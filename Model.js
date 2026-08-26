@@ -102,21 +102,33 @@ function revealFraction(progress, index, count, maxStagger) {
 function describe(state) {
   var s = state || {}
   var members = s.members || []
+  var rejected = s.rejected || []
+  var missing = s.missing || []
+  var anchored = s.anchored || []
+  var foreign = s.foreign || []
+
+  // What the pocket actually holds, not what it was asked to hold. Counting the
+  // configuration would let the first line say "holding 3 widgets" directly
+  // above three lines explaining that none of them could be used — and this
+  // tooltip is the only place any of that surfaces.
+  var held = Math.max(0, members.length - missing.length - anchored.length)
   var lines = []
 
   if (members.length === 0) {
     lines.push("Pocket is empty — set `members` on its bar entry")
+  } else if (held === 0) {
+    lines.push("Pocket holding nothing — none of the widgets it names can be used")
   } else if (s.expanded) {
     lines.push("Pocket open — click to keep it open")
   } else {
-    lines.push("Pocket holding " + members.length + " widget" + (members.length === 1 ? "" : "s"))
+    lines.push("Pocket holding " + held + " widget" + (held === 1 ? "" : "s"))
   }
 
   if (s.pinned) lines.push("Pinned — click to release")
-  if ((s.rejected || []).length > 0) lines.push("Not a widget id: " + s.rejected.join(", "))
-  if ((s.missing || []).length > 0) lines.push("Not on this bar: " + s.missing.join(", "))
-  if ((s.anchored || []).length > 0) lines.push("Refused, it is the center anchor: " + s.anchored.join(", "))
-  if ((s.foreign || []).length > 0) lines.push("In another section, so hiding it looks arbitrary: " + s.foreign.join(", "))
+  if (rejected.length > 0) lines.push("Not a widget id: " + rejected.join(", "))
+  if (missing.length > 0) lines.push("Not on this bar: " + missing.join(", "))
+  if (anchored.length > 0) lines.push("Refused, it is the center anchor: " + anchored.join(", "))
+  if (foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + foreign.join(", "))
   if (s.duplicateInstances) lines.push("A second Pocket entry exists — they will fight over shared members")
 
   return lines.join("\n")

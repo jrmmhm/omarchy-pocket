@@ -58,7 +58,7 @@ The file hot-reloads: no restart needed after an edit.
 **Put the pocket on the side of its members that faces the section's anchor.**
 In the `right` section that means the members come *first* and the pocket last;
 in `left`, the pocket first. Fanning out changes the section's width, and this
-ordering is what keeps the chevron itself from sliding out from under your
+ordering is what keeps the mark itself from sliding out from under your
 pointer.
 
 `omarchy.tray` is a poor member: Omarchy pins it to its section's inner edge on
@@ -66,18 +66,20 @@ every config load, and its own drawer assumes it sits there.
 
 ## How it decides to open and close
 
-It opens while the pointer is on the chevron or on any widget it holds, and
+It opens while the pointer is on the mark or on any widget it holds, and
 while one of those widgets has its panel open — a bar panel covers the screen
 with an input mask, so hover stops arriving entirely, and without that last
 condition the pocket would fold up underneath the panel you just opened.
 
-It closes 120 ms after all of that stops **and** the pointer has left the bar.
+It closes within a tick of all of that stopping **and** the pointer having left
+the bar — a repeating check rather than a countdown, because a countdown that a
+guard refuses once has nothing left to re-arm it.
 Waiting for the bar rather than the pocket is deliberate: folding up narrows the
 section, which can slide a neighbour under a stationary pointer, and a pocket
 that reacted to that would oscillate. Omarchy's own hover reveal uses the same
 rule.
 
-**Click the chevron to pin it open**, click again to release. That is the way
+**Click the mark to pin it open**, click again to release. That is the way
 out of the cases where no leave event is ever coming — a workspace switch that
 teleports the cursor, an application grabbing the pointer. The pin is
 session-only and deliberately not written to `shell.json`: a half-written

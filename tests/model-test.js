@@ -141,6 +141,26 @@ contains("collapsed pocket names its size",
   Model.describe({ members: ["a", "b"] }), "holding 2 widgets")
 check("one member is singular",
   Model.describe({ members: ["a"] }).split("\n")[0], "Pocket holding 1 widget")
+
+// The first line must describe what is held, not what was configured. A tooltip
+// claiming three widgets directly above three lines saying none of them works
+// is worse than no tooltip, and this one is the only place those problems ever
+// appear.
+check("unusable members are not counted as held",
+  Model.describe({ members: ["a", "b", "c"], missing: ["a"] }).split("\n")[0],
+  "Pocket holding 2 widgets")
+check("a refused anchor is not counted as held",
+  Model.describe({ members: ["a", "b"], anchored: ["b"] }).split("\n")[0],
+  "Pocket holding 1 widget")
+check("nothing usable is said outright, not counted",
+  Model.describe({ members: ["a", "b", "c"], missing: ["a", "b"], anchored: ["c"] }).split("\n")[0],
+  "Pocket holding nothing — none of the widgets it names can be used")
+check("a configured but unusable pocket does not claim to be open",
+  Model.describe({ members: ["a"], missing: ["a"], expanded: true }).split("\n")[0],
+  "Pocket holding nothing — none of the widgets it names can be used")
+check("a member in another section still counts as held",
+  Model.describe({ members: ["a", "b"], foreign: ["b"] }).split("\n")[0],
+  "Pocket holding 2 widgets")
 contains("open pocket offers the pin",
   Model.describe({ members: ["a"], expanded: true }), "click to keep it open")
 contains("pinned pocket offers the release",

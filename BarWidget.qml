@@ -283,8 +283,8 @@ BarWidget {
     // Deliberately not the stock tray's chevron: the tray sits in the same
     // section doing a visually similar thing, and two identical glyphs side by
     // side are two things a user cannot tell apart. Dots read as "there is more
-    // here", and turning them upright is the same 600ms OutCubic move the
-    // drawer makes.
+    // here", and turning them upright rides the same scalar as everything else,
+    // so it is the drawer's move by construction rather than by a copied number.
     text: String.fromCodePoint(0xf01d8)
     // Derived from the animated scalar, so it must not carry a Behavior of its
     // own — two animations on one value fight and the slower one wins twice.
