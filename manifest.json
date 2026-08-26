@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "jrmmhm.pocket",
+  "name": "Pocket",
+  "version": "0.1.0",
+  "author": "jrmmhm",
+  "license": "MIT",
+  "description": "Tuck a run of bar widgets into one slot and fan them back out on hover. The widgets never leave the bar layout, so every Omarchy tool keeps reporting them correctly.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Pocket",
+    "description": "Hides the bar widgets you name and shows them again while the pointer is on them",
+    "category": "Appearance",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "members": "",
+      "showCount": true
+    },
+    "schema": [
+      {
+        "key": "members",
+        "type": "string",
+        "label": "Widget ids to tuck away, comma separated"
+      },
+      {
+        "key": "showCount",
+        "type": "boolean",
+        "label": "Show how many widgets are tucked away",
+        "defaultValue": true
+      }
+    ]
+  }
+}
