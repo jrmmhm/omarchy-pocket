@@ -73,6 +73,29 @@ function rejectedMembers(value, selfId) {
   return out
 }
 
+// Each member's own share of the reveal, so they cascade out of the pocket
+// instead of all arriving at once. `index` counts from the member nearest the
+// pocket, which is the one that should lead.
+//
+// The stagger shrinks as the pocket fills: four members at 0.15 each still
+// leave every one of them 55% of the run to travel, while a dozen at 0.15
+// would leave the last one no time at all. Falling progress reverses the
+// cascade for free — the nearest member is the last one to fade.
+function revealFraction(progress, index, count, maxStagger) {
+  var p = Number(progress)
+  if (!isFinite(p)) p = 0
+  p = Math.max(0, Math.min(1, p))
+
+  var n = Math.max(1, Math.floor(Number(count)) || 1)
+  var i = Math.max(0, Math.min(n - 1, Math.floor(Number(index)) || 0))
+  var limit = maxStagger === undefined ? 0.15 : Number(maxStagger)
+  var stagger = n > 1 ? Math.min(limit, 0.6 / (n - 1)) : 0
+  var span = 1 - stagger * (n - 1)
+  if (span <= 0) return p
+
+  return Math.max(0, Math.min(1, (p - stagger * i) / span))
+}
+
 // One tooltip line per condition, most actionable first. The pocket is the only
 // place these problems surface: a member that never appears produces no error
 // anywhere else in the shell.
@@ -101,5 +124,6 @@ function describe(state) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
-                     rejectedMembers: rejectedMembers, describe: describe }
+                     rejectedMembers: rejectedMembers, revealFraction: revealFraction,
+                     describe: describe }
 }

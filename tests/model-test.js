@@ -91,6 +91,48 @@ check("nothing rejected when all are valid",
 check("the pocket's own id is not a rejection",
   Model.rejectedMembers(SELF, SELF), [])
 
+// ------------------------------------------------------- reveal cascade
+
+const rf = Model.revealFraction
+
+check("nothing revealed at rest", rf(0, 0, 4), 0)
+check("fully revealed at the end", rf(1, 0, 4), 1)
+check("the last member is also fully revealed at the end", rf(1, 3, 4), 1)
+check("the last member has not started at the halfway point", rf(0.4, 3, 4), 0)
+check("a lone member tracks the scalar exactly", rf(0.37, 0, 1), 0.37)
+check("count 0 is treated as one member", rf(0.37, 0, 0), 0.37)
+
+// The point of the cascade: the near member is always at least as far along as
+// the far one, and strictly ahead somewhere in the middle.
+assertions++
+{
+  let ordered = true, strictSomewhere = false
+  for (let p = 0; p <= 1.0001; p += 0.05) {
+    for (let i = 1; i < 4; i++) {
+      if (rf(p, i - 1, 4) < rf(p, i, 4)) ordered = false
+      if (rf(p, i - 1, 4) > rf(p, i, 4)) strictSomewhere = true
+    }
+  }
+  if (!ordered || !strictSomewhere) {
+    failures++
+    console.error(`FAIL: the cascade is ordered and actually staggers (ordered=${ordered}, staggers=${strictSomewhere})`)
+  }
+}
+
+// Every member must still complete, however many there are — a stagger that
+// did not shrink with the count would leave the last one no run at all.
+for (const n of [1, 2, 4, 8, 20]) {
+  check(`every one of ${n} members completes`,
+    Array.from({ length: n }, (_, i) => rf(1, i, n)).every(v => v === 1), true)
+  check(`none of ${n} members starts early`,
+    Array.from({ length: n }, (_, i) => rf(0, i, n)).every(v => v === 0), true)
+}
+
+check("progress above one is clamped", rf(5, 2, 4), 1)
+check("progress below zero is clamped", rf(-5, 0, 4), 0)
+check("garbage progress reads as rest", rf("nonsense", 0, 4), 0)
+check("an index past the end is the last member", rf(1, 99, 4), rf(1, 3, 4))
+
 // -------------------------------------------------------------- tooltip
 
 contains("empty pocket asks for members",

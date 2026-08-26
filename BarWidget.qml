@@ -155,10 +155,32 @@ BarWidget {
     NumberAnimation { duration: root.animationDuration; easing.type: Easing.OutCubic }
   }
 
-  onRevealProgressChanged: {
-    for (var i = 0; i < root.driven.length; i++) root.setSlotOpacity(root.driven[i], root.revealProgress)
-    // Space is only given back once the members have faded out, so the
-    // neighbours slide in behind them rather than through them.
+  // Which end of the member list sits against the pocket. In the right section
+  // the members precede it, so the last one is its neighbour and should lead
+  // the cascade; in the left section the first one does.
+  readonly property bool membersLeadFromEnd: ownRegion !== "left"
+
+  // Members grow out of the edge that faces the pocket rather than swelling in
+  // place, which reads as coming out of it. Scale is visual only — it moves no
+  // layout and touches nothing the bar computes.
+  readonly property int growthOrigin: membersLeadFromEnd ? Item.Right : Item.Left
+
+  onRevealProgressChanged: applyReveal()
+
+  function applyReveal() {
+    var list = root.driven
+    var n = list.length
+
+    for (var i = 0; i < n; i++) {
+      var order = root.membersLeadFromEnd ? (n - 1 - i) : i
+      var f = Model.revealFraction(root.revealProgress, order, n)
+      root.setSlotProperty(list[i], "transformOrigin", root.growthOrigin)
+      root.setSlotProperty(list[i], "opacity", f)
+      root.setSlotProperty(list[i], "scale", 0.6 + 0.4 * f)
+    }
+
+    // Space is only given back once the members have gone, so the neighbours
+    // slide in behind them rather than through them.
     if (!root.expanded && root.revealProgress <= 0.001) root.hideDriven()
   }
 
@@ -170,7 +192,6 @@ BarWidget {
   }
 
   function setSlotVisible(slot, value) { setSlotProperty(slot, "visible", value) }
-  function setSlotOpacity(slot, value) { setSlotProperty(slot, "opacity", value) }
 
   function hideDriven() {
     for (var i = 0; i < root.driven.length; i++) root.setSlotVisible(root.driven[i], false)
@@ -189,17 +210,19 @@ BarWidget {
 
     root.driven = wanted.slice()
 
-    for (var j = 0; j < wanted.length; j++) {
-      root.setSlotOpacity(wanted[j], root.revealProgress)
-      // Growing happens up front so the members have room to fade into;
-      // shrinking waits for the fade to finish, in onRevealProgressChanged.
-      if (root.expanded) root.setSlotVisible(wanted[j], true)
-      else if (root.revealProgress <= 0.001) root.setSlotVisible(wanted[j], false)
+    // Room is made up front so the members have somewhere to grow into;
+    // taking it back waits for them to finish leaving, in applyReveal().
+    if (root.expanded) {
+      for (var j = 0; j < wanted.length; j++) root.setSlotVisible(wanted[j], true)
     }
+
+    root.applyReveal()
   }
 
   function release(slot) {
-    root.setSlotOpacity(slot, 1)
+    root.setSlotProperty(slot, "opacity", 1)
+    root.setSlotProperty(slot, "scale", 1)
+    root.setSlotProperty(slot, "transformOrigin", Item.Center)
     root.setSlotVisible(slot, true)
   }
 
