@@ -3,14 +3,15 @@
 **Tuck a run of bar widgets into one slot and fan them back out on hover.**
 
 A bar that has grown to a dozen widgets is a bar you stop reading. Pocket takes
-the ones you rarely need, hides them behind a single chevron with a count, and
-brings them back the moment you point at it. They stay fully usable while they
-are out — the same widgets, not stand-ins.
+the ones you rarely need, hides them behind a single mark, and brings them back
+the moment you point at it. They stay fully usable while they are out — the same
+widgets, not stand-ins.
 
-```
-  before   󰂯 󰤨 󰕾 󰍹 󰁹  ▏  ▏ ▏ ▏
-   after     4  󰕾 󰍹 󰁹   ▏  ▏ ▏ ▏
-```
+The mark is a row of dots that turns upright as the pocket opens, over the same
+600 ms `OutCubic` the stock tray drawer uses, and the members fade with it.
+Deliberately not a chevron: the tray sits in the same section doing a visually
+similar thing, and two identical glyphs beside each other are two things nobody
+can tell apart.
 
 ## Why this one keeps your setup honest
 
@@ -49,7 +50,6 @@ exists because Omarchy's settings form can produce a string and not an array.
 | Setting | Type | Default | What it does |
 | :--- | :--- | :--- | :--- |
 | `members` | string or array | `""` | Ids of the bar widgets to tuck away |
-| `showCount` | boolean | `true` | Show how many are currently tucked away |
 
 The file hot-reloads: no restart needed after an edit.
 

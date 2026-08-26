@@ -17,18 +17,26 @@ function isWidgetId(value) {
 // The `members` setting is written by hand in shell.json or through Omarchy's
 // settings form. The form can only produce a string, so both shapes have to
 // work: ["omarchy.audio", "omaplug"] and "omarchy.audio, omaplug".
+//
+// Deliberately not Array.isArray(). The bar parses shell.json into a
+// QVariantList and injects it, and what arrives in QML is a sequence type that
+// indexes and reports `length` like an array while failing Array.isArray().
+// Measured on 2026-08-26: an array-valued `members` parsed as nothing at all,
+// silently, and the pocket rendered an empty count over a bar it never touched.
+// Duck-typing is the fix; the string case is tested first because a string
+// carries `length` too.
 function toList(value) {
-  if (Array.isArray(value)) {
-    var out = []
-    for (var i = 0; i < value.length; i++) {
-      var entry = value[i]
-      if (typeof entry === "string") out.push(entry)
-      else if (entry && typeof entry.id === "string") out.push(entry.id)
-    }
-    return out
-  }
+  if (value === null || value === undefined) return []
   if (typeof value === "string") return value.split(/[,\s]+/)
-  return []
+  if (typeof value.length !== "number") return []
+
+  var out = []
+  for (var i = 0; i < value.length; i++) {
+    var entry = value[i]
+    if (typeof entry === "string") out.push(entry)
+    else if (entry && typeof entry.id === "string") out.push(entry.id)
+  }
+  return out
 }
 
 // Order is the user's; duplicates and the pocket's own id are dropped. Naming
@@ -65,12 +73,6 @@ function rejectedMembers(value, selfId) {
   return out
 }
 
-function countText(count, show) {
-  if (show === false) return ""
-  var n = Math.max(0, Math.floor(Number(count) || 0))
-  return n > 0 ? String(n) : ""
-}
-
 // One tooltip line per condition, most actionable first. The pocket is the only
 // place these problems surface: a member that never appears produces no error
 // anywhere else in the shell.
@@ -99,5 +101,5 @@ function describe(state) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
-                     rejectedMembers: rejectedMembers, countText: countText, describe: describe }
+                     rejectedMembers: rejectedMembers, describe: describe }
 }

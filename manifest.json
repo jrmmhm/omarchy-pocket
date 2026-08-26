@@ -19,20 +19,13 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "members": "",
-      "showCount": true
+      "members": ""
     },
     "schema": [
       {
         "key": "members",
         "type": "string",
         "label": "Widget ids to tuck away, comma separated"
-      },
-      {
-        "key": "showCount",
-        "type": "boolean",
-        "label": "Show how many widgets are tucked away",
-        "defaultValue": true
       }
     ]
   }

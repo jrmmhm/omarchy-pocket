@@ -54,6 +54,22 @@ check("whitespace separated string",
   Model.parseMembers("omarchy.audio  omaplug", SELF), ["omarchy.audio", "omaplug"])
 check("array of objects",
   Model.parseMembers([{ id: "omarchy.audio" }, { id: "omaplug" }], SELF), ["omarchy.audio", "omaplug"])
+
+// What actually arrives from the bar. shell.json is parsed into a QVariantList
+// and injected as a QML sequence: it indexes and reports length, but
+// Array.isArray() says false. node cannot produce that type, so these fixtures
+// stand in for it — an array-like that is provably not an Array. Without them
+// the suite was green while the plugin read an array-valued `members` as empty.
+const sequence = { length: 2, 0: "mehiel.darky", 1: "omaplug" }
+check("the fixture is not a real Array", Array.isArray(sequence), false)
+check("array-like sequence, as the bar injects it",
+  Model.parseMembers(sequence, SELF), ["mehiel.darky", "omaplug"])
+check("array-like sequence of objects",
+  Model.parseMembers({ length: 1, 0: { id: "omaplug" } }, SELF), ["omaplug"])
+check("empty sequence", Model.parseMembers({ length: 0 }, SELF), [])
+check("an object with no length is not a list",
+  Model.parseMembers({ id: "omaplug" }, SELF), [])
+check("a number is not a list", Model.parseMembers(7, SELF), [])
 check("order is the user's",
   Model.parseMembers("omaplug, omarchy.audio", SELF), ["omaplug", "omarchy.audio"])
 check("duplicates collapse",
@@ -74,14 +90,6 @@ check("nothing rejected when all are valid",
   Model.rejectedMembers("omaplug, omarchy.audio", SELF), [])
 check("the pocket's own id is not a rejection",
   Model.rejectedMembers(SELF, SELF), [])
-
-// ------------------------------------------------------------- counting
-
-check("zero hides the count", Model.countText(0, true), "")
-check("negative hides the count", Model.countText(-3, true), "")
-check("count is shown", Model.countText(4, true), "4")
-check("showCount false hides it", Model.countText(4, false), "")
-check("garbage counts as zero", Model.countText("nonsense", true), "")
 
 // -------------------------------------------------------------- tooltip
 

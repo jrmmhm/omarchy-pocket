@@ -28,7 +28,6 @@ BarWidget {
 
   readonly property var memberIds: Model.parseMembers(setting("members", ""), root.moduleName)
   readonly property var rejectedIds: Model.rejectedMembers(setting("members", ""), root.moduleName)
-  readonly property bool showCount: setting("showCount", true) === true
 
   // ------------------------------------------------------------- identity
 
@@ -110,9 +109,8 @@ BarWidget {
 
   property bool expanded: false
   property bool pinned: false
-  property int drawnCount: 0
 
-  // Every slot this pocket has currently set to invisible. Kept as its own list
+  // Every slot this pocket has currently taken over. Kept as its own list
   // rather than derived from `resolution`, because the restore has to reach
   // slots that have *left* the member list — and, on destruction, slots the
   // binding can no longer be evaluated for.
@@ -144,51 +142,69 @@ BarWidget {
     return bar.moduleWidgets(root.moduleName).length > 1
   }
 
+  // ------------------------------------------------------------ animation
+
+  // One animated scalar, everything else derived from it — the shape the stock
+  // tray drawer uses, with its duration and curve, so the two read as the same
+  // gesture. Driving each slot's opacity from a per-slot animation instead
+  // would put N competing animations on objects this widget does not own.
+  readonly property int animationDuration: 600
+  property real revealProgress: expanded ? 1 : 0
+
+  Behavior on revealProgress {
+    NumberAnimation { duration: root.animationDuration; easing.type: Easing.OutCubic }
+  }
+
+  onRevealProgressChanged: {
+    for (var i = 0; i < root.driven.length; i++) root.setSlotOpacity(root.driven[i], root.revealProgress)
+    // Space is only given back once the members have faded out, so the
+    // neighbours slide in behind them rather than through them.
+    if (!root.expanded && root.revealProgress <= 0.001) root.hideDriven()
+  }
+
   // --------------------------------------------------------------- effect
 
-  function slotIsDrawn(slot) {
-    return !!slot && !!slot.activeItem && slot.activeItem.visible === true && slot.width > 0
-  }
-
-  function measure() {
-    var list = root.resolution.slots
-    var n = 0
-    for (var i = 0; i < list.length; i++) if (root.slotIsDrawn(list[i])) n++
-    root.drawnCount = n
-  }
-
-  function setSlotVisible(slot, value) {
+  function setSlotProperty(slot, name, value) {
     // Slots die with the bar surface, and a rebuild can hand us one mid-teardown.
-    try { if (slot) slot.visible = value } catch (e) { }
+    try { if (slot) slot[name] = value } catch (e) { }
+  }
+
+  function setSlotVisible(slot, value) { setSlotProperty(slot, "visible", value) }
+  function setSlotOpacity(slot, value) { setSlotProperty(slot, "opacity", value) }
+
+  function hideDriven() {
+    for (var i = 0; i < root.driven.length; i++) root.setSlotVisible(root.driven[i], false)
   }
 
   function apply() {
     var wanted = root.resolution.slots
 
-    // Anything we previously hid and no longer own goes back first — a member
-    // removed from the setting, or refused as the center anchor, must not stay
-    // invisible just because it left the list.
+    // Anything we previously took over and no longer own goes back first — a
+    // member removed from the setting, or refused as the center anchor, must
+    // not stay invisible just because it left the list.
     for (var i = 0; i < root.driven.length; i++) {
       var old = root.driven[i]
-      if (wanted.indexOf(old) === -1) root.setSlotVisible(old, true)
+      if (wanted.indexOf(old) === -1) root.release(old)
     }
 
-    // Counting has to happen while the members are still drawn: once they are
-    // invisible, Qt's effective-visibility cascade makes "hidden by us" and
-    // "hid itself" read exactly the same, and the count would decay to zero.
-    if (!root.expanded) root.measure()
+    root.driven = wanted.slice()
 
-    for (var j = 0; j < wanted.length; j++) root.setSlotVisible(wanted[j], root.expanded)
-
-    root.driven = root.expanded ? [] : wanted.slice()
-
-    // Geometry does not settle in the tick that writes `visible`, so a count
-    // taken right here would read the previous frame.
-    if (root.expanded) Qt.callLater(root.measure)
+    for (var j = 0; j < wanted.length; j++) {
+      root.setSlotOpacity(wanted[j], root.revealProgress)
+      // Growing happens up front so the members have room to fade into;
+      // shrinking waits for the fade to finish, in onRevealProgressChanged.
+      if (root.expanded) root.setSlotVisible(wanted[j], true)
+      else if (root.revealProgress <= 0.001) root.setSlotVisible(wanted[j], false)
+    }
   }
 
-  function revealAll() {
-    for (var i = 0; i < root.driven.length; i++) root.setSlotVisible(root.driven[i], true)
+  function release(slot) {
+    root.setSlotOpacity(slot, 1)
+    root.setSlotVisible(slot, true)
+  }
+
+  function releaseAll() {
+    for (var i = 0; i < root.driven.length; i++) root.release(root.driven[i])
     root.driven = []
   }
 
@@ -205,7 +221,7 @@ BarWidget {
 
   // Without this, disabling or hot-reloading the plugin leaves someone else's
   // widgets invisible with no way back short of restarting the shell.
-  Component.onDestruction: revealAll()
+  Component.onDestruction: releaseAll()
 
   onHoldOpenChanged: if (holdOpen) expanded = true
 
@@ -220,11 +236,11 @@ BarWidget {
     running: root.expanded && !root.pinned
     onTriggered: {
       if (root.holdOpen) return
-      // Folding up widens nothing but narrows the section, which slides the
-      // pocket itself out from under a stationary pointer — and the pointer
-      // landing on a neighbour would fold it, moving it back, and so on. Hold
-      // until the pointer has left the bar entirely, which is the same rule
-      // Bar.qml applies to its own hover reveal.
+      // Folding up narrows the section, which slides the pocket itself out from
+      // under a stationary pointer — and the pointer landing on a neighbour
+      // would fold it, moving it back, and so on. Hold until the pointer has
+      // left the bar entirely, which is the same rule Bar.qml applies to its
+      // own hover reveal.
       if (root.bar && root.bar.barHovered) return
       root.expanded = false
     }
@@ -232,69 +248,31 @@ BarWidget {
 
   // ----------------------------------------------------------------- view
 
-  readonly property string countText: Model.countText(root.drawnCount, root.showCount && !root.expanded)
-
-  // Chevron pointing the way the members lie: closed it points at them, open it
-  // points back at the pocket. Written as code points because the glyphs are
-  // unreadable in an editor and in a diff.
-  readonly property string glyph: root.expanded
-    ? String.fromCodePoint(0xf054)
-    : String.fromCodePoint(0xf053)
-
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   HoverHandler { id: pocketHover }
 
-  TextMetrics {
-    id: countMetrics
-    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-    font.pixelSize: Style.bar.iconFont
-    text: root.countText
-  }
-
   BarIconButton {
     id: button
     bar: root.bar
-    slotSize: Style.bar.iconSlot + (root.countText !== "" ? countMetrics.width + Style.space(3) : 0)
+    active: root.pinned
+    // Deliberately not the stock tray's chevron: the tray sits in the same
+    // section doing a visually similar thing, and two identical glyphs side by
+    // side are two things a user cannot tell apart. Dots read as "there is more
+    // here", and turning them upright is the same 600ms OutCubic move the
+    // drawer makes.
+    text: String.fromCodePoint(0xf01d8)
+    // Derived from the animated scalar, so it must not carry a Behavior of its
+    // own — two animations on one value fight and the slower one wins twice.
+    textRotation: (root.vertical ? 90 : 0) + root.revealProgress * 90
+
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
       rejected: root.rejectedIds, missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
       duplicateInstances: root.duplicateInstances
     })
-    active: root.pinned
-
-    iconComponent: Component {
-      Item {
-        Row {
-          anchors.centerIn: parent
-          spacing: Style.space(3)
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.glyph
-            textFormat: Text.PlainText
-            color: button.foreground
-            font.family: button.fontFamily
-            font.pixelSize: Style.bar.iconFont
-            renderType: Text.NativeRendering
-            rotation: root.vertical ? 90 : 0
-          }
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.countText !== ""
-            text: root.countText
-            textFormat: Text.PlainText
-            color: button.foreground
-            font.family: button.fontFamily
-            font.pixelSize: Style.bar.iconFont
-            renderType: Text.NativeRendering
-          }
-        }
-      }
-    }
 
     // The pointer is the primary gesture; the click is the way out of the cases
     // where no leave event is coming — a panel grabbing input, a workspace
