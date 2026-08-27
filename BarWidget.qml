@@ -40,7 +40,23 @@ BarWidget {
   // The bar exists once per monitor and every surface's slots land in the same
   // `bar.moduleSlots` array, so a pocket has to filter to its own window or it
   // would hide the other screen's widgets too.
+  //
+  // Null is a state, not an impossibility: a dying instance loses its window
+  // while its bindings still run, and a live surface loses its window for the
+  // ~50 ms a monitor move unmaps it. Both are answered in Model.ownsSlot(),
+  // which matches nothing rather than everything. See docs/decisions/0005.
   readonly property var ownWindow: root.QsWindow ? root.QsWindow.window : null
+
+  // Whether the host publishes the two helpers that tell one bar surface's
+  // slots from another's. A custom bar need not, and then there is nothing to
+  // filter with and one answer to give.
+  readonly property bool hostComparesWindows: !!bar
+    && typeof bar.slotWindow === "function" && typeof bar.sameWindow === "function"
+
+  // The host can tell surfaces apart and this instance does not know which one
+  // it is on. Nothing resolves in that state, and the tooltip says so instead
+  // of reporting every member as absent from a bar it never looked at.
+  readonly property bool surfaceUnknown: hostComparesWindows && ownWindow === null
 
   function canonical(id) {
     return bar && typeof bar.canonicalWidgetId === "function"
@@ -72,8 +88,12 @@ BarWidget {
       for (var j = 0; j < slots.length; j++) {
         var slot = slots[j]
         if (!slot || root.canonical(slot.moduleName) !== want) continue
-        if (mine && bar && typeof bar.slotWindow === "function" && typeof bar.sameWindow === "function"
-            && !bar.sameWindow(bar.slotWindow(slot), mine)) continue
+        if (!Model.ownsSlot({
+              hostComparesWindows: root.hostComparesWindows,
+              surfaceKnown: mine !== null,
+              sameWindow: root.hostComparesWindows && mine !== null
+                ? bar.sameWindow(bar.slotWindow(slot), mine) : false
+            })) continue
         hit = slot
         break
       }
@@ -625,7 +645,7 @@ BarWidget {
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
       rejected: root.rejectedIds, missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
-      duplicateInstances: root.duplicateInstances
+      duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown
     })
 
     // The pointer is the primary gesture; the click is the way out of the cases

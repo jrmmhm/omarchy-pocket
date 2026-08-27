@@ -73,6 +73,36 @@ function rejectedMembers(value, selfId) {
   return out
 }
 
+// --------------------------------------------------------------- surface
+
+// Whether a bar slot belongs to the surface this pocket lives on.
+//
+// `Bar.qml` is one object with a window per screen, and every surface's slots
+// land in one shared array, so this comparison is the only thing keeping one
+// screen's pocket off another screen's widgets. The host owns the comparison
+// itself; what belongs here is what to do when its answer is not available.
+//
+// An instance that does not know its own window matches NOTHING. It used to
+// match everything — the comparison was skipped whenever the window was null —
+// and null is reachable twice over: a dying instance loses its window while its
+// bindings are still live, and a live surface loses its window for the ~50 ms a
+// monitor move unmaps it. Either way the instance adopted another screen's
+// slots, and handed them back visible on the way out. The host's own
+// sameWindow() already answers this way; only the caller disagreed. See
+// docs/decisions/0005.
+//
+// A host that cannot tell its surfaces apart at all is the separate, older
+// case: there is one answer to give and the pocket gives it, which is the
+// single-surface degradation a custom bar has always been offered. It is asked
+// second on purpose, so that a caller which forgot to say what it knows gets
+// the refusal rather than the old answer.
+function ownsSlot(state) {
+  var s = state || {}
+  if (s.surfaceKnown !== true) return false
+  if (s.hostComparesWindows !== true) return true
+  return s.sameWindow === true
+}
+
 // ------------------------------------------------------------ membership
 
 // The bar hands entries over as plain objects after a JSON round-trip, but a
@@ -489,14 +519,26 @@ function describe(state) {
   var anchored = s.anchored || []
   var foreign = s.foreign || []
 
+  // An instance that does not know which bar surface it is on resolved nothing,
+  // and every member came back unfound — but it never looked, so saying "not on
+  // this bar" would be a claim about widgets that are in fact right there. It
+  // gets its own line, and the lines drawn from the resolution are suppressed.
+  // Normally a state no one can see, because an instance without a window is on
+  // a surface that is not being drawn; permanently true only if this plugin
+  // ever loses its `Quickshell` import, which is exactly the regression the
+  // header of BarWidget.qml warns about.
+  var unknown = s.surfaceUnknown === true
+
   // What the pocket actually holds, not what it was asked to hold. Counting the
   // configuration would let the first line say "holding 3 widgets" directly
   // above three lines explaining that none of them could be used — and this
   // tooltip is the only place any of that surfaces.
-  var held = Math.max(0, members.length - missing.length - anchored.length)
+  var held = unknown ? 0 : Math.max(0, members.length - missing.length - anchored.length)
   var lines = []
 
-  if (members.length === 0) {
+  if (unknown) {
+    lines.push("Pocket cannot tell which screen it is on — it is hiding nothing")
+  } else if (members.length === 0) {
     lines.push("Pocket is empty — drag a widget onto it, or set `members` on its bar entry")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
@@ -508,9 +550,9 @@ function describe(state) {
 
   if (s.pinned) lines.push("Pinned — click to release")
   if (rejected.length > 0) lines.push("Not a widget id: " + rejected.join(", "))
-  if (missing.length > 0) lines.push("Not on this bar: " + missing.join(", "))
-  if (anchored.length > 0) lines.push("Refused, it is the center anchor: " + anchored.join(", "))
-  if (foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + foreign.join(", "))
+  if (!unknown && missing.length > 0) lines.push("Not on this bar: " + missing.join(", "))
+  if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + anchored.join(", "))
+  if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + foreign.join(", "))
   if (s.duplicateInstances) lines.push("A second Pocket entry exists — they will fight over shared members")
 
   return lines.join("\n")
@@ -526,6 +568,6 @@ if (typeof module !== "undefined" && module.exports) {
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
-                     gapTouchesMember: gapTouchesMember,
+                     gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder }
 }
