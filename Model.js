@@ -151,8 +151,8 @@ function withoutMember(rawList, id) {
 // still recorded at its old position, and ranking it there would put it at the
 // wrong end of the list. Its new position is not a guess either: a widget
 // aimed at the pocket ends up against the pocket, which is the near end of the
-// run by definition — from the far side the bar puts it on the wrong side
-// first and the placement invariant pulls it back, but the end of the run it
+// run by definition — whether the drop steering placed it there directly or
+// the placement invariant pulled it back afterwards, the end of the run it
 // belongs to is the same one. So order the survivors by the layout and append
 // the newcomer to the end that faces the pocket.
 function nextMembers(rawList, layoutIds, id, intent, nearestAtEnd) {
@@ -230,6 +230,41 @@ function dropDecision(state) {
   return "none"
 }
 
+// --------------------------------------------------------- drop steering
+
+// Which side of the pocket the bar should be told to place an arriving widget
+// on, as { after: <bool> }, or null when the pocket must not touch the bar's
+// drop marker at all. See docs/decisions/0003.
+//
+// Only `after === false` is ever returned, and that is a property of the host
+// rather than a simplification. Bar.qml's dropBarModuleAtTarget() resolves
+// `after === true` through nextVisibleModuleName(), which walks past every
+// module that is not drawn — and a collapsed pocket's members are exactly
+// that — so a widget steered that way lands at the far end of the run instead
+// of against the pocket. `after === false` names the target slot itself and is
+// exact. That is the side the members occupy wherever they lead from the end
+// of the list, which is every section but `left`.
+//
+// The write permission is the same one that decides whether `members` may be
+// written at all. Steering without writing would move a widget the user did
+// not aim there and then not record it as a member.
+function steerDropAfter(state) {
+  var s = state || {}
+  if (s.intent !== "add") return null
+  if (s.mayWrite !== true) return null
+  if (s.nearestAtEnd !== true) return null
+  return { after: false }
+}
+
+// The bar's drop marker as Bar.qml computes it: a plain {x, y, width, height}.
+// Compared field by field because dropMarkerRect() returns a fresh object on
+// every call, so reference equality is always false and the pocket would
+// rewrite the marker on every pointer move forever.
+function sameMarkerRect(a, b) {
+  if (!a || !b) return false
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
 // ------------------------------------------------------------- config write
 
 // The entries of one layout section as the user's file actually holds them, or
@@ -267,9 +302,10 @@ function setMembersOnEntry(config, region, id, value) {
 
 // The first member sitting on the wrong side of the pocket, or "" if the run
 // is intact. Members belong on one side — the side the pocket fans them out
-// towards — and a widget dropped onto the pocket from the far side is placed
-// there by the bar, which would leave it fanning out alone on the wrong side
-// of the icon while the rest of the group is on the other.
+// towards — and a member that is not there fans out alone on the wrong side of
+// the icon while the rest of the group is on the other. steerDropAfter() keeps
+// a far-side arrival from landing there wherever it applies; this is what
+// guarantees the result when it does not.
 //
 // Ids the region does not hold are skipped rather than reported: a member in
 // another section is a different mistake, and the tooltip already names it.
@@ -421,5 +457,6 @@ if (typeof module !== "undefined" && module.exports) {
                      membersValue: membersValue, dropDecision: dropDecision,
                      setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
-                     placeMemberBesideSelf: placeMemberBesideSelf }
+                     placeMemberBesideSelf: placeMemberBesideSelf,
+                     steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect }
 }

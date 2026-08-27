@@ -168,6 +168,14 @@ BarWidget {
   // reported a second pocket on every setup with more than one screen.
   readonly property bool duplicateInstances: Model.countEntries(root.barLayout, root.moduleName) > 1
 
+  // Whether this pocket may act on the layout at all — one property rather than
+  // the same pair of conditions repeated at each call site, because the drop
+  // steering below has to refuse in exactly the cases the writes refuse in. Two
+  // copies of that rule drifting apart is what would let the pocket move a
+  // widget the user did not aim there and then not record it as a member.
+  readonly property bool mayWriteMembers: Model.mayWrite(root.barLayout, root.moduleName)
+    && root.ownRegion !== ""
+
   // ----------------------------------------------------------------- drag
 
   // The bar already owns widget drag-and-drop, and it publishes the three
@@ -240,6 +248,77 @@ BarWidget {
     if (intent !== "none") root.commitDrop(intent, id)
   }
 
+  // -------------------------------------------------------- drop steering
+
+  // Left to itself, the bar places a widget where its own drop marker said, so
+  // one aimed at the pocket from the far side lands on the far side and the
+  // invariant below has to move it back — a second layout write, and therefore
+  // a second full rebuild of every widget on every monitor. Told where the
+  // widget belongs while the drag is still running, the bar places it correctly
+  // the first time and the invariant finds nothing to do.
+  //
+  // Everything here is optional by construction. A missing property or a
+  // renamed dropMarkerRect() makes the override stop applying, and the
+  // invariant still produces the correct layout — one rebuild slower. That is
+  // why the invariant was not replaced by this. See docs/decisions/0003.
+
+  // Both of the bar's marker values in one sample, so a change to EITHER
+  // re-asserts BOTH. Bar.qml writes them one after the other on every pointer
+  // move, and hanging the override on only one would make the outcome depend
+  // on which it writes last: reverse those two assignments and the bar would
+  // draw its insertion line on one side of the pocket while placing the widget
+  // on the other. A marker that lies is worse than no override at all.
+  readonly property var hostDropMarker: ({
+    after: bar ? bar.barDragAfter === true : false,
+    rect: bar ? bar.barDragTargetGeometry : null
+  })
+
+  readonly property var steerAfter: Model.steerDropAfter({
+    intent: root.dropIntent,
+    nearestAtEnd: root.membersLeadFromEnd,
+    mayWrite: root.mayWriteMembers
+  })
+
+  // Writing a property from inside its own change handler re-enters that
+  // handler synchronously — measured on Qt 6, along with the rest of the
+  // semantics this relies on.
+  property bool steering: false
+
+  onHostDropMarkerChanged: steerDrop()
+
+  function steerDrop() {
+    if (root.steering) return
+    if (!root.steerAfter) return
+    if (!bar || !("barDragAfter" in bar) || !("barDragTargetGeometry" in bar)) return
+    if (typeof bar.dropMarkerRect !== "function") return
+
+    var want = root.steerAfter.after
+    var rect = bar.dropMarkerRect(root.ownSlot, want)
+    if (!rect) return
+
+    // The rect is compared field by field, not by identity: dropMarkerRect()
+    // returns a fresh object every call. Comparing only `after` would not do
+    // either — in the order Bar.qml writes today the `after` assignment
+    // triggers this, and the geometry assignment that follows would then find
+    // `after` already correct and stop, leaving the line drawn on the side the
+    // widget is not going to.
+    if (bar.barDragAfter === want && Model.sameMarkerRect(bar.barDragTargetGeometry, rect)) return
+
+    // Guarded so a host that turned one of these readonly cannot leave the
+    // flag latched and the override off for the rest of the session. The write
+    // that decides the placement goes first, so a refusal there applies nothing
+    // at all rather than half of it — and the invariant below carries the
+    // result either way. `finally` would say this more directly, but Qt 5's
+    // qmlformat segfaults on it, and that is the parser named in the README.
+    root.steering = true
+    try {
+      bar.barDragAfter = want
+      bar.barDragTargetGeometry = rect
+    } catch (e) {
+    }
+    root.steering = false
+  }
+
   // ---------------------------------------------------------- persistence
 
   // The widget just taken in, held visible until the bar's own release handler
@@ -269,12 +348,10 @@ BarWidget {
   // bar patches into the running widgets instead of rebuilding them, and the
   // move that follows reads the config this call already updated.
   function commitDrop(intent, id) {
-    if (!Model.mayWrite(root.barLayout, root.moduleName)) return
+    if (!root.mayWriteMembers) return
     if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
     var region = root.ownRegion
-    if (region === "") return
-
     var raw = root.setting("members", "")
     var next = Model.nextMembers(Model.toList(raw), root.layoutIds(region), id, intent,
                                  root.membersLeadFromEnd)
@@ -294,10 +371,12 @@ BarWidget {
 
   // ------------------------------------------------------- placement repair
 
-  // Members belong on the side the pocket fans them out towards. A widget
-  // dropped onto the pocket from the far side is placed there by the bar, and
-  // would fan out alone on the wrong side of the icon while the rest of the
-  // group is on the other — which reads as the pocket having lost it.
+  // Members belong on the side the pocket fans them out towards. A member that
+  // is not there would fan out alone on the wrong side of the icon while the
+  // rest of the group is on the other — which reads as the pocket having lost
+  // it. The steering above keeps a far-side arrival from landing there in the
+  // first place wherever it applies; this is what guarantees the result when it
+  // does not, and what repairs a hand-edited config either way.
   //
   // Written as a standing invariant rather than as a step in the drop, because
   // it cannot be a step in the drop: the bar persists its own move AFTER this
@@ -324,12 +403,10 @@ BarWidget {
 
   function repairPlacement() {
     if (root.misplacedMember === "") return
-    if (!Model.mayWrite(root.barLayout, root.moduleName)) return
+    if (!root.mayWriteMembers) return
     if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
     var region = root.ownRegion
-    if (region === "") return
-
     var id = root.misplacedMember
     var selfId = root.moduleName
     var nearestAtEnd = root.membersLeadFromEnd
