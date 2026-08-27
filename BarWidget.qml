@@ -246,6 +246,14 @@ BarWidget {
     var slots = bar ? bar.moduleSlots : []
     var mine = root.ownWindow
     var last = null
+    // A slot answers for one layout entry and then steps aside. The host lets
+    // some widgets be added twice — a spacer, the indicators — and taking the
+    // first slot carrying the id every time would answer with the earlier copy
+    // for both of them: the mark's real neighbour would go unrecognised while
+    // a gap further out armed the pocket instead. Slots are created in layout
+    // order, so consuming them in that order pairs the nth entry with the nth
+    // slot.
+    var used = []
 
     for (var i = 0; i < ids.length; i++) {
       if (ids[i] === root.moduleName) break
@@ -254,6 +262,7 @@ BarWidget {
         var slot = slots[j]
         if (!slot || slot.region !== root.ownRegion) continue
         if (root.canonical(slot.moduleName) !== ids[i]) continue
+        if (used.indexOf(slot) !== -1) continue
         if (!Model.ownsSlot({
               hostComparesWindows: root.hostComparesWindows,
               surfaceKnown: mine !== null,
@@ -264,6 +273,7 @@ BarWidget {
         // slot that is invisible or has no size, so the bar can never name it —
         // and a collapsed pocket's own members are exactly that.
         if (slot.visible !== true || slot.width <= 0 || slot.height <= 0) continue
+        used.push(slot)
         last = slot
         break
       }
