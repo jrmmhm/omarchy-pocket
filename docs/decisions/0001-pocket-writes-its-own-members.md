@@ -84,8 +84,13 @@ in the README rather than papered over.
 Shipped in 0.2.0. `Model.js` holds the decision (`dropDecision`), the list it
 produces (`nextMembers`, `orderMembers`, `withoutMember`, `membersValue`) and
 the write itself (`setMembersOnEntry`); `BarWidget.qml` only observes the bar's
-drag properties and calls them. 170 assertions cover it, with a negative fixture
-beside every refusal.
+drag properties and calls them. Every refusal has a negative fixture beside it
+in the suite.
+
+The write refuses rather than scaffolds: if the section this pocket claims to
+live in is absent from the config, there is nothing here to edit, and creating
+it would be the host's business. That is what keeps "the only thing Pocket
+writes is its own entry" literally true.
 
 Two things had to be learned by running it rather than by reading the host.
 
@@ -93,8 +98,8 @@ The write must run *synchronously*, ahead of the bar's own move, because that
 move rebuilds every widget on every monitor and a deferred callback would reach
 for an instance that no longer exists. It is safe to run first: a members-only
 change is an inline settings change, which the bar patches into the running
-widgets instead of rebuilding them — measured at 0.05 s against 1.45 s for an
-order change.
+widgets instead of rebuilding them, at a fraction of the cost
+([0002](0002-members-belong-on-one-side.md) owns the measurement).
 
 And the widget just taken in must be held *visible* until the bar's release
 handler has returned. Qt cancels a pressed `MouseArea` the moment its item goes

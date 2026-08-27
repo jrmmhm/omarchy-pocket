@@ -64,13 +64,35 @@ the layout is untouched.
 
 ## Consequences
 
-Accepted cost: a far-side drop pays two bar rebuilds instead of one — measured
-at about 3 s rather than 1.5 s on a three-monitor session, where a rebuild
-re-instantiates every widget on every screen. Dropping from the side the members
-are already on pays the usual single rebuild, which is what any widget reorder
-costs in Omarchy with or without this plugin.
+Accepted cost: a far-side drop pays two bar rebuilds instead of one. Dropping
+from the side the members are already on pays the usual single rebuild, which is
+what any widget reorder costs in Omarchy with or without this plugin.
 
-The open question is whether to spend host coupling to avoid it: overriding
+This file owns the number. Measured on the user's three-monitor session by
+sampling the shell process's CPU time across a write: **1.45 s** for a layout
+order change (three samples, 1.45 / 1.47 / 1.45), against **0.05 s** for a
+members-only change. The gap is what 0001 relies on when it writes membership
+ahead of the bar's own move; it is also why a second order change is worth
+arguing about at all. Every other file states the cost qualitatively and points
+here.
+
+Two adjacent ideas were refused during the same work, and are recorded here so
+they are not re-proposed as oversights.
+
+**Expanding the pocket after a successful add**, as feedback that the widget
+went somewhere. It cannot work: the drop's own layout write rebuilds every
+widget, and `expanded` is per-instance session state that the rebuild discards
+milliseconds later. The feedback lives in the mark lighting up *before* the
+drop instead, which is the better place for it anyway.
+
+**Teaching `resolution` to prefer a drawn slot** over the hidden placeholder the
+bar builds for every center widget when `centerAnchor` is set. The obvious
+implementation reads `slot.visible` inside the binding that decides which slot
+to set `visible` on — a loop, and one that would oscillate rather than settle.
+Refused; the consequence is a README caveat instead: a member in the `center`
+section with an anchor configured may bind the placeholder and never hide.
+
+The open question is whether to spend host coupling to avoid the extra rebuild: overriding
 `barDragAfter` and the drop-marker geometry during the drag would make the bar
 place a far-side arrival correctly in the first place, halving the cost, at the
 price of writing three of the bar's internal properties mid-gesture. If a future

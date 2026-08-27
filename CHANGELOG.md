@@ -7,14 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Known
-
-- Dropping a widget in from the far side of the pocket costs two bar rebuilds
-  instead of one — about 3 s rather than 1.5 s on a three-monitor session,
-  because Omarchy rebuilds every widget on every monitor for any reorder.
-  Making the drop marker snap to the pocket's inner edge during the drag would
-  halve it, at the price of reaching further into the bar's internals. Not
-  decided yet.
+Nothing yet. One deliberate limitation carried over from 0.2.0 is still open:
+dropping a widget in from the far side of the pocket costs two bar rebuilds
+instead of one. Whether to spend host coupling to avoid it is argued, with the
+measurement, in
+[decision 0002](docs/decisions/0002-members-belong-on-one-side.md).
 
 ## [0.2.0] — 2026-08-27
 

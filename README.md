@@ -124,10 +124,17 @@ would make one screen's transient state everyone's.
 ## Things you should know before installing
 
 - **Dropping a widget in from the far side takes about twice as long.** Any
-  widget reorder makes Omarchy rebuild every widget on every monitor — measured
-  at ~1.5 s on a three-monitor session — and putting a far-side arrival back
-  where it belongs costs a second one. Dropping from the side the members are
-  already on costs the usual single rebuild.
+  widget reorder makes Omarchy rebuild every widget on every monitor, and
+  putting a far-side arrival back where it belongs costs a second rebuild.
+  Dropping from the side the members are already on costs the usual single one.
+  The measurement and the trade-off are in
+  [decision 0002](docs/decisions/0002-members-belong-on-one-side.md).
+- **A member in the `center` section can be the wrong one.** With `centerAnchor`
+  set, the bar builds every center widget twice — once drawn, once as a hidden
+  placeholder — and Pocket may bind the placeholder, in which case the widget on
+  screen never hides. Telling them apart would mean reading `visible` inside the
+  binding that sets it, which is a loop. Keep members in the pocket's own
+  section, which is where they belong anyway.
 - **A drag cancelled from outside cannot be told from a drop.** Qt emits
   `canceled` *instead of* `released` with nothing to distinguish them, so if
   something steals the pointer while the mark is lit, the widget joins the
@@ -174,7 +181,9 @@ Design decisions live in [`docs/decisions/`](docs/decisions/).
 Omarchy 4.x with the Quickshell bar. No network access, no subprocesses. The
 only thing Pocket writes is its own entry in `shell.json` — its `members`, and
 the position of a member that ended up on the wrong side of it — always through
-the host's own config mutator, which writes the file atomically.
+the host's own config mutator, which writes the file atomically. If it cannot
+find its own entry it writes nothing at all, rather than creating what is
+missing: scaffolding a config is the host's business, not a plugin's.
 
 ## License
 
