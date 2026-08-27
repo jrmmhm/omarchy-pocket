@@ -426,8 +426,17 @@ BarWidget {
   //
   // It converges for the same reason: ordering by the layout is idempotent,
   // and nothing puts the list back out of order.
-  readonly property bool membersMisordered: !Model.membersInLayoutOrder(
-    Model.toList(root.setting("members", "")), root.layoutIds(root.ownRegion))
+  //
+  // It writes back what toList() produced, so it must not run over a list
+  // toList() cannot reproduce. A hand-written entry with spaces in it comes
+  // back split, and joined again it is no longer what the user wrote — a typo
+  // would be silently rewritten into several ids, one of them possibly a
+  // duplicate. An id the parser rejects is exactly that marker, and the
+  // tooltip is already asking the user to fix it. Every gesture that writes
+  // has the same lossy step, but a gesture is asked for; this is not.
+  readonly property bool membersMisordered: root.rejectedIds.length === 0
+    && !Model.membersInLayoutOrder(
+      Model.toList(root.setting("members", "")), root.layoutIds(root.ownRegion))
 
   function scheduleReorder() {
     if (!root.membersMisordered) return

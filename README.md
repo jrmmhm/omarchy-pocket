@@ -96,8 +96,15 @@ ordering is what keeps the mark itself from sliding out from under your pointer.
 Pocket keeps that arrangement for you. While you drag a widget onto it, it tells
 the bar which side the widget belongs on, so it lands there directly; and a
 member that ends up on the wrong side anyway — moved there by hand, or dropped
-in from the far side in the `left` section — is put back against the pocket. It
-never reorders members that are already on the right side.
+in from the far side in the `left` section — is put back against the pocket. A
+widget already on the correct side is never moved.
+
+The `members` setting itself is kept in the order the widgets physically sit in,
+and rewritten when the two disagree — that order is what the fan-out follows, so
+a list that disagrees with the bar animates in a direction that is not there. If
+you write `members` by hand in a different order, expect it back in layout order.
+Ids Pocket could not parse are left exactly where you wrote them, and while one
+of those is present it does not touch the order at all.
 
 `omarchy.tray` is a poor member: Omarchy pins it to its section's inner edge on
 every config load, and its own drawer assumes it sits there.

@@ -3,6 +3,13 @@
 //
 // Run through tests/run.sh, which is the command the /implement commit gate
 // accepts for this repository.
+//
+// Mutation testing this file: copy the whole repository, not just Model.js and
+// tests/. The manifest checks below read manifest.json AND the entry point it
+// names, so a partial copy fails before a single mutant is applied — and every
+// mutant then reads as killed, which is the one result that looks like success.
+// Measured on 2026-08-27: fourteen mutants "killed" against such a baseline, of
+// which six had in fact survived. Assert the baseline is green first.
 
 const fs = require("fs")
 const path = require("path")
@@ -379,8 +386,19 @@ check("nor the one before the last widget", gap("omarchy.power", false), false)
 check("a target this section does not hold touches nothing",
   gap("omarchy.audio", false), false)
 check("an empty target id touches nothing", gap("", false), false)
-check("a malformed entry does not resolve as a target",
-  Model.gapTouchesMember(["a", "", "b"], ["a"], "", true), false)
+
+// A hand-written layout can hold a malformed entry, which entryIdOf() reports
+// as "". These three are the only fixtures that can tell the three id guards
+// apart from doing nothing at all: without a malformed entry to land on, an
+// empty or unknown target still comes out false by accident — through indexOf
+// and an out-of-range read — rather than because the rule refused it. Each was
+// watched failing with its guard removed.
+check("an empty target id does not resolve to a malformed entry",
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], ["mehiel.darky"], "", false), false)
+check("an empty member id does not match a malformed entry",
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], [""], "mehiel.darky", true), false)
+check("an unknown target does not fall through to the first gap",
+  Model.gapTouchesMember(["mehiel.darky", "omaplug"], ["mehiel.darky"], "nope", true), false)
 check("no layout at all touches nothing",
   Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false), false)
 check("no members at all touches nothing",
@@ -427,6 +445,18 @@ check("but a real inversion is still seen past one",
   Model.membersInLayoutOrder(["omaplug", "mehiel.darky", "typo"], RUN), false)
 check("with no layout to compare against, order cannot be wrong",
   Model.membersInLayoutOrder(["omaplug", "mehiel.darky"], []), true)
+
+// The repair writes back what toList() produced, so it must not run over a
+// list toList() cannot reproduce. These two together are why the widget guards
+// the invariant on `rejected` being empty: the second says the repair WOULD
+// fire on such a list, the first says how it is recognised before it does.
+const MANGLES = "not a widget id!, omaplug"
+check("a rejected id marks a list that must not be rewritten",
+  Model.rejectedMembers(MANGLES, SELF).length > 0, true)
+check("because ordering it would change what the user wrote",
+  Model.membersInLayoutOrder(Model.toList(MANGLES), RUN), false)
+check("and the round trip would split one entry into several",
+  Model.membersValue(Model.toList(MANGLES), MANGLES), "not, a, widget, id!, omaplug")
 
 // --------------------------------------------------------- config write
 

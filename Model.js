@@ -142,7 +142,6 @@ function orderMembers(list, layoutIds) {
 function membersInLayoutOrder(rawList, layoutIds) {
   var source = rawList || []
   var ordered = orderMembers(source, layoutIds)
-  if (ordered.length !== source.length) return false
   for (var i = 0; i < source.length; i++) {
     if (String(ordered[i]).trim() !== String(source[i]).trim()) return false
   }
@@ -231,6 +230,12 @@ function gapTouchesMember(layoutIds, memberIds, targetId, after) {
   if (at === -1) return false
   if (after) at += 1
 
+  // The two range guards are on the engine's terms, not the test suite's. In
+  // node an out-of-range index is undefined and falls out harmlessly; the
+  // layout reaching this from QML is a sequence type, which is not obliged to
+  // be so forgiving. node cannot show the difference, so no test can either —
+  // the same reason the tiebreak in orderMembers() carries a comment instead
+  // of a fixture.
   var before = at > 0 ? String(ids[at - 1]).trim() : ""
   var behind = at < ids.length ? String(ids[at]).trim() : ""
 

@@ -68,8 +68,11 @@ every pocket instance reaches the same conclusion. `targetIsSelf` stays an
 object identity test and stays safe, because it only ever gates the `add`
 branch and its fallthrough is "do nothing" — the instance that is not being
 aimed at declines rather than acting. Reintroducing `resolution.slots` into the
-membership branch, for any reason, restores the multi-monitor defect; a test
-pins the shape of the inputs so that it cannot happen quietly.
+membership branch, for any reason, restores the multi-monitor defect. A test
+states that intent — a member's fate must not depend on which instance is
+asking — but it can only vary the inputs the rule has, so it would not catch a
+new per-instance input being added. This paragraph is the guard; the test is
+the reminder.
 
 Deleting `innerEdge` changes nothing. In the `right` and `center` sections the
 gap before the pocket touches the innermost member and the gap after it touches
@@ -126,10 +129,28 @@ write, 34 ms later, 0.03 s of shell CPU and no rebuild. A layout reorder —
 what the bar itself does — costs one layout write, its rebuild, and then that
 one repair.
 
-One observation from the live session is recorded unexplained rather than
-explained away: four of five real drag gestures produced three writes rather
-than two, the last two byte-identical, together 0.02 s of CPU. Reproducing
-each path on its own afterwards gave the expected counts above, so the third
-write does not come from either invariant in isolation. It changes no bytes
-and costs nothing measurable; it is written down here so that a later
-measurement has something to compare against.
+One observation from the live session: four of five real drag gestures produced
+three writes rather than two, the last two byte-identical, together 0.02 s of
+CPU. Reproducing each path on its own afterwards gave the expected counts
+above, so it is not either invariant on its own.
+
+The candidate — derived from the code, not measured — is this decision working
+as intended. The bar's drag properties live on the shared bar root, so every
+pocket instance runs the same falling-edge handler, and the membership branch
+now reads only instance-independent ids. All of them therefore reach the same
+conclusion and all of them call `commitDrop`, which nothing deduplicates: one
+write per monitor, byte-identical from the second on. Agreement is the whole
+point of the change, and this is its price. It is cheap — identical bytes are
+an empty settings delta and no rebuild — and it is written down so a later
+measurement has something to compare against rather than a mystery.
+
+Two things this rule now depends on are recorded as known rather than fixed.
+`memberIds` is not passed through `bar.canonicalWidgetId` while
+`layoutIds()` and the drag target's id are; the host's implementation is the
+identity today, so nothing differs, but if it ever stopped being so,
+`gapTouchesMember()`, `membersInLayoutOrder()` and `firstMisplacedMember()`
+would all fail together. And while a member is stranded on the wrong side of
+the pocket, the gap behind the pocket touches it and therefore reads as inside
+the group — a drag there does not eject. That is what "outside the group"
+means when the group is temporarily the wrong shape, and the placement
+invariant restores it.
