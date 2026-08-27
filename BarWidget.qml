@@ -292,6 +292,55 @@ BarWidget {
     else root.releaseVisibleHold()
   }
 
+  // ------------------------------------------------------- placement repair
+
+  // Members belong on the side the pocket fans them out towards. A widget
+  // dropped onto the pocket from the far side is placed there by the bar, and
+  // would fan out alone on the wrong side of the icon while the rest of the
+  // group is on the other — which reads as the pocket having lost it.
+  //
+  // Written as a standing invariant rather than as a step in the drop, because
+  // it cannot be a step in the drop: the bar persists its own move AFTER this
+  // widget has written, and would overwrite any correction made first. The
+  // move also rebuilds every widget, so whatever repairs the placement has to
+  // be something the NEW instance does on sight. That it also repairs a
+  // hand-edited config is the better half of the bargain.
+  //
+  // It converges: each pass moves exactly one widget to the correct side, and
+  // there is no rule that moves one back.
+  readonly property string misplacedMember: Model.firstMisplacedMember(
+    root.layoutIds(root.ownRegion), root.moduleName, root.memberIds, root.membersLeadFromEnd)
+
+  // Never written straight from a handler. A bar surface exists per monitor,
+  // every one of them reaches this conclusion at the same moment, and the write
+  // rebuilds the whole bar — done inline it would land in the middle of the
+  // Repeater still creating the delegates that are asking for it. Deferred, the
+  // first write wins and the instances the rebuild replaces find nothing left
+  // to do; Qt.callLater collapses the repeats per object for free.
+  function scheduleRepair() {
+    if (root.misplacedMember === "") return
+    Qt.callLater(root.repairPlacement)
+  }
+
+  function repairPlacement() {
+    if (root.misplacedMember === "") return
+    if (root.duplicateInstances) return
+    if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
+
+    var region = root.ownRegion
+    if (region === "") return
+
+    var id = root.misplacedMember
+    var selfId = root.moduleName
+    var nearestAtEnd = root.membersLeadFromEnd
+
+    bar.shell.mutateShellConfig(function (config) {
+      Model.placeMemberBesideSelf(config, region, id, selfId, nearestAtEnd)
+    })
+  }
+
+  onMisplacedMemberChanged: scheduleRepair()
+
   // ------------------------------------------------------------ animation
 
   // One animated scalar, everything else derived from it — the shape the stock
@@ -394,6 +443,10 @@ BarWidget {
   Component.onCompleted: {
     if (holdOpen) expanded = true
     apply()
+    // The instance that could see the misplacement is the one the drop's own
+    // rebuild created, and a binding that starts out non-empty never changes,
+    // so it would never fire its handler.
+    scheduleRepair()
   }
 
   // Without this, disabling or hot-reloading the plugin leaves someone else's

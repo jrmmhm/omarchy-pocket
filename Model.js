@@ -254,6 +254,69 @@ function setMembersOnEntry(config, region, id, value) {
   return false
 }
 
+// The first member sitting on the wrong side of the pocket, or "" if the run
+// is intact. Members belong on one side — the side the pocket fans them out
+// towards — and a widget dropped onto the pocket from the far side is placed
+// there by the bar, which would leave it fanning out alone on the wrong side
+// of the icon while the rest of the group is on the other.
+//
+// Ids the region does not hold are skipped rather than reported: a member in
+// another section is a different mistake, and the tooltip already names it.
+function firstMisplacedMember(layoutIds, selfId, memberIds, nearestAtEnd) {
+  var ids = layoutIds || []
+  var self = String(selfId || "").trim()
+  if (self === "") return ""
+
+  var selfAt = -1
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i]).trim() === self) { selfAt = i; break }
+  }
+  if (selfAt === -1) return ""
+
+  var members = memberIds || []
+  for (var m = 0; m < members.length; m++) {
+    var want = String(members[m]).trim()
+    if (want === "" || want === self) continue
+    for (var j = 0; j < ids.length; j++) {
+      if (String(ids[j]).trim() !== want) continue
+      if (nearestAtEnd ? j > selfAt : j < selfAt) return want
+      break
+    }
+  }
+  return ""
+}
+
+// Move one entry so it sits directly against the pocket, on the side the
+// members fan out towards. Reports whether it moved: a member already on the
+// correct side is left exactly where the user put it, which is what keeps
+// this from fighting the ordering inside the run.
+function placeMemberBesideSelf(config, region, id, selfId, nearestAtEnd) {
+  if (!isPlainObject(config)) return false
+  var want = String(id || "").trim()
+  var self = String(selfId || "").trim()
+  if (want === "" || self === "" || want === self) return false
+
+  if (!isPlainObject(config.bar)) config.bar = {}
+  if (!isPlainObject(config.bar.layout)) config.bar.layout = {}
+  if (!Array.isArray(config.bar.layout[region])) config.bar.layout[region] = []
+
+  var entries = config.bar.layout[region]
+  var from = -1
+  var selfAt = -1
+  for (var i = 0; i < entries.length; i++) {
+    var eid = entryIdOf(entries[i])
+    if (eid === want && from === -1) from = i
+    if (eid === self && selfAt === -1) selfAt = i
+  }
+  if (from === -1 || selfAt === -1) return false
+  if (nearestAtEnd ? from < selfAt : from > selfAt) return false
+
+  var moved = entries.splice(from, 1)[0]
+  var at = from < selfAt ? selfAt - 1 : selfAt
+  entries.splice(nearestAtEnd ? at : at + 1, 0, moved)
+  return true
+}
+
 // How many entries the layout holds for one widget id. This is the honest
 // answer to "is there a second pocket": bar.moduleWidgets() counts live
 // instances, and the bar is built once per monitor — plus a second time for
@@ -340,5 +403,7 @@ if (typeof module !== "undefined" && module.exports) {
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
-                     setMembersOnEntry: setMembersOnEntry, countEntries: countEntries }
+                     setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
+                     firstMisplacedMember: firstMisplacedMember,
+                     placeMemberBesideSelf: placeMemberBesideSelf }
 }

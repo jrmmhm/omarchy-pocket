@@ -384,6 +384,73 @@ check("an empty id is refused",
     JSON.stringify(config), JSON.stringify({ bar: { layout: { right: [] } } }))
 }
 
+// ---------------------------------------------------- placement repair
+
+const RIGHT_IDS = ["omarchy.tray", "mehiel.darky", "omaplug", SELF, "jerome.focus", "omarchy.bluetooth"]
+
+check("a run entirely on the right side of the pocket is intact",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["mehiel.darky", "omaplug"], true), "")
+check("a member past the pocket is named",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["mehiel.darky", "omarchy.bluetooth"], true),
+  "omarchy.bluetooth")
+check("the first one is named, not all of them",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["jerome.focus", "omarchy.bluetooth"], true),
+  "jerome.focus")
+// Mirrored: in a left section the members sit after the pocket, so being
+// before it is the mistake.
+check("in a left section the sides are mirrored",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["jerome.focus"], false), "")
+check("and a member before the pocket is the mistake there",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["mehiel.darky"], false), "mehiel.darky")
+// A member in another section is a different mistake and the tooltip already
+// names it; repairing it by moving it here would be an unasked-for edit.
+check("a member the region does not hold is skipped",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, ["omarchy.clock"], true), "")
+check("a pocket that is not in the region reports nothing",
+  Model.firstMisplacedMember(["a", "b"], SELF, ["a"], true), "")
+check("no members, nothing misplaced",
+  Model.firstMisplacedMember(RIGHT_IDS, SELF, [], true), "")
+
+{
+  const config = { bar: { layout: { right: [
+    { id: "omarchy.tray" }, { id: "mehiel.darky" }, { id: SELF },
+    { id: "jerome.focus" }, { id: "omarchy.bluetooth", quirk: 1 }] } } }
+  check("a member past the pocket is moved back against it",
+    Model.placeMemberBesideSelf(config, "right", "omarchy.bluetooth", SELF, true), true)
+  check("it now sits directly before the pocket",
+    config.bar.layout.right.map(Model.entryIdOf),
+    ["omarchy.tray", "mehiel.darky", "omarchy.bluetooth", SELF, "jerome.focus"])
+  check("and it was moved, not rebuilt",
+    config.bar.layout.right[2].quirk, 1)
+  // Idempotent, which is what stops the invariant from oscillating.
+  check("a second pass moves nothing",
+    Model.placeMemberBesideSelf(config, "right", "omarchy.bluetooth", SELF, true), false)
+}
+
+{
+  const config = { bar: { layout: { left: [
+    { id: "b" }, { id: SELF }, { id: "a" }] } } }
+  check("a left-section member before the pocket is moved",
+    Model.placeMemberBesideSelf(config, "left", "b", SELF, false), true)
+  check("and lands directly after it",
+    config.bar.layout.left.map(Model.entryIdOf), [SELF, "b", "a"])
+}
+
+check("a member already on the correct side is left alone",
+  Model.placeMemberBesideSelf({ bar: { layout: { right: [{ id: "a" }, { id: SELF }] } } },
+    "right", "a", SELF, true), false)
+check("an entry that is not there is not invented",
+  Model.placeMemberBesideSelf({ bar: { layout: { right: [{ id: SELF }] } } },
+    "right", "a", SELF, true), false)
+check("a pocket that is not there is refused",
+  Model.placeMemberBesideSelf({ bar: { layout: { right: [{ id: "a" }] } } },
+    "right", "a", SELF, true), false)
+check("the pocket refuses to move itself",
+  Model.placeMemberBesideSelf({ bar: { layout: { right: [{ id: SELF }] } } },
+    "right", SELF, SELF, true), false)
+check("a config that is not an object is refused",
+  Model.placeMemberBesideSelf(null, "right", "a", SELF, true), false)
+
 // ------------------------------------------------------- entry counting
 
 // The bug this replaces: bar.moduleWidgets() counts live instances, and the
