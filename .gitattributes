@@ -1,0 +1,6 @@
+# The shell reads these files verbatim; keep them LF everywhere.
+* text=auto eol=lf
+
+# The figures are documentation, not source. Without this GitHub's language
+# bar reports the repository as mostly SVG.
+docs/*.svg linguist-documentation

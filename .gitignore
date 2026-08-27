@@ -1,0 +1,10 @@
+# Qt's compiled QML/JS cache, written next to the source it came from.
+*.qmlc
+*.jsc
+.qmlls.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~

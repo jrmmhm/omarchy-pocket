@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # run.sh prints the success line itself, so a crashed run prints nothing
+      # recognizable rather than an empty success.
+      - run: bash tests/run.sh
+
+  qml:
+    name: qml syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # qmllint cannot resolve the shell's own qs.* imports, so this is a
+      # syntax gate, not a semantic one -- which is exactly the half the node
+      # suite cannot cover. It is skipped rather than failed when the Qt tools
+      # are not installable: a packaging change upstream is not a defect here,
+      # and a job that fails for that reason teaches everyone to ignore it.
+      - name: lint
+        run: |
+          set -u
+          sudo apt-get update -qq || { echo "::warning::apt update failed, skipping"; exit 0; }
+          sudo apt-get install -y -qq qt6-declarative-dev-tools \
+            || { echo "::warning::qt6-declarative-dev-tools unavailable, skipping"; exit 0; }
+          QMLLINT="$(command -v qmllint || true)"
+          [ -n "$QMLLINT" ] || QMLLINT=/usr/lib/qt6/bin/qmllint
+          [ -x "$QMLLINT" ] || { echo "::warning::qmllint not found, skipping"; exit 0; }
+          "$QMLLINT" BarWidget.qml
