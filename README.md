@@ -59,6 +59,15 @@ so it survives a restart, and you can still edit it by hand:
 writes back whichever shape it finds, and never touches anything else on the
 entry. The file hot-reloads: no restart after an edit.
 
+The order you drag survives more than a restart. The run's physical order lives
+in `bar.layout` and `members` mirrors it, both in that one file, written by the
+host atomically — so a reboot is just a restart, and `omarchy plugin update`
+pulls a new version and rebuilds the widgets without touching the file at all. A
+member whose widget fails to load after an update keeps its place, because the
+place is read from the file rather than from what is running. The one thing that
+does lose the list is a plugin manager's disable/enable round-trip; that caveat
+is below.
+
 ## Why this one keeps your setup honest
 
 ![Other grouping widgets move members into plugins[], where Omarchy's tools report them as off. Pocket leaves them in bar.layout.](docs/pocket-layout.svg)
@@ -119,8 +128,9 @@ in progress holds it open too, for the same reason: Qt delivers no hover at all
 while something else holds the mouse.
 
 It closes within a tick of all of that stopping **and** the pointer having left
-the bar — a repeating check rather than a countdown, because a countdown that a
-guard refuses once has nothing left to re-arm it.
+the bar — any screen's bar, see the notes below — a repeating check rather than
+a countdown, because a countdown that a guard refuses once has nothing left to
+re-arm it.
 Waiting for the bar rather than the pocket is deliberate: folding up narrows the
 section, which can slide a neighbour under a stationary pointer, and a pocket
 that reacted to that would oscillate. Omarchy's own hover reveal uses the same
@@ -167,6 +177,24 @@ would make one screen's transient state everyone's.
 - **A plugin manager's disable/enable round-trip can lose `members`**, because
   re-enabling a bar widget rewrites its entry as a bare `{ "id": ... }`. Keep a
   copy of the line if you toggle the pocket off and on.
+- **A pocket on another screen folds up late.** Omarchy counts bar hover once
+  for the whole shell rather than once per screen, so while your pointer is on
+  *any* monitor's bar, no pocket on any monitor folds. It only delays a fold —
+  nothing opens by itself, and everything closes as soon as the pointer leaves
+  the bar. Reading it per screen is not available to a plugin: the only
+  per-surface signal is which module slot the pointer is on, and that does not
+  cover the empty runs between the sections, where the fold has to keep waiting.
+- **A click on one screen's bar can land on another screen's pocket.** The bar
+  hit-tests a click against the click targets of every monitor, and since Qt
+  6.8 mapping a point between two windows goes through global coordinates —
+  which Wayland does not give a client, so both bar surfaces report their origin
+  as the screen corner and are tested as though stacked on top of each other.
+  Where two pockets sit at the same distance from their bar's left edge,
+  clicking one can pin the other; clicking it again releases it. Pocket cannot
+  filter this out from the inside: a widget is handed a press with no record of
+  where it happened, and refusing presses that arrive without a hover would
+  break pinning in exactly the case it exists for — a bar panel is open, and its
+  input mask means no hover reaches the bar at all.
 - **A member cannot be the `centerAnchor`.** That one slot carries a `visible`
   binding of the bar's own, and writing it would destroy the binding for the
   rest of the session. Pocket refuses it — the mark will not light up for it.

@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On more than one monitor, dragging a widget into the pocket, out of it, or
+  around inside it no longer leaves the pocket on another screen fanned out.
+  A pocket filtered the bar's shared slot list to its own window only while it
+  knew which window that was — and when it did not, it skipped the comparison
+  and matched every screen. Two things make that reachable: an instance being
+  torn down loses its window while its bindings still run, and a live bar
+  surface loses its window for the ~50 ms a monitor move unmaps it. Either way
+  it adopted another screen's widgets and handed them back visible as it died,
+  while the pocket that owns them had already finished and had no reason to look
+  again. The comparison is now unconditional: an instance that does not know its
+  own window owns no slot at all. See
+  [decision 0005](docs/decisions/0005-a-pocket-drives-only-its-own-screens-slots.md).
+- The tooltip no longer reports members as "not on this bar" when the pocket has
+  not been able to look at the bar. It says which state it is in instead.
+
+### Documented
+
+- Two host limits that look like Pocket bugs and are not: a pocket on another
+  screen folds up late, because Omarchy counts bar hover once for the whole
+  shell; and a click on one screen's bar can land on another screen's pocket,
+  because the bar hit-tests clicks against every monitor's targets through
+  coordinates Wayland does not give a client. Both are in the README, with why
+  a plugin cannot filter them out from the inside.
+- What the dragged order survives, and the one thing it does not.
+
 - Reordering a widget *inside* the pocket no longer throws it out. It was
   dropped from `members` while the bar left it sitting among the remaining
   members — neither in the pocket nor out of it — and dropped exactly where it
