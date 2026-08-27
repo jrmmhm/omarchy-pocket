@@ -193,8 +193,9 @@ BarWidget {
     return false
   }
 
-  // The edge the members sit behind. Dropping there means "in", the other
-  // edge means "out", and the bar draws the line that says which one it is.
+  // Which side of the pocket the drop marker sits on, in terms of where its
+  // members live. Aiming at the pocket takes a widget in from either side; the
+  // side only decides whether dragging a member counts as leaving.
   readonly property bool onInnerEdge: membersLeadFromEnd ? !dragAfter : dragAfter
 
   readonly property string dropIntent: {

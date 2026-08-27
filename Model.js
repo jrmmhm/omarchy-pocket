@@ -130,18 +130,9 @@ function orderMembers(list, layoutIds) {
   return out
 }
 
-// Both operate on the RAW list — what the user actually wrote — and never on
-// the parsed one. Round-tripping through parseMembers would quietly delete the
+// Operates on the RAW list — what the user actually wrote — and never on the
+// parsed one. Round-tripping through parseMembers would quietly delete the
 // very ids the tooltip is at that moment asking the user to fix.
-function withMember(rawList, id) {
-  var want = String(id || "").trim()
-  var out = (rawList || []).slice()
-  if (want === "") return out
-  for (var i = 0; i < out.length; i++) if (String(out[i]).trim() === want) return out
-  out.push(want)
-  return out
-}
-
 function withoutMember(rawList, id) {
   var drop = String(id || "").trim()
   var out = []
@@ -151,6 +142,24 @@ function withoutMember(rawList, id) {
     out.push(source[i])
   }
   return out
+}
+
+// The member list a finished drag leaves behind.
+//
+// The layout is consulted only for the members that did NOT move, because the
+// pocket writes before the bar does: at this moment the dragged widget is
+// still recorded at its old position, and ranking it there would put it at the
+// wrong end of the list. Its new position is not a guess — dropping on the
+// inner edge lands it against the pocket, which is the near end of the run by
+// definition. So order the survivors by the layout and append the newcomer to
+// the end that faces the pocket.
+function nextMembers(rawList, layoutIds, id, intent, nearestAtEnd) {
+  var ordered = orderMembers(withoutMember(rawList, id), layoutIds)
+  if (intent !== "add") return ordered
+
+  var want = String(id || "").trim()
+  if (want === "") return ordered
+  return nearestAtEnd ? ordered.concat([want]) : [want].concat(ordered)
 }
 
 // Write back the shape that was found. A user who wrote a comma string gets a
@@ -180,8 +189,8 @@ function membersValue(list, previousRaw) {
 // identity test, which is correct per monitor and per center-anchor duplicate
 // without mapping a single coordinate.
 //
-// The rule in one sentence: the pocket has two edges, and dropping on the
-// inner one puts a widget in while dropping on the outer one takes it out.
+// The rule in one sentence: dropping a widget onto the pocket puts it in, and
+// dragging a member past the pocket takes it out.
 function dropDecision(state) {
   var s = state || {}
   var source = String(s.sourceId || "").trim()
@@ -199,8 +208,18 @@ function dropDecision(state) {
     if (String(members[i]).trim() === source) { isMember = true; break }
   }
 
-  var ontoInnerEdge = s.targetIsSelf === true && s.innerEdge === true
-  if (ontoInnerEdge) return isMember ? "none" : "add"
+  if (s.targetIsSelf === true) {
+    // Onto the pocket means in, from either side. Splitting the icon so that
+    // its two halves meant opposite things was measured on a real bar and felt
+    // wrong for the obvious reason: half of the thing you are aiming at did
+    // the opposite of what aiming at it looks like.
+    if (!isMember) return "add"
+
+    // For something already inside, the far side is the way out — dragging it
+    // past the pocket is how leaving a group looks. The near side is just
+    // reordering within the run.
+    return s.innerEdge === true ? "none" : "remove"
+  }
 
   // Leaving needs somewhere to land. A drag released off the bar produces no
   // target at all, the bar moves nothing, and neither does the pocket.
@@ -319,7 +338,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
                      rejectedMembers: rejectedMembers, revealFraction: revealFraction,
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
-                     withMember: withMember, withoutMember: withoutMember,
+                     withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
                      setMembersOnEntry: setMembersOnEntry, countEntries: countEntries }
 }

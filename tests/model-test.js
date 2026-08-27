@@ -212,21 +212,46 @@ check("a missing list yields nothing", Model.orderMembers(undefined, LAYOUT_RIGH
 
 // -------------------------------------------------- adding and removing
 
-// Both work on the RAW list. A round trip through parseMembers would delete
-// the ids the tooltip is at that moment asking the user to fix, and that is
-// their config, not ours.
-check("a new member is appended", Model.withMember(["a"], "b"), ["a", "b"])
-check("adding twice changes nothing", Model.withMember(["a", "b"], "b"), ["a", "b"])
-check("a rejected id survives an unrelated add",
-  Model.withMember(["../evil", "a"], "b"), ["../evil", "a", "b"])
-check("adding nothing changes nothing", Model.withMember(["a"], ""), ["a"])
-check("adding to nothing starts the list", Model.withMember(undefined, "a"), ["a"])
-
+// Works on the RAW list. A round trip through parseMembers would delete the
+// ids the tooltip is at that moment asking the user to fix, and that is their
+// config, not ours.
 check("a member is removed", Model.withoutMember(["a", "b"], "a"), ["b"])
 check("removing what is not there changes nothing", Model.withoutMember(["a"], "b"), ["a"])
 check("a rejected id survives an unrelated removal",
   Model.withoutMember(["../evil", "a", "b"], "a"), ["../evil", "b"])
 check("removing the last member empties the list", Model.withoutMember(["a"], "a"), [])
+
+// ------------------------------------------------------- the next list
+
+// The pocket writes before the bar moves anything, so at this moment the
+// dragged widget is still recorded where it came FROM. Ranking it there is
+// what would go wrong, and these two fixtures are the proof: the newcomer
+// must land against the pocket regardless of where it started.
+check("a widget dragged in from the far end still lands nearest the pocket",
+  Model.nextMembers(["mehiel.darky", "omaplug"], LAYOUT_RIGHT, "omarchy.tray", "add", true),
+  ["mehiel.darky", "omaplug", "omarchy.tray"])
+check("a widget dragged in from beyond the pocket lands there too",
+  Model.nextMembers(["mehiel.darky", "omaplug"], LAYOUT_RIGHT, "jerome.focus", "add", true),
+  ["mehiel.darky", "omaplug", "jerome.focus"])
+// In the left section the members sit after the pocket, so the near end is
+// the front of the list and the cascade runs the other way.
+check("in a left section the newcomer lands at the front",
+  Model.nextMembers(["mehiel.darky", "omaplug"], LAYOUT_RIGHT, "omarchy.tray", "add", false),
+  ["omarchy.tray", "mehiel.darky", "omaplug"])
+check("adding a widget that is already a member only re-seats it",
+  Model.nextMembers(["mehiel.darky", "omaplug"], LAYOUT_RIGHT, "mehiel.darky", "add", true),
+  ["omaplug", "mehiel.darky"])
+check("the survivors are put back into layout order",
+  Model.nextMembers(["omarchy.tailscale", "mehiel.darky"], LAYOUT_RIGHT, "omaplug", "add", true),
+  ["mehiel.darky", "omarchy.tailscale", "omaplug"])
+check("removing leaves the rest in layout order",
+  Model.nextMembers(["omarchy.tailscale", "omaplug", "mehiel.darky"], LAYOUT_RIGHT, "omaplug", "remove", true),
+  ["mehiel.darky", "omarchy.tailscale"])
+check("a rejected id survives either way",
+  Model.nextMembers(["../evil", "omaplug"], LAYOUT_RIGHT, "mehiel.darky", "add", true),
+  ["omaplug", "../evil", "mehiel.darky"])
+check("adding nothing adds nothing",
+  Model.nextMembers(["omaplug"], LAYOUT_RIGHT, "", "add", true), ["omaplug"])
 
 // -------------------------------------------------------- serialisation
 
@@ -256,14 +281,17 @@ function drop(overrides) {
   }, overrides))
 }
 
+// Aiming at the pocket takes a widget in from either side. An earlier rule
+// gave the icon's two halves opposite meanings; on a real bar that meant half
+// the thing you aim at does the opposite of what aiming at it looks like.
 check("the inner edge takes a widget in",
   drop({ targetIsSelf: true, innerEdge: true }), "add")
-check("the outer edge does not",
-  drop({ targetIsSelf: true, innerEdge: false }), "none")
+check("the outer edge takes it in too",
+  drop({ targetIsSelf: true, innerEdge: false }), "add")
 check("a neighbour is not the pocket", drop({ targetIsSelf: false }), "none")
-check("a member dropped on the inner edge is already in",
+check("a member dropped on the near side is only reordered",
   drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: true }), "none")
-check("a member dropped on the outer edge leaves",
+check("a member dragged past the pocket leaves",
   drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: false }), "remove")
 check("a member dropped elsewhere on the bar leaves",
   drop({ sourceId: "omaplug" }), "remove")
@@ -279,8 +307,12 @@ check("a member released off the bar stays",
 // than assumed to.
 check("the pocket refuses to hold itself",
   drop({ sourceId: SELF, targetIsSelf: true, innerEdge: true }), "none")
+check("and refuses itself from the other side too",
+  drop({ sourceId: SELF, targetIsSelf: true, innerEdge: false }), "none")
 check("the pocket refuses the center anchor",
   drop({ sourceId: "omarchy.clock", targetIsSelf: true, innerEdge: true }), "none")
+check("and refuses it from the other side too",
+  drop({ sourceId: "omarchy.clock", targetIsSelf: true, innerEdge: false }), "none")
 check("a widget that merely shares the anchor's name pattern is fine",
   drop({ sourceId: "omarchy.clockwork", targetIsSelf: true, innerEdge: true }), "add")
 check("with no anchor set, nothing is refused for being one",
