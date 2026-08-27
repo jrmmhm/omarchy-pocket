@@ -10,6 +10,14 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Ahead of the node suite on purpose: model-test.js prints the success line the
+# commit gate matches, and a QML failure after it would leave that line standing
+# as the last word on a red run. Skips itself where Quickshell is absent.
+if ! bash "$ROOT/tests/qml/run.sh"; then
+  echo "TESTS FAILED (qml harness)"
+  exit 1
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "TESTS FAILED (node is not installed)"
   exit 1
