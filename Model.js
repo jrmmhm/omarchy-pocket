@@ -345,9 +345,20 @@ function dropDecision(state) {
 // The write permission is the same one that decides whether `members` may be
 // written at all. Steering without writing would move a widget the user did
 // not aim there and then not record it as a member.
+//
+// `aimedAtOwnSlot` is the bar naming this pocket's own slot as the drop target,
+// and it is not implied by the intent: a widget aimed at the mark's near edge
+// arms the pocket while `barDragTarget` still points at the widget drawn before
+// it. Steering that would write a marker rect computed from THIS slot against a
+// target that is the neighbour, and `dropBarModuleAtTarget()` resolves the
+// placement from the target — the widget would land beside the neighbour while
+// the bar drew its line at the mark. That is a single monitor's defect; on
+// several it is also what keeps a drag on one screen from dragging the line
+// onto another screen's pocket. See docs/decisions/0008.
 function steerDropAfter(state) {
   var s = state || {}
   if (s.intent !== "add") return null
+  if (s.aimedAtOwnSlot !== true) return null
   if (s.mayWrite !== true) return null
   if (s.nearestAtEnd !== true) return null
   return { after: false }

@@ -671,7 +671,7 @@ check("a config that is not an object is refused",
 
 function steer(overrides) {
   return Model.steerDropAfter(Object.assign({
-    intent: "add", nearestAtEnd: true, mayWrite: true
+    intent: "add", aimedAtOwnSlot: true, nearestAtEnd: true, mayWrite: true
   }, overrides))
 }
 

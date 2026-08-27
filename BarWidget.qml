@@ -223,6 +223,69 @@ BarWidget {
   readonly property bool dropGapTouchesMember: Model.gapTouchesMember(
     root.layoutIds(root.ownRegion), root.memberIds, root.dragTargetId, root.dragAfter)
 
+  // The slot the bar names when it draws its line against the mark's NEAR edge.
+  //
+  // Module slots sit flush against one another — Bar.qml lays them out in a
+  // `Row` with `spacing: 0` — so that edge is at exactly the same distance from
+  // two candidates, and `BarModel.nearestDropTarget()` breaks the tie by
+  // keeping the first one it walked. `moduleSlots` is appended in slot creation
+  // order, which is layout order, so the pocket loses the tie at its near edge
+  // to whatever is drawn before it and wins the one at its far edge. Measured
+  // across the whole neighbourhood in docs/decisions/0008.
+  //
+  // Walked in layout order rather than in `moduleSlots` order, because the two
+  // agree everywhere except for the second copy the bar builds of every centre
+  // widget when `centerAnchor` is set, whose registration order is its own.
+  //
+  // Reading `slot.visible` here is not the loop 0002 refused. That one read it
+  // inside the binding that writes it; nothing downstream of this one writes
+  // `visible` — it reaches the drop decision, the mark's colour and the
+  // steering, and stops there.
+  readonly property var slotBeforeSelf: {
+    var ids = root.layoutIds(root.ownRegion)
+    var slots = bar ? bar.moduleSlots : []
+    var mine = root.ownWindow
+    var last = null
+
+    for (var i = 0; i < ids.length; i++) {
+      if (ids[i] === root.moduleName) break
+
+      for (var j = 0; j < slots.length; j++) {
+        var slot = slots[j]
+        if (!slot || slot.region !== root.ownRegion) continue
+        if (root.canonical(slot.moduleName) !== ids[i]) continue
+        if (!Model.ownsSlot({
+              hostComparesWindows: root.hostComparesWindows,
+              surfaceKnown: mine !== null,
+              sameWindow: root.hostComparesWindows && mine !== null
+                ? bar.sameWindow(bar.slotWindow(slot), mine) : false
+            })) continue
+        // What is not drawn is not a candidate: moduleDropAtScene() skips a
+        // slot that is invisible or has no size, so the bar can never name it —
+        // and a collapsed pocket's own members are exactly that.
+        if (slot.visible !== true || slot.width <= 0 || slot.height <= 0) continue
+        last = slot
+        break
+      }
+    }
+    return last
+  }
+
+  // Aiming at the mark means aiming at either of its two edges. The far one the
+  // bar names by this slot; the near one it names by the widget drawn before
+  // it, with the marker on that widget's far side — the same gap under its
+  // other name. Without the second term the near half of the mark never armed
+  // at all, which is what made the README's "from either side" untrue for half
+  // the icon while 0002 believed it had settled the question.
+  //
+  // Both terms are object identity against slots this instance can see, so the
+  // instance that is not being aimed at still falls through to doing nothing.
+  // That is the property 0004 asks the `add` branch to keep, and the reason the
+  // steering below may still be hung on the narrower of the two.
+  readonly property bool aimsAtSelf: !!root.dragTarget
+    && (root.dragTarget === root.ownSlot
+        || (root.dragAfter && root.dragTarget === root.slotBeforeSelf))
+
   readonly property string dropIntent: {
     if (!root.dragSource) return "none"
     return Model.dropDecision({
@@ -230,13 +293,25 @@ BarWidget {
       selfId: root.moduleName,
       anchorId: root.anchorId,
       members: root.memberIds,
-      targetIsSelf: !!root.dragTarget && root.dragTarget === root.ownSlot,
+      targetIsSelf: root.aimsAtSelf,
       hasTarget: !!root.dragTarget,
       gapTouchesMember: root.dropGapTouchesMember
     })
   }
 
-  readonly property bool dropArmed: dropIntent === "add"
+  // Lit while a release would take a widget in. `mayWriteMembers` is what
+  // commitDrop() checks, and until now the light did not: a bar carrying a
+  // second pocket entry lit the mark and then wrote nothing, which is the one
+  // thing the light is not allowed to do.
+  readonly property bool dropArmed: dropIntent === "add" && mayWriteMembers
+
+  // Lit while a release would let a member go. Unlike the add above, this
+  // answer is taken from ids alone (0004), so every screen's pocket reaches it
+  // in the same instant — the light has to ask separately whether the drag is
+  // on this surface. The resolved member slots are already filtered to it, so
+  // asking them costs no further reading of the host.
+  readonly property bool dropReleases: dropIntent === "remove" && mayWriteMembers
+    && root.resolution.slots.indexOf(root.dragSource) !== -1
 
   // What the drag last meant. The decision has to be taken when the drag ENDS,
   // and Bar.qml clears every drag property in one breath at that moment.
@@ -280,6 +355,7 @@ BarWidget {
 
   readonly property var steerAfter: Model.steerDropAfter({
     intent: root.dropIntent,
+    aimedAtOwnSlot: !!root.dragTarget && root.dragTarget === root.ownSlot,
     nearestAtEnd: root.membersLeadFromEnd,
     mayWrite: root.mayWriteMembers
   })
@@ -648,10 +724,17 @@ BarWidget {
   BarIconButton {
     id: button
     bar: root.bar
-    // Lit while a release would collect the dragged widget — the answer given
-    // before the drop, not explained after it. The same predicate decides the
+    // Lit while a release would change what the pocket holds — the answer given
+    // before the drop, not explained after it. The same predicates decide the
     // write, so the light cannot promise something the drop then refuses.
-    active: root.pinned || root.dropArmed
+    active: root.pinned || root.dropArmed || root.dropReleases
+    // Two answers, two colours, because they are opposite answers and the
+    // difference is the whole gesture: taking a widget in keeps the colour the
+    // bar gives an active widget, letting a member go borrows the colour
+    // Bar.qml paints its own insertion line in — the line the user is looking
+    // at while the pocket decides. A theme whose accent is its bar text reads
+    // that state as unlit, which is the state it replaced.
+    activeColor: root.dropReleases ? Color.accent : (root.bar ? root.bar.urgent : Color.urgent)
     // Deliberately not the stock tray's chevron: the tray sits in the same
     // section doing a visually similar thing, and two identical glyphs side by
     // side are two things a user cannot tell apart. Dots read as "there is more
