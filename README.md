@@ -165,8 +165,8 @@ could not find, could not use, or would not touch.
 ## Development
 
 ```bash
-bash tests/run.sh      # ALL TESTS PASSED (N assertions, 0 failures)
-qmllint BarWidget.qml
+bash tests/run.sh                    # ALL TESTS PASSED (N assertions, 0 failures)
+qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
 `Model.js` holds everything decidable without a running shell and is unit-tested
