@@ -24,11 +24,23 @@ eDP-1 at x=0 (1152×720), HDMI-A-1 at x=1152 (1600×900), DP-2 at x=2752
 and to the `quattro` branch as it stood on this date, so none of this is a local
 artefact. The tag is the durable half of that claim; the branch has moved on.
 
-The harnesses live outside this repository, under the session scratchpad as
-`harness/e1` … `harness/e9`. Each loads the host's own functions verbatim —
-copied out of a read-only scratch copy of `/usr/share/omarchy/shell`, never
-retyped — and feeds them fake targets. The installed shell was not modified;
-`pacman -Qkk omarchy` reports 1654 files, 0 altered.
+The harnesses were built outside this repository and are not kept: they exercise
+the host rather than Pocket, no CI runner has a Wayland session to run them in,
+and pinned to one Omarchy version they would go stale without anyone noticing.
+Each measurement below therefore says what it did, well enough to rebuild in a
+few lines, and is labelled so the text can refer back to it — `e2`, `e3` and so
+on are labels in this file, not paths.
+
+The shape they share: a Quickshell config that creates `PanelWindow`s, holds the
+host's own functions copied verbatim out of a read-only scratch copy of
+`/usr/share/omarchy/shell` — never retyped — and calls them with stand-in
+targets. Two notes for anyone rebuilding one. `qml6` prints nothing unless
+`QT_ASSUME_STDERR_HAS_CONSOLE=1` is set, and a probe surface wants
+`color: "transparent"`, `WlrLayer.Background`, `ExclusionMode.Ignore` and
+`WlrKeyboardFocus.None` so it disturbs nothing on screen.
+
+The installed shell was not modified; `pacman -Qkk omarchy` reports 1654 files,
+0 altered.
 
 ### The click routing: right about the defect, wrong about the cause
 
@@ -190,6 +202,15 @@ a defect on overlapping outputs, where e5 measures it going from 9 wrong clicks
 in 9 to none. `Ui/KeyboardPanel.qml::pressTargetAt` already applies exactly that
 filter for the same job, so the asymmetry within one file is the argument, and
 the one-line fix is unchanged.
+
+It was tried rather than assumed. A scratch copy of the host with
+`if (!targetBelongsToWindow(target, slotWindow(slot))) continue` added, its
+functions extracted verbatim and run against two surfaces sharing an origin:
+9 wrong resolutions in 18 becomes none, and the side-by-side case stays at 27
+and 0. One trade-off comes with it, also measured: a slot whose window is
+momentarily unknown resolves to `null`, so the click does nothing rather than
+something on the wrong surface. That is the same rule this plugin adopted for
+itself in [0005](0005-a-pocket-drives-only-its-own-screens-slots.md).
 
 The README carries no causal mechanism for either limit any more. It names the
 condition, says whether a plugin can filter it out, and points here. A mechanism
