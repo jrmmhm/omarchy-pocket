@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" role="img"
+     aria-label="Other grouping widgets move their members out of bar.layout, so Omarchy's own tools report a running widget as off. Pocket leaves them in bar.layout and only hides their slots, so every tool keeps reporting them correctly.">
+  <defs>
+    <style>
+      .card { fill: #0f1319; }
+      .pane { fill: #131820; }
+      .bad  { stroke: #f85149; }
+      .good { stroke: #3fb950; }
+      .badf { fill: #f85149; }
+      .goodf{ fill: #3fb950; }
+      .box  { fill: #1a1f27; stroke: #2b323d; stroke-width: 1; }
+      .h    { fill: #cdd9e5; font: 600 13px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .k    { fill: #8b98a8; font: 400 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .kd   { fill: #5b6673; font: 400 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .t    { fill: #7d8b9b; font: 400 12px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .flow { fill: none; stroke-width: 1.7; stroke-dasharray: 4 4; }
+    </style>
+    <marker id="a-bad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 1 9 5 0 9z" fill="#f85149"/>
+    </marker>
+  </defs>
+
+  <rect width="880" height="300" rx="12" class="card"/>
+
+  <!-- left: the usual way -->
+  <rect x="24" y="24" width="404" height="252" rx="10" class="pane"/>
+  <text x="48" y="54" class="h">Every other way of grouping</text>
+  <text x="48" y="74" class="t">moves the widget out of the layout</text>
+
+  <rect x="48" y="96" width="356" height="60" rx="8" class="box"/>
+  <text x="64" y="120" class="k">bar.layout.right</text>
+  <text x="64" y="140" class="kd">[ tray, … ]</text>
+
+  <rect x="48" y="196" width="356" height="60" rx="8" class="box"/>
+  <text x="64" y="220" class="k">plugins[]</text>
+  <text x="64" y="240" class="k">[ darky, omaplug, tailscale ]</text>
+
+  <path d="M226 158 v 32" class="flow bad" marker-end="url(#a-bad)"/>
+
+  <text x="288" y="180" class="badf" style="font: 600 11px ui-sans-serif, sans-serif; letter-spacing:.08em">REPORTED OFF</text>
+
+  <!-- right: pocket -->
+  <rect x="452" y="24" width="404" height="252" rx="10" class="pane"/>
+  <text x="476" y="54" class="h">Pocket</text>
+  <text x="476" y="74" class="t">moves nothing, only hides the slot</text>
+
+  <rect x="476" y="96" width="356" height="118" rx="8" class="box"/>
+  <text x="492" y="120" class="k">bar.layout.right</text>
+  <text x="492" y="142" class="k">[ tray,</text>
+  <text x="504" y="162" class="k">darky, omaplug, tailscale,</text>
+  <text x="504" y="182" class="k">pocket, … ]</text>
+  <text x="492" y="204" class="kd">slot.visible = false</text>
+
+  <text x="476" y="248" class="goodf" style="font: 600 11px ui-sans-serif, sans-serif; letter-spacing:.08em">STILL REPORTED ON</text>
+  <text x="476" y="268" class="t">omarchy plugin list · shell toggle · its own settings</text>
+</svg>

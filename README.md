@@ -1,19 +1,65 @@
+<div align="center">
+
 # Pocket
 
-**Tuck a run of bar widgets into one slot and fan them back out on hover.**
+**Tuck a run of Omarchy bar widgets behind one mark, and fan them back out on hover.**
+
+[![tests](https://img.shields.io/github/actions/workflow/status/jrmmhm/omarchy-pocket/ci.yml?branch=main&style=flat&label=tests&logo=github&logoColor=white)](https://github.com/jrmmhm/omarchy-pocket/actions/workflows/ci.yml)
+[![Omarchy 4.x](https://img.shields.io/badge/Omarchy-4.x-1f6feb?style=flat)](https://omarchy.org)
+[![bar widget](https://img.shields.io/badge/kind-bar--widget-8957e5?style=flat)](https://github.com/basecamp/omarchy)
+[![MIT](https://img.shields.io/badge/license-MIT-3fb950?style=flat)](LICENSE)
+
+</div>
+
+<!-- Motion demo goes here once recorded: docs/pocket-demo.gif -->
+
+![Three states of a bar: crowded, pocketed, and fanned back out on hover](docs/pocket-states.svg)
 
 A bar that has grown to a dozen widgets is a bar you stop reading. Pocket takes
 the ones you rarely need, hides them behind a single mark, and brings them back
 the moment you point at it. They stay fully usable while they are out — the same
 widgets, not stand-ins.
 
-The mark is a row of dots that turns upright as the pocket opens, over the same
-600 ms `OutCubic` the stock tray drawer uses, and the members fade with it.
-Deliberately not a chevron: the tray sits in the same section doing a visually
-similar thing, and two identical glyphs beside each other are two things nobody
-can tell apart.
+## Install
+
+```bash
+omarchy plugin add https://github.com/jrmmhm/omarchy-pocket.git --enable
+```
+
+Then drag the widgets you want it to hold onto it. That is the whole setup.
+
+## Put things in, take things out
+
+![Dropping a widget onto the dots puts it away; dragging a member past them takes it back](docs/pocket-drag.svg)
+
+**Drop a widget on the dots and it goes in.** From either side — the mark lights
+up while a release would collect it, so you know before you let go. The bar draws
+its own insertion line at the same time, and the two always agree.
+
+**Drag a member past the dots and it comes out.** So does dropping it anywhere
+else on the bar. Dropping it back among the others just reorders the group.
+
+To reach a member you have to open the pocket first: a hidden widget is not on
+the bar to be grabbed. Hover the mark, then drag.
+
+Everything is written to this plugin's own entry in `~/.config/omarchy/shell.json`,
+so it survives a restart, and you can still edit it by hand:
+
+```json
+{ "id": "jrmmhm.pocket", "members": "omaplug, omarchy.tailscale, ianswope.snapshots" }
+```
+
+| Setting | Type | Default | What it does |
+| :--- | :--- | :--- | :--- |
+| `members` | string or array | `""` | Ids of the bar widgets to tuck away |
+
+`members` also accepts a JSON array, which is the nicer shape by hand. Pocket
+writes back whichever shape it finds, and never touches anything else on the
+entry. The file hot-reloads: no restart after an edit.
 
 ## Why this one keeps your setup honest
+
+![Other grouping widgets move members into plugins[], where Omarchy's tools report them as off. Pocket leaves them in bar.layout.](docs/pocket-layout.svg)
 
 Every other way of grouping bar widgets moves them out of `bar.layout` — into
 the top-level `plugins[]` array — and mounts them again somewhere else. That
@@ -25,41 +71,29 @@ widget is *enabled* by whether its id sits in `bar.layout`. Move it out and:
 - `omarchy-shell shell toggle <id>` and its keybinding stop finding it
 - its settings lose their only valid home
 
-**Pocket moves nothing.** The widgets stay in `bar.layout`, in their own module
-slots, built by the bar itself. Pocket only flips `visible` on those slots, and
+**Pocket moves nothing out.** The widgets stay in `bar.layout`, in their own
+module slots, built by the bar itself. Pocket flips `visible` on those slots, and
 a Qt `Row` does not lay out an invisible child — so the space closes up and
 nothing else in the shell notices. Every tool keeps telling the truth.
 
-## Install
+## The mark
 
-```bash
-omarchy plugin add https://github.com/jrmmhm/omarchy-pocket.git --enable
-```
-
-Then name the widgets it should hold, on its own entry in
-`~/.config/omarchy/shell.json`:
-
-```json
-{ "id": "jrmmhm.pocket", "members": "omaplug, omarchy.tailscale, ianswope.snapshots" }
-```
-
-`members` also accepts a JSON array — `["omaplug", "omarchy.tailscale"]` — which
-is the nicer shape if you edit the file by hand. The comma-separated string
-exists because Omarchy's settings form can produce a string and not an array.
-
-| Setting | Type | Default | What it does |
-| :--- | :--- | :--- | :--- |
-| `members` | string or array | `""` | Ids of the bar widgets to tuck away |
-
-The file hot-reloads: no restart needed after an edit.
+A row of dots that turns upright as the pocket opens, over the same 600 ms
+`OutCubic` the stock tray drawer uses, with the members fading out of it in a
+cascade. Deliberately not a chevron: the tray sits in the same section doing a
+visually similar thing, and two identical glyphs beside each other are two
+things nobody can tell apart.
 
 ## Where to put it
 
 **Put the pocket on the side of its members that faces the section's anchor.**
 In the `right` section that means the members come *first* and the pocket last;
 in `left`, the pocket first. Fanning out changes the section's width, and this
-ordering is what keeps the mark itself from sliding out from under your
-pointer.
+ordering is what keeps the mark itself from sliding out from under your pointer.
+
+Pocket keeps that arrangement for you: a member that ends up on the wrong side —
+dropped in from the far side, or moved there by hand — is put back against the
+pocket. It never reorders members that are already on the right side.
 
 `omarchy.tray` is a poor member: Omarchy pins it to its section's inner edge on
 every config load, and its own drawer assumes it sits there.
@@ -69,7 +103,9 @@ every config load, and its own drawer assumes it sits there.
 It opens while the pointer is on the mark or on any widget it holds, and
 while one of those widgets has its panel open — a bar panel covers the screen
 with an input mask, so hover stops arriving entirely, and without that last
-condition the pocket would fold up underneath the panel you just opened.
+condition the pocket would fold up underneath the panel you just opened. A drag
+in progress holds it open too, for the same reason: Qt delivers no hover at all
+while something else holds the mouse.
 
 It closes within a tick of all of that stopping **and** the pointer having left
 the bar — a repeating check rather than a countdown, because a countdown that a
@@ -82,12 +118,20 @@ rule.
 **Click the mark to pin it open**, click again to release. That is the way
 out of the cases where no leave event is ever coming — a workspace switch that
 teleports the cursor, an application grabbing the pointer. The pin is
-session-only and deliberately not written to `shell.json`: a half-written
-`shell.json` drops the bar to Omarchy's defaults and deregisters every
-third-party widget on it for as long as that lasts.
+session-only: `shell.json` is shared by every bar surface, and persisting it
+would make one screen's transient state everyone's.
 
 ## Things you should know before installing
 
+- **Dropping a widget in from the far side takes about twice as long.** Any
+  widget reorder makes Omarchy rebuild every widget on every monitor — measured
+  at ~1.5 s on a three-monitor session — and putting a far-side arrival back
+  where it belongs costs a second one. Dropping from the side the members are
+  already on costs the usual single rebuild.
+- **A drag cancelled from outside cannot be told from a drop.** Qt emits
+  `canceled` *instead of* `released` with nothing to distinguish them, so if
+  something steals the pointer while the mark is lit, the widget joins the
+  pocket without having moved. One drag undoes it.
 - **`SUPER+CTRL+1…9` renumbers.** Those bindings open "the Nth panel in the
   right section" and count only what is *drawn*, so a collapsed pocket shifts
   the numbering — and with a pocket it additionally depends on where your
@@ -104,9 +148,9 @@ third-party widget on it for as long as that lasts.
   copy of the line if you toggle the pocket off and on.
 - **A member cannot be the `centerAnchor`.** That one slot carries a `visible`
   binding of the bar's own, and writing it would destroy the binding for the
-  rest of the session. Pocket refuses it and says so in its tooltip.
+  rest of the session. Pocket refuses it — the mark will not light up for it.
 - **One pocket per bar.** A second entry added by hand is detected and reported
-  in the tooltip; two pockets sharing a member will fight over it.
+  in the tooltip; while one exists, Pocket refuses to write anything at all.
 
 The tooltip is where all of this surfaces at runtime — it names every member it
 could not find, could not use, or would not touch.
@@ -115,6 +159,7 @@ could not find, could not use, or would not touch.
 
 ```bash
 bash tests/run.sh      # ALL TESTS PASSED (N assertions, 0 failures)
+qmllint BarWidget.qml
 ```
 
 `Model.js` holds everything decidable without a running shell and is unit-tested
@@ -122,10 +167,14 @@ with `node`; `BarWidget.qml` keeps only what needs live objects. Note that the
 shell's plugin file-watcher does not follow symlinks, so if you develop against
 a symlinked checkout, apply changes with `omarchy restart shell`.
 
+Design decisions live in [`docs/decisions/`](docs/decisions/).
+
 ## Requirements
 
-Omarchy 4.x with the Quickshell bar. No network access, no subprocesses, no
-files written — Pocket reads the bar's own state and nothing else.
+Omarchy 4.x with the Quickshell bar. No network access, no subprocesses. The
+only thing Pocket writes is its own entry in `shell.json` — its `members`, and
+the position of a member that ended up on the wrong side of it — always through
+the host's own config mutator, which writes the file atomically.
 
 ## License
 
