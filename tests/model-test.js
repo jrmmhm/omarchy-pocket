@@ -98,6 +98,33 @@ check("nothing rejected when all are valid",
 check("the pocket's own id is not a rejection",
   Model.rejectedMembers(SELF, SELF), [])
 
+// --------------------------------------------------------- own surface
+
+check("a slot on our own surface is ours",
+  Model.ownsSlot({ hostComparesWindows: true, surfaceKnown: true, sameWindow: true }), true)
+check("a slot on another surface is not ours",
+  Model.ownsSlot({ hostComparesWindows: true, surfaceKnown: true, sameWindow: false }), false)
+
+// The regression this rule exists for, stated twice because it used to be
+// answered by skipping the question. An instance that does not know its own
+// window matched EVERY slot, adopted another screen's widgets, and handed them
+// back visible when it died. Both directions of the host's answer have to be
+// refused, or the skip comes back in a different shape.
+check("an instance that does not know its surface owns nothing",
+  Model.ownsSlot({ hostComparesWindows: true, surfaceKnown: false, sameWindow: false }), false)
+check("not knowing the surface overrules a host that says yes",
+  Model.ownsSlot({ hostComparesWindows: true, surfaceKnown: false, sameWindow: true }), false)
+check("a missing answer from the host is not a yes",
+  Model.ownsSlot({ hostComparesWindows: true, surfaceKnown: true }), false)
+
+// The older degradation, deliberately unchanged: a custom bar that publishes no
+// window helpers has exactly one surface's worth of answer to give.
+check("a host that cannot compare surfaces owns every slot",
+  Model.ownsSlot({ hostComparesWindows: false, surfaceKnown: true, sameWindow: false }), true)
+check("an uncomparable host still needs a known surface",
+  Model.ownsSlot({ hostComparesWindows: false, surfaceKnown: false }), false)
+check("a caller that says nothing is refused, not indulged", Model.ownsSlot(), false)
+
 // ------------------------------------------------------- reveal cascade
 
 const rf = Model.revealFraction
@@ -187,6 +214,22 @@ contains("rejected ids are named",
   Model.describe({ members: [], rejected: ["../evil"] }), "Not a widget id: ../evil")
 contains("a second pocket is called out",
   Model.describe({ members: ["a"], duplicateInstances: true }), "second Pocket entry")
+
+// An instance without a window resolves nothing, so every member comes back
+// unfound. Reporting that as "not on this bar" would be a claim about widgets
+// that are in fact sitting right there -- it never looked. Verbatim, because
+// this line is the only account anyone gets of that state.
+check("a pocket that does not know its screen says so, verbatim",
+  Model.describe({ members: ["a", "b"], missing: ["a", "b"], surfaceUnknown: true }).split("\n")[0],
+  "Pocket cannot tell which screen it is on — it is hiding nothing")
+check("it does not claim its members are absent",
+  Model.describe({ members: ["a"], missing: ["a"], surfaceUnknown: true }).indexOf("Not on this bar") === -1,
+  true)
+check("nor that it is holding them",
+  Model.describe({ members: ["a", "b"], surfaceUnknown: true }).indexOf("holding") === -1, true)
+// The setting text is readable without a window; only the resolution is not.
+contains("a rejected id is still named without a screen",
+  Model.describe({ members: [], rejected: ["../evil"], surfaceUnknown: true }), "Not a widget id: ../evil")
 
 // ------------------------------------------------------- entry identity
 
@@ -545,6 +588,18 @@ check("a pocket that is not in the region reports nothing",
   Model.firstMisplacedMember(["a", "b"], SELF, ["a"], true), "")
 check("no members, nothing misplaced",
   Model.firstMisplacedMember(RIGHT_IDS, SELF, [], true), "")
+
+// The startup guarantee, and the other half of "an empty layout leaves
+// everything where it was" above. Both standing invariants run on sight, and
+// at the moment a bar surface is built the host has not necessarily handed the
+// layout over yet -- `layoutIds()` answers with an empty list until it has. A
+// repair that fired against that list would move a widget to satisfy a layout
+// nobody published, so the settings a user dragged into place would come back
+// rearranged after every restart.
+check("a layout the host has not delivered yet moves nothing",
+  Model.firstMisplacedMember([], SELF, ["mehiel.darky", "omaplug"], true), "")
+check("nor in a left section",
+  Model.firstMisplacedMember([], SELF, ["mehiel.darky", "omaplug"], false), "")
 
 {
   const config = { bar: { layout: { right: [
