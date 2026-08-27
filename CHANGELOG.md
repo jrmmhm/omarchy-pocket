@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The bar's drop marker is no longer read through a property of Pocket's own,
+  which the QML engine reported as a binding loop on every pointer move of a
+  drag it was steering. What the steering does is unchanged — a change to either
+  of the bar's two marker values still re-asserts both — and it now also undoes
+  the first of those two writes when the second is refused, so the side a widget
+  lands on and the line the bar draws can no longer come apart. See
+  [decision 0006](docs/decisions/0006-the-drop-steering-listens-it-does-not-sample.md),
+  which also corrects what decision 0005 said about how often this happened.
+
 - On more than one monitor, dragging a widget into the pocket, out of it, or
   around inside it no longer leaves the pocket on another screen fanned out.
   A pocket filtered the bar's shared slot list to its own window only while it
@@ -61,6 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README now says what the dragged order survives — a restart, a reboot, an
   `omarchy plugin update`, a member whose widget fails to load — and the known
   way to lose it.
+- `bash tests/run.sh` now also loads `BarWidget.qml` in Quickshell against a
+  fake bar, which is the only way to cover the drop steering's wiring to the
+  host at all. It skips itself where Quickshell or an Omarchy shell is absent,
+  so CI is unaffected.
 
 ## [0.2.0] — 2026-08-27
 

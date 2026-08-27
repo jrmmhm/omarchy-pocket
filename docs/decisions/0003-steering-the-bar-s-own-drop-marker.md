@@ -1,6 +1,7 @@
 # 3. Steering the bar's own drop marker
 
-- Status: accepted
+- Status: accepted; its mechanism replaced by
+  [0006](0006-the-drop-steering-listens-it-does-not-sample.md)
 - Date: 2026-08-27
 - Resolves the open question in [0002](0002-members-belong-on-one-side.md)
 
@@ -113,3 +114,24 @@ the other end: the member list is now checked against the layout on sight and
 put back into its order, whatever put it out. The placement stays as described
 above — the `left` section still lands a near-side arrival past the hidden
 members — but the cascade no longer runs backwards over it.
+
+## Two paragraphs above are wrong about the code they describe
+
+Both are in the implementation section, and
+[0006](0006-the-drop-steering-listens-it-does-not-sample.md) has the
+measurements. The decision itself stands: the override, its permission, the
+single steerable side, and the invariant that guarantees the result are all
+unchanged.
+
+**"Both values are overridden together, from a change to either."** The
+requirement is right and still holds. The mechanism it describes — sampling both
+into one binding — is what makes Qt report a binding loop on every steered
+pointer move, and it is gone. Both host change signals now call the same
+re-assert, which satisfies the same requirement without a binding of our own in
+the middle.
+
+**"A write from inside a change handler re-enters it. Measured on Qt 6."** Not
+true of the code this file shipped. The write landed inside the binding's own
+update frame, so Qt refused the nested evaluation and the handler was never
+re-entered — which is why the re-entrancy flag this paragraph justifies had no
+effect at all until 0006. The sentence describes the code as it is now.

@@ -194,5 +194,13 @@ and the gestures, which is what a `resolution` binding reaching a missing
 `Model.ownsSlot` would produce on every `moduleSlots` change. That says the new
 call is well formed. It does **not** say the comparison ran — a binding that is
 never re-evaluated is equally silent — and the log is not otherwise quiet: the
-`hostDropMarker` binding loop from 0003 writes some eighty warnings per shell
-start and did so here too, unchanged from before this commit.
+`hostDropMarker` binding loop from 0003 was writing into it throughout,
+unchanged from before this commit.
+
+The rate this paragraph originally gave — "some eighty warnings per shell start"
+— was wrong, and it is worth saying so in the file that got it wrong. The count
+was right for this session; the unit was not. Every one of those warnings landed
+during a drag, minutes after the start, and none at the start at all. Nothing in
+the conclusions above turns on it. The correction, the measured unit and the
+removal of the loop belong to
+[0006](0006-the-drop-steering-listens-it-does-not-sample.md).
