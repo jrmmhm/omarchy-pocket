@@ -130,6 +130,25 @@ function orderMembers(list, layoutIds) {
   return out
 }
 
+// Whether the member list already sits in the order the widgets physically do.
+// Deliberately asked as "would orderMembers() change anything", so that the
+// check and the repair can never disagree about what "in order" means.
+//
+// It has to be checked on sight rather than folded into a gesture: reordering
+// a member inside the run moves widgets without this pocket writing anything
+// at all, and the cascade in applyReveal() counts from the member nearest the
+// pocket outwards — a list that disagrees with the layout animates in a
+// direction that does not exist on screen.
+function membersInLayoutOrder(rawList, layoutIds) {
+  var source = rawList || []
+  var ordered = orderMembers(source, layoutIds)
+  if (ordered.length !== source.length) return false
+  for (var i = 0; i < source.length; i++) {
+    if (String(ordered[i]).trim() !== String(source[i]).trim()) return false
+  }
+  return true
+}
+
 // Operates on the RAW list — what the user actually wrote — and never on the
 // parsed one. Round-tripping through parseMembers would quietly delete the
 // very ids the tooltip is at that moment asking the user to fix.
@@ -183,16 +202,62 @@ function membersValue(list, previousRaw) {
   return items.join(", ")
 }
 
-// What a finished drag means for membership. Deliberately expressed in terms
-// of the bar's own drop target rather than pointer coordinates: barDragTarget
-// and barDragAfter are the two values Bar.qml already uses to draw its drop
-// marker, so the pocket's answer and the line the user is looking at can never
-// disagree. Comparing the target against this instance's own slot is an object
-// identity test, which is correct per monitor and per center-anchor duplicate
-// without mapping a single coordinate.
+// Whether the gap the bar is drawing its insertion line in has one of this
+// pocket's members against it, on either side.
 //
-// The rule in one sentence: dropping a widget onto the pocket puts it in, and
-// dragging a member past the pocket takes it out.
+// The user aims at a gap, and a gap has two slots against it. Asking which of
+// the two the bar picked is what made the membership rule wrong twice over.
+//
+// BarModel.nearestDropTarget resolves to the candidate with the nearest edge,
+// and adjacent slots share a gap — so the gap at the outer end of the run came
+// back as the neighbour outside it or as the first member inside it, on a
+// sub-pixel tie, and those two answers meant opposite things. And the answer
+// was drawn from the pocket's resolved member slots, which every instance
+// filters to its own window: on a multi-monitor bar the instance the drag was
+// not on saw every member as a stranger and concluded the member was leaving.
+//
+// Ids out of the layout have neither problem. They are the same on every
+// screen, and they describe both sides of the gap rather than one of them.
+// See docs/decisions/0004.
+function gapTouchesMember(layoutIds, memberIds, targetId, after) {
+  var ids = layoutIds || []
+  var want = String(targetId || "").trim()
+  if (want === "") return false
+
+  var at = -1
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i]).trim() === want) { at = i; break }
+  }
+  if (at === -1) return false
+  if (after) at += 1
+
+  var before = at > 0 ? String(ids[at - 1]).trim() : ""
+  var behind = at < ids.length ? String(ids[at]).trim() : ""
+
+  var members = memberIds || []
+  for (var m = 0; m < members.length; m++) {
+    var id = String(members[m]).trim()
+    if (id === "") continue
+    if (id === before || id === behind) return true
+  }
+  return false
+}
+
+// What a finished drag means for membership. Deliberately expressed in terms
+// of the bar's own drop marker rather than pointer coordinates: barDragTarget
+// and barDragAfter are the two values Bar.qml already uses to draw the line,
+// so the pocket's answer and the line the user is looking at can never
+// disagree.
+//
+// The rule in two sentences: aiming at the pocket takes a widget in, from
+// either side; and a member stays in for as long as the line is drawn against
+// the group.
+//
+// Only `targetIsSelf` is an object identity test, and only the `add` branch
+// consults it. That is what keeps it safe on a bar built once per monitor: the
+// instance that is not being aimed at falls through to doing nothing, rather
+// than to acting on a conclusion the other instances did not reach. Everything
+// the membership branch reads is an id, identical on every screen.
 function dropDecision(state) {
   var s = state || {}
   var source = String(s.sourceId || "").trim()
@@ -210,24 +275,21 @@ function dropDecision(state) {
     if (String(members[i]).trim() === source) { isMember = true; break }
   }
 
-  if (s.targetIsSelf === true) {
-    // Onto the pocket means in, from either side. Splitting the icon so that
-    // its two halves meant opposite things was measured on a real bar and felt
-    // wrong for the obvious reason: half of the thing you are aiming at did
-    // the opposite of what aiming at it looks like.
-    if (!isMember) return "add"
-
-    // For something already inside, the far side is the way out — dragging it
-    // past the pocket is how leaving a group looks. The near side is just
-    // reordering within the run.
-    return s.innerEdge === true ? "none" : "remove"
-  }
+  // Onto the pocket means in, from either side. Splitting the icon so that its
+  // two halves meant opposite things was measured on a real bar and felt wrong
+  // for the obvious reason: half of the thing you are aiming at did the
+  // opposite of what aiming at it looks like.
+  if (!isMember) return s.targetIsSelf === true ? "add" : "none"
 
   // Leaving needs somewhere to land. A drag released off the bar produces no
   // target at all, the bar moves nothing, and neither does the pocket.
-  if (isMember && s.hasTarget === true && s.targetIsMember !== true) return "remove"
+  if (s.hasTarget !== true) return "none"
 
-  return "none"
+  // Past the pocket, beyond the outer end of the run, or anywhere else on the
+  // bar — in each of those the line is drawn in a gap with no member against
+  // it, which is what leaving a group looks like. Everywhere inside the run,
+  // including its outermost edge, it is a reorder.
+  return s.gapTouchesMember === true ? "none" : "remove"
 }
 
 // --------------------------------------------------------- drop steering
@@ -458,5 +520,7 @@ if (typeof module !== "undefined" && module.exports) {
                      setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
                      placeMemberBesideSelf: placeMemberBesideSelf,
-                     steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect }
+                     steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
+                     gapTouchesMember: gapTouchesMember,
+                     membersInLayoutOrder: membersInLayoutOrder }
 }

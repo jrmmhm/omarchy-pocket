@@ -193,18 +193,14 @@ BarWidget {
   readonly property var dragTarget: bar ? bar.barDragTarget : null
   readonly property bool dragAfter: bar ? bar.barDragAfter === true : false
   readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
+  readonly property string dragTargetId: dragTarget ? canonical(dragTarget.moduleName) : ""
 
-  function isMemberSlot(slot) {
-    if (!slot) return false
-    var list = root.resolution.slots
-    for (var i = 0; i < list.length; i++) if (list[i] === slot) return true
-    return false
-  }
-
-  // Which side of the pocket the drop marker sits on, in terms of where its
-  // members live. Aiming at the pocket takes a widget in from either side; the
-  // side only decides whether dragging a member counts as leaving.
-  readonly property bool onInnerEdge: membersLeadFromEnd ? !dragAfter : dragAfter
+  // The gap the bar is drawing its line in, answered from ids rather than from
+  // this instance's own resolved slots. `resolution` is filtered to one window,
+  // and the bar is built once per monitor — reading it here made the instance
+  // the drag was NOT on see every member as a stranger and eject it.
+  readonly property bool dropGapTouchesMember: Model.gapTouchesMember(
+    root.layoutIds(root.ownRegion), root.memberIds, root.dragTargetId, root.dragAfter)
 
   readonly property string dropIntent: {
     if (!root.dragSource) return "none"
@@ -214,9 +210,8 @@ BarWidget {
       anchorId: root.anchorId,
       members: root.memberIds,
       targetIsSelf: !!root.dragTarget && root.dragTarget === root.ownSlot,
-      targetIsMember: root.isMemberSlot(root.dragTarget),
       hasTarget: !!root.dragTarget,
-      innerEdge: root.onInnerEdge
+      gapTouchesMember: root.dropGapTouchesMember
     })
   }
 
@@ -418,6 +413,45 @@ BarWidget {
 
   onMisplacedMemberChanged: scheduleRepair()
 
+  // ---------------------------------------------------- member order repair
+
+  // The member list is kept in the order the widgets physically sit in, and
+  // reordering a member inside the run is the one way that order changes
+  // without this pocket writing anything — the bar moves the widget, and
+  // membership does not change, so no gesture of ours runs. The same standing
+  // invariant shape as the placement repair above, and separate from it
+  // because it is a different mistake and a much cheaper one: `members` is an
+  // inline settings change, which the bar patches into the running widgets
+  // instead of rebuilding them. See docs/decisions/0002 for what each costs.
+  //
+  // It converges for the same reason: ordering by the layout is idempotent,
+  // and nothing puts the list back out of order.
+  readonly property bool membersMisordered: !Model.membersInLayoutOrder(
+    Model.toList(root.setting("members", "")), root.layoutIds(root.ownRegion))
+
+  function scheduleReorder() {
+    if (!root.membersMisordered) return
+    Qt.callLater(root.repairMemberOrder)
+  }
+
+  function repairMemberOrder() {
+    if (!root.membersMisordered) return
+    if (!root.mayWriteMembers) return
+    if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
+
+    var region = root.ownRegion
+    var raw = root.setting("members", "")
+    var value = Model.membersValue(
+      Model.orderMembers(Model.toList(raw), root.layoutIds(region)), raw)
+    var selfId = root.moduleName
+
+    bar.shell.mutateShellConfig(function (config) {
+      Model.setMembersOnEntry(config, region, selfId, value)
+    })
+  }
+
+  onMembersMisorderedChanged: scheduleReorder()
+
   // ------------------------------------------------------------ animation
 
   // One animated scalar, everything else derived from it — the shape the stock
@@ -522,8 +556,9 @@ BarWidget {
     apply()
     // The instance that could see the misplacement is the one the drop's own
     // rebuild created, and a binding that starts out non-empty never changes,
-    // so it would never fire its handler.
+    // so it would never fire its handler. The same holds for the order.
     scheduleRepair()
+    scheduleReorder()
   }
 
   // Without this, disabling or hot-reloading the plugin leaves someone else's
