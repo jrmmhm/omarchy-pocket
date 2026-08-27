@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "jrmmhm.pocket",
   "name": "Pocket",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "jrmmhm",
   "license": "MIT",
-  "description": "Tuck a run of bar widgets into one slot and fan them back out on hover. The widgets never leave the bar layout, so every Omarchy tool keeps reporting them correctly.",
+  "description": "Tuck a run of bar widgets into one slot and fan them back out on hover. Drag a widget onto it to put it away, drag it off to get it back. The widgets never leave the bar layout, so every Omarchy tool keeps reporting them correctly.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Pocket",
-    "description": "Hides the bar widgets you name and shows them again while the pointer is on them",
+    "description": "Hides the bar widgets you drag onto it and shows them again while the pointer is on them",
     "category": "Appearance",
     "allowMultiple": false,
     "defaultSection": "right",
@@ -25,7 +25,8 @@
       {
         "key": "members",
         "type": "string",
-        "label": "Widget ids to tuck away, comma separated"
+        "label": "Widget ids to tuck away, comma separated",
+        "description": "Usually set by dragging widgets onto the pocket. Edit it here to name them by hand."
       }
     ]
   }
