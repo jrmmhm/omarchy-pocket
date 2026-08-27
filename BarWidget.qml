@@ -17,6 +17,12 @@ import "Model.js" as Model
 // keeps telling the truth about a tucked-away widget: `inBar` still finds it,
 // `findPanelWidget` still finds it, its settings still live on its own entry.
 //
+// Membership can be changed by dragging, and that is the one thing the pocket
+// writes: its own `members` key, on its own layout entry, through the host's
+// own config mutator. The gesture itself belongs to the bar — the pocket only
+// reads the drop marker the bar is already drawing. See
+// docs/decisions/0001-pocket-writes-its-own-members.md.
+//
 // The alternative — mounting other widgets' components inside this one — is
 // what ianswope.stack does, and it forces the members out of `bar.layout`,
 // which is where all four of its defects come from.
@@ -90,19 +96,32 @@ BarWidget {
     return { slots: found, missing: missing, anchored: anchored, foreign: foreign }
   }
 
+  // This pocket's own module slot. `activeItem === root` is already exact per
+  // instance — every bar surface builds its own — so no window filter belongs
+  // here. Identity against this object is also what makes the drop rule below
+  // correct on a multi-monitor bar without mapping a single coordinate.
+  readonly property var ownSlot: {
+    var slots = bar ? bar.moduleSlots : []
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i] && slots[i].activeItem === root) return slots[i]
+    }
+    return null
+  }
+
   // Which section this pocket itself sits in, read off its own slot so a member
   // in a different section can be called out as the layout mistake it is.
-  readonly property string ownRegion: {
-    var slots = bar ? bar.moduleSlots : []
-    var mine = root.ownWindow
-    for (var i = 0; i < slots.length; i++) {
-      var slot = slots[i]
-      if (!slot || slot.activeItem !== root) continue
-      if (mine && bar && typeof bar.slotWindow === "function" && typeof bar.sameWindow === "function"
-          && !bar.sameWindow(bar.slotWindow(slot), mine)) continue
-      return String(slot.region || "")
-    }
-    return ""
+  readonly property string ownRegion: ownSlot ? String(ownSlot.region || "") : ""
+
+  // The layout as the bar holds it, which is the only honest answer to "how
+  // many pockets are there". Guarded because a custom bar need not have it.
+  readonly property var barLayout: bar && ("layoutConfig" in bar) ? bar.layoutConfig : null
+
+  function layoutIds(region) {
+    var entries = root.barLayout ? root.barLayout[region] : null
+    var out = []
+    if (!entries || typeof entries.length !== "number") return out
+    for (var i = 0; i < entries.length; i++) out.push(root.canonical(Model.entryIdOf(entries[i])))
+    return out
   }
 
   // ---------------------------------------------------------------- state
@@ -135,11 +154,141 @@ BarWidget {
     return false
   }
 
-  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen
+  // Requiring `expanded` means this can only ever keep the pocket open, never
+  // open it. It is needed because hover is not something to fall back on
+  // during a drag: Qt delivers no hover events at all while another item holds
+  // the mouse grab, so every hover flag is frozen at whatever it last was.
+  readonly property bool dragHoldsOpen: expanded && dragSource !== null
 
-  readonly property bool duplicateInstances: {
-    if (!bar || typeof bar.moduleWidgets !== "function") return false
-    return bar.moduleWidgets(root.moduleName).length > 1
+  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen || dragHoldsOpen
+
+  // Counted off the layout rather than off live instances. `bar.moduleWidgets`
+  // counts what is mounted, and the bar is built once per monitor — plus a
+  // second time for every center widget when centerAnchor is set — so it
+  // reported a second pocket on every setup with more than one screen.
+  readonly property bool duplicateInstances: Model.countEntries(root.barLayout, root.moduleName) > 1
+
+  // ----------------------------------------------------------------- drag
+
+  // The bar already owns widget drag-and-drop, and it publishes the three
+  // values it draws its own drop marker from: the slot being dragged, the slot
+  // the drop would land on, and which side of that slot the marker sits on.
+  // Reading those three is the whole of this feature. The pocket starts no
+  // drag, grabs no pointer, and never asks where the cursor is — so what it
+  // decides and what the user is looking at cannot disagree.
+  //
+  // Pointer coordinates were the obvious alternative and are the wrong tool:
+  // Qt delivers no hover at all under a mouse grab, scene coordinates are per
+  // window, and a bar surface exists per monitor. Object identity has none of
+  // those problems.
+  readonly property var dragSource: bar ? bar.barDragSource : null
+  readonly property var dragTarget: bar ? bar.barDragTarget : null
+  readonly property bool dragAfter: bar ? bar.barDragAfter === true : false
+  readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
+
+  function isMemberSlot(slot) {
+    if (!slot) return false
+    var list = root.resolution.slots
+    for (var i = 0; i < list.length; i++) if (list[i] === slot) return true
+    return false
+  }
+
+  // The edge the members sit behind. Dropping there means "in", the other
+  // edge means "out", and the bar draws the line that says which one it is.
+  readonly property bool onInnerEdge: membersLeadFromEnd ? !dragAfter : dragAfter
+
+  readonly property string dropIntent: {
+    if (!root.dragSource) return "none"
+    return Model.dropDecision({
+      sourceId: root.dragSourceId,
+      selfId: root.moduleName,
+      anchorId: root.anchorId,
+      members: root.memberIds,
+      targetIsSelf: !!root.dragTarget && root.dragTarget === root.ownSlot,
+      targetIsMember: root.isMemberSlot(root.dragTarget),
+      hasTarget: !!root.dragTarget,
+      innerEdge: root.onInnerEdge
+    })
+  }
+
+  readonly property bool dropArmed: dropIntent === "add"
+
+  // What the drag last meant. The decision has to be taken when the drag ENDS,
+  // and Bar.qml clears every drag property in one breath at that moment.
+  property string pendingIntent: "none"
+  property string pendingId: ""
+  property bool dragSeen: false
+
+  onDropIntentChanged: {
+    if (!root.dragSource) return
+    root.pendingIntent = root.dropIntent
+    root.pendingId = root.dragSourceId
+  }
+
+  onDragSourceChanged: {
+    if (root.dragSource) { root.dragSeen = true; return }
+
+    // Always cleared on the falling edge. Bar.qml calls clearBarDrag() on every
+    // press too, and a sample left from the previous drag must never be able to
+    // decide the next one.
+    var intent = root.dragSeen ? root.pendingIntent : "none"
+    var id = root.pendingId
+    root.dragSeen = false
+    root.pendingIntent = "none"
+    root.pendingId = ""
+    if (intent !== "none") root.commitDrop(intent, id)
+  }
+
+  // ---------------------------------------------------------- persistence
+
+  // The widget just taken in, held visible until the bar's own release handler
+  // has returned. Qt cancels a pressed MouseArea the moment its item becomes
+  // invisible, and that MouseArea is still mid-release: hiding the slot any
+  // earlier revokes its grab, which clears the bar's click suppression and
+  // turns the drop into a click on the widget that was dropped. Dropping the
+  // power widget into the pocket would open the power menu.
+  property string heldVisibleId: ""
+
+  function isHeld(slot) {
+    return root.heldVisibleId !== "" && !!slot
+      && root.canonical(slot.moduleName) === root.heldVisibleId
+  }
+
+  function releaseVisibleHold() {
+    if (root.heldVisibleId === "") return
+    root.heldVisibleId = ""
+    root.apply()
+  }
+
+  // Written synchronously, before the bar persists its own move. Deferring it
+  // is not an option: the bar's move reassigns the layout, which destroys and
+  // rebuilds every widget on every monitor, and a deferred callback would be
+  // reaching for an instance that no longer exists. Running first is also
+  // harmless — a members-only change is an inline settings change, which the
+  // bar patches into the running widgets instead of rebuilding them, and the
+  // move that follows reads the config this call already updated.
+  function commitDrop(intent, id) {
+    if (root.duplicateInstances) return
+    if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
+
+    var region = root.ownRegion
+    if (region === "") return
+
+    var raw = root.setting("members", "")
+    var next = Model.nextMembers(Model.toList(raw), root.layoutIds(region), id, intent,
+                                 root.membersLeadFromEnd)
+    var value = Model.membersValue(next, raw)
+    var selfId = root.moduleName
+
+    root.heldVisibleId = intent === "add" ? String(id) : ""
+
+    var written = false
+    bar.shell.mutateShellConfig(function (config) {
+      written = Model.setMembersOnEntry(config, region, selfId, value)
+    })
+
+    if (written) Qt.callLater(root.releaseVisibleHold)
+    else root.releaseVisibleHold()
   }
 
   // ------------------------------------------------------------ animation
@@ -172,6 +321,7 @@ BarWidget {
     var n = list.length
 
     for (var i = 0; i < n; i++) {
+      if (root.isHeld(list[i])) continue
       var order = root.membersLeadFromEnd ? (n - 1 - i) : i
       var f = Model.revealFraction(root.revealProgress, order, n)
       root.setSlotProperty(list[i], "transformOrigin", root.growthOrigin)
@@ -194,7 +344,10 @@ BarWidget {
   function setSlotVisible(slot, value) { setSlotProperty(slot, "visible", value) }
 
   function hideDriven() {
-    for (var i = 0; i < root.driven.length; i++) root.setSlotVisible(root.driven[i], false)
+    for (var i = 0; i < root.driven.length; i++) {
+      if (root.isHeld(root.driven[i])) continue
+      root.setSlotVisible(root.driven[i], false)
+    }
   }
 
   function apply() {
@@ -279,7 +432,10 @@ BarWidget {
   BarIconButton {
     id: button
     bar: root.bar
-    active: root.pinned
+    // Lit while a release would collect the dragged widget — the answer given
+    // before the drop, not explained after it. The same predicate decides the
+    // write, so the light cannot promise something the drop then refuses.
+    active: root.pinned || root.dropArmed
     // Deliberately not the stock tray's chevron: the tray sits in the same
     // section doing a visually similar thing, and two identical glyphs side by
     // side are two things a user cannot tell apart. Dots read as "there is more
@@ -299,10 +455,14 @@ BarWidget {
 
     // The pointer is the primary gesture; the click is the way out of the cases
     // where no leave event is coming — a panel grabbing input, a workspace
-    // switch teleporting the cursor. Session-only on purpose: persisting it
-    // would mean writing shell.json, and a half-written shell.json drops the
-    // bar back to Omarchy's defaults, deregistering every third-party widget
-    // on it for as long as that lasts.
+    // switch teleporting the cursor.
+    //
+    // Session-only on purpose, though not for the reason this comment used to
+    // give. Writing shell.json is safe: the host writes it atomically, and the
+    // pocket now writes `members` itself. The pin stays unwritten because it is
+    // a pointer aid for the next few seconds and because shell.json is shared
+    // by every bar surface — persisting it would make one screen's transient
+    // state everyone's.
     onPressed: function(code) {
       root.pinned = !root.pinned
       if (root.pinned) root.expanded = true
