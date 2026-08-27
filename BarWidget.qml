@@ -278,29 +278,43 @@ BarWidget {
   // invariant still produces the correct layout — one rebuild slower. That is
   // why the invariant was not replaced by this. See docs/decisions/0003.
 
-  // Both of the bar's marker values in one sample, so a change to EITHER
-  // re-asserts BOTH. Bar.qml writes them one after the other on every pointer
-  // move, and hanging the override on only one would make the outcome depend
-  // on which it writes last: reverse those two assignments and the bar would
-  // draw its insertion line on one side of the pocket while placing the widget
-  // on the other. A marker that lies is worse than no override at all.
-  readonly property var hostDropMarker: ({
-    after: bar ? bar.barDragAfter === true : false,
-    rect: bar ? bar.barDragTargetGeometry : null
-  })
-
   readonly property var steerAfter: Model.steerDropAfter({
     intent: root.dropIntent,
     nearestAtEnd: root.membersLeadFromEnd,
     mayWrite: root.mayWriteMembers
   })
 
-  // Writing a property from inside its own change handler re-enters that
-  // handler synchronously — measured on Qt 6, along with the rest of the
-  // semantics this relies on.
+  // The re-entrancy guard, and the only thing that stops the recursion:
+  // steerDrop() writes the two properties whose change signals called it, and
+  // Qt delivers those synchronously. Measured on Qt 6.11.2.
   property bool steering: false
 
-  onHostDropMarkerChanged: steerDrop()
+  // Listened to, rather than sampled into a property of this widget's own. A
+  // property that reads these two values with a handler that writes them back
+  // is a cycle through that property's own binding: Qt finds its update()
+  // re-entered, prints "Binding loop detected" and SKIPS the re-evaluation —
+  // three warnings per steered pointer move, and the flag above never even
+  // reached. The near miss is measured too: hanging the handlers on the mirror
+  // properties this file already has (`dragAfter`) loops in exactly the same
+  // way, because any binding that transitively depends on what its handler
+  // writes does. See docs/decisions/0006.
+  //
+  // Both signals call the same function and that function re-asserts BOTH
+  // values, so a change to either fixes both. Bar.qml writes them one after the
+  // other on every pointer move, and reacting to only one would make the
+  // outcome depend on which it writes last: reverse those two assignments and
+  // the bar would draw its insertion line on one side of the pocket while
+  // placing the widget on the other. A marker that lies is worse than no
+  // override at all.
+  //
+  // ignoreUnknownSignals is what keeps this host access optional like every
+  // other one here: a custom bar that publishes neither property gets silence.
+  Connections {
+    target: root.bar
+    ignoreUnknownSignals: true
+    function onBarDragAfterChanged() { root.steerDrop() }
+    function onBarDragTargetGeometryChanged() { root.steerDrop() }
+  }
 
   function steerDrop() {
     if (root.steering) return
@@ -320,17 +334,23 @@ BarWidget {
     // widget is not going to.
     if (bar.barDragAfter === want && Model.sameMarkerRect(bar.barDragTargetGeometry, rect)) return
 
-    // Guarded so a host that turned one of these readonly cannot leave the
-    // flag latched and the override off for the rest of the session. The write
-    // that decides the placement goes first, so a refusal there applies nothing
-    // at all rather than half of it — and the invariant below carries the
-    // result either way. `finally` would say this more directly, but Qt 5's
-    // qmlformat segfaults on it, and that is the parser named in the README.
+    // Guarded so a host that turned one of these readonly cannot leave the flag
+    // latched and the override off for the rest of the session. Both values are
+    // applied or neither: the write that decides the placement goes first, so a
+    // refusal there applies nothing at all, and a refusal on the geometry is
+    // rolled back. Leaving that one half-written is the one outcome this
+    // override must never produce — measured against a host with a readonly
+    // geometry, it placed the widget against the pocket while the bar kept
+    // drawing its line on the far side. The invariant below carries the result
+    // either way. `finally` would say this more directly, but Qt 5's qmlformat
+    // segfaults on it, and that is the parser named in the README.
     root.steering = true
+    var hostAfter = bar.barDragAfter
     try {
       bar.barDragAfter = want
       bar.barDragTargetGeometry = rect
     } catch (e) {
+      try { bar.barDragAfter = hostAfter } catch (e2) { }
     }
     root.steering = false
   }
