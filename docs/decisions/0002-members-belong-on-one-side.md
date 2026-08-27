@@ -68,6 +68,10 @@ Accepted cost: a far-side drop pays two bar rebuilds instead of one. Dropping
 from the side the members are already on pays the usual single rebuild, which is
 what any widget reorder costs in Omarchy with or without this plugin.
 
+[0003](0003-steering-the-bar-s-own-drop-marker.md) removed that cost wherever
+the override applies, which is every section but `left`. The invariant is
+unchanged and still guarantees the result; it simply has nothing to repair.
+
 This file owns the number. Measured on the user's three-monitor session by
 sampling the shell process's CPU time across a write: **1.45 s** for a layout
 order change (three samples, 1.45 / 1.47 / 1.45), against **0.05 s** for a
@@ -75,6 +79,23 @@ members-only change. The gap is what 0001 relies on when it writes membership
 ahead of the bar's own move; it is also why a second order change is worth
 arguing about at all. Every other file states the cost qualitatively and points
 here.
+
+Re-measured on 2026-08-27, after 0003, on the same session and the same way —
+and this time counting the writes with inotify rather than sampling for them,
+because a poll can miss two writes that land inside one interval:
+
+| what | writes to `shell.json` | CPU | rebuilds |
+| :--- | :--- | :--- | :--- |
+| a members-only change | 1 | 0.07 s | 0 |
+| one layout order change | 1 | 1.21 s | 1 |
+| a hand-edited wrong side, repaired by the invariant | 2 | 2.53 s | 2 |
+| a far-side drop, with the override | 2 | 2.28 s | 1 |
+
+The last row is the point. Two writes, one of them the cheap members-only
+change and one the layout move — the repair write is absent, and the repair is
+demonstrably a write of its own: given a hand-edited config with a member on
+the wrong side, exactly one further write appears and the member ends up
+against the pocket. The `left` section still pays the two-rebuild row.
 
 Two adjacent ideas were refused during the same work, and are recorded here so
 they are not re-proposed as oversights.
@@ -92,10 +113,6 @@ to set `visible` on — a loop, and one that would oscillate rather than settle.
 Refused; the consequence is a README caveat instead: a member in the `center`
 section with an anchor configured may bind the placeholder and never hide.
 
-The open question is whether to spend host coupling to avoid the extra rebuild: overriding
-`barDragAfter` and the drop-marker geometry during the drag would make the bar
-place a far-side arrival correctly in the first place, halving the cost, at the
-price of writing three of the bar's internal properties mid-gesture. If a future
-Omarchy changed them, the override would simply stop applying and this invariant
-would still guarantee the result — so the fast path could degrade to the slow one
-rather than to a defect. Deferred, not rejected.
+Whether to spend host coupling to avoid the extra rebuild was left open here
+and is answered in [0003](0003-steering-the-bar-s-own-drop-marker.md), which
+also records what validating that candidate against `Bar.qml` changed about it.

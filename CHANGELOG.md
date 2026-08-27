@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet. One deliberate limitation carried over from 0.2.0 is still open:
-dropping a widget in from the far side of the pocket costs two bar rebuilds
-instead of one. Whether to spend host coupling to avoid it is argued, with the
-measurement, in
-[decision 0002](docs/decisions/0002-members-belong-on-one-side.md).
+### Changed
+
+- Dropping a widget onto the pocket from the far side now costs one bar rebuild
+  instead of two. While the drag is running, Pocket tells the bar which side of
+  the mark the widget belongs on, so the bar places it there in the first place
+  and the placement invariant has nothing to repair. The invariant is unchanged
+  and still guarantees the result: every host access is optional, so a future
+  Omarchy that renames those properties makes the override stop applying rather
+  than misbehave. The `left` section keeps the old cost — the side it would need
+  is the one the bar resolves past hidden modules, which a collapsed pocket's
+  members are. Measured in
+  [decision 0002](docs/decisions/0002-members-belong-on-one-side.md), decided in
+  [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).
 
 ## [0.2.0] — 2026-08-27
 

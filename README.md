@@ -91,9 +91,11 @@ In the `right` section that means the members come *first* and the pocket last;
 in `left`, the pocket first. Fanning out changes the section's width, and this
 ordering is what keeps the mark itself from sliding out from under your pointer.
 
-Pocket keeps that arrangement for you: a member that ends up on the wrong side —
-dropped in from the far side, or moved there by hand — is put back against the
-pocket. It never reorders members that are already on the right side.
+Pocket keeps that arrangement for you. While you drag a widget onto it, it tells
+the bar which side the widget belongs on, so it lands there directly; and a
+member that ends up on the wrong side anyway — moved there by hand, or dropped
+in from the far side in the `left` section — is put back against the pocket. It
+never reorders members that are already on the right side.
 
 `omarchy.tray` is a poor member: Omarchy pins it to its section's inner edge on
 every config load, and its own drawer assumes it sits there.
@@ -123,12 +125,15 @@ would make one screen's transient state everyone's.
 
 ## Things you should know before installing
 
-- **Dropping a widget in from the far side takes about twice as long.** Any
-  widget reorder makes Omarchy rebuild every widget on every monitor, and
-  putting a far-side arrival back where it belongs costs a second rebuild.
-  Dropping from the side the members are already on costs the usual single one.
-  The measurement and the trade-off are in
-  [decision 0002](docs/decisions/0002-members-belong-on-one-side.md).
+- **In the `left` section, dropping a widget in from the far side takes about
+  twice as long.** Any widget reorder makes Omarchy rebuild every widget on
+  every monitor, and putting a far-side arrival back where it belongs costs a
+  second rebuild. Everywhere else Pocket tells the bar where the widget belongs
+  while you are still dragging, so it lands there the first time and one rebuild
+  is all it costs. The measurements are in
+  [decision 0002](docs/decisions/0002-members-belong-on-one-side.md), the reason
+  `left` is the exception in
+  [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).
 - **A member in the `center` section can be the wrong one.** With `centerAnchor`
   set, the bar builds every center widget twice — once drawn, once as a hidden
   placeholder — and Pocket may bind the placeholder, in which case the widget on
