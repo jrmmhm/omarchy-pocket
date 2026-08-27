@@ -162,6 +162,14 @@ a wrong action into a dead click without ever delivering the press to the pocket
 that was aimed at. `KeyboardPanel::pressTargetAt` already filters by window —
 the fix is the same filter in `moduleClickTargetAt`, and it belongs upstream.
 
+Both paragraphs above were written from reading source, and both have since been
+measured. The hover one holds. The click one is right that the filter is missing
+and wrong about what makes it bite: Qt pins a Wayland toplevel to the origin of
+its own output, so the two surfaces are not tested stacked, and on monitors side
+by side the defect does not occur at all. The measurements, the condition that
+does trigger it, and the upstream recommendation as it now stands belong to
+[0007](0007-the-two-host-limits-measured.md).
+
 **An instance that owns no slot still writes.** It runs `steerDrop()` and
 `commitDrop()` as before, because 0004 requires every instance to reach the same
 membership answer from ids alone, and none of that reads the resolution. What
