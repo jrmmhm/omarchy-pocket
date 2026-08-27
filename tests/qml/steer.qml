@@ -111,6 +111,16 @@ QtObject {
     check("and the marker is moved with it, so the two cannot disagree",
           harness.fakeBar.barDragTargetGeometry.x, 50)
 
+    // A second move that flips only the side, leaving the geometry object it
+    // already holds. One assertion per subscription is the whole point of this
+    // one: with both writes in play the geometry handler covers for a dead
+    // `after` handler, and a misspelt name there is invisible -- which is the
+    // failure ignoreUnknownSignals is quiet about. Bar.qml can write this pair
+    // in either order, so neither handler may be the only one that works.
+    harness.fakeBar.barDragAfter = true
+
+    check("a side flipped on its own is steered back", harness.fakeBar.barDragAfter, false)
+
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
   }

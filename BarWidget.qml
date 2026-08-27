@@ -286,18 +286,18 @@ BarWidget {
 
   // The re-entrancy guard, and the only thing that stops the recursion:
   // steerDrop() writes the two properties whose change signals called it, and
-  // Qt delivers those synchronously. Measured on Qt 6.11.2.
+  // Qt delivers those synchronously.
   property bool steering: false
 
   // Listened to, rather than sampled into a property of this widget's own. A
   // property that reads these two values with a handler that writes them back
   // is a cycle through that property's own binding: Qt finds its update()
-  // re-entered, prints "Binding loop detected" and SKIPS the re-evaluation —
-  // three warnings per steered pointer move, and the flag above never even
-  // reached. The near miss is measured too: hanging the handlers on the mirror
-  // properties this file already has (`dragAfter`) loops in exactly the same
-  // way, because any binding that transitively depends on what its handler
-  // writes does. See docs/decisions/0006.
+  // re-entered, prints "Binding loop detected" and SKIPS the re-evaluation, so
+  // the flag above was never even reached. The near miss is measured too:
+  // hanging the handlers on the mirror properties this file already has
+  // (`dragAfter`) loops in exactly the same way, because any binding that
+  // transitively depends on what its handler writes does. docs/decisions/0006
+  // has the engine version and the counts.
   //
   // Both signals call the same function and that function re-asserts BOTH
   // values, so a change to either fixes both. Bar.qml writes them one after the

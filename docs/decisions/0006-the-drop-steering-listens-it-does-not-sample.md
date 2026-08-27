@@ -122,11 +122,21 @@ apply.** Quickshell can load `BarWidget.qml` itself against an object that is
 not a bar, so `tests/qml/` exercises the working tree rather than a model of it.
 Two cases, each watched red on its own mutation: the sampling binding (three
 binding loops), a missing rollback (`steer-readonly` alone), and a misspelt
-signal name (`steer` alone) — the last being the failure `ignoreUnknownSignals`
-makes silent, and the price this decision pays for keeping the access optional.
-They do not run on GitHub's runners, which have no Quickshell package; that is
-the same bargain `.github/workflows/ci.yml` already makes for `qmlformat`, and
-the workflow says so rather than claiming coverage it does not have.
+signal name — the last being the failure `ignoreUnknownSignals` makes silent,
+and the price this decision pays for keeping the access optional.
+
+That last one needs both of its assertions, and the reason is worth writing down
+because the obvious harness does not have them. A move that writes the side and
+the geometry lets the geometry handler cover for a dead `after` handler: with
+only that case, misspelling `onBarDragAfterChanged` leaves the suite green. The
+second assertion flips the side on its own, which is a pair `Bar.qml` can write
+in either order, so neither subscription may be the only one that works.
+
+They do not run on GitHub's runners, which have no Quickshell package. That is
+the same bargain `.github/workflows/ci.yml` already makes for `qmlformat`;
+`tests/qml/run.sh` says which condition it skipped on, and the README's
+Development section says the coverage is local, rather than either claiming
+coverage that is not there.
 
 **Two sentences in 0003 are wrong about the code as it stood, and both are
 corrected there rather than left to be found.** The paragraph beginning "Both
