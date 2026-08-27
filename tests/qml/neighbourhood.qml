@@ -189,8 +189,39 @@ QtObject {
     if (harness.step === 3) return harness.checkSteering()
     if (harness.step === 4) return harness.openPocket()
     if (harness.step === 5) return harness.sweepOpen()
-    if (harness.step === 6) return harness.checkRefusedLight()
-    if (harness.step === 7) return harness.finish()
+    if (harness.step === 6) return harness.checkRepeatedIds()
+    if (harness.step === 7) return harness.checkRefusedLight()
+    if (harness.step === 8) return harness.finish()
+  }
+
+  // A section that carries the same widget twice — the host allows it for a
+  // spacer and for the indicators — must still name the pocket's own
+  // neighbour. Taking the first slot with the right id for every entry answers
+  // with the earlier copy twice: the near edge stays unfixed and a gap two
+  // slots further out arms the pocket instead. Both were measured before the
+  // walk started consuming the slots it had used.
+  function checkRepeatedIds() {
+    var ids = ["omarchy.spacer", "omarchy.tray", "omarchy.spacer", "jrmmhm.pocket", "jerome.focus"]
+    var made = [], entries = []
+    for (var i = 0; i < ids.length; i++) {
+      made.push(harness.slotComponent.createObject(harness, { moduleName: ids[i] }))
+      entries.push({ id: ids[i] })
+    }
+    harness.slots = made
+    harness.slotFor("jrmmhm.pocket").activeItem = harness.pocket
+    harness.pocket.settings = { members: "" }
+    harness.fakeBar.layoutConfig = { left: [], center: [], right: entries }
+    harness.fakeBar.moduleSlots = made
+    harness.layout()
+
+    var mark = harness.slotFor("jrmmhm.pocket")
+    harness.check("the mark's neighbour is the second copy of the repeated id, not the first",
+      harness.pocket.slotBeforeSelf, made[2])
+    harness.check("an empty pocket still takes a widget in at its near edge",
+      harness.ask(mark.x - 1, "jerome.focus"), "add")
+    harness.check("and the far half of the copy two slots out is left alone",
+      harness.ask(made[0].x + made[0].width - 1, "jerome.focus"), "none")
+    harness.endDrag()
   }
 
   function build() {
