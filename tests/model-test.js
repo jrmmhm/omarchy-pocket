@@ -477,6 +477,67 @@ check("the pocket refuses to move itself",
 check("a config that is not an object is refused",
   Model.placeMemberBesideSelf(null, "right", "a", SELF, true), false)
 
+// --------------------------------------------------------- drop steering
+
+// Told where an arriving widget belongs while the drag is still running, the
+// bar places it correctly the first time and the placement invariant above
+// finds nothing to do — one bar rebuild instead of two.
+
+function steer(overrides) {
+  return Model.steerDropAfter(Object.assign({
+    intent: "add", nearestAtEnd: true, mayWrite: true
+  }, overrides))
+}
+
+// `after: false` means "before the target slot", which names the pocket itself
+// and is exact. It is the only steerable side, so this is the only object the
+// function ever returns.
+check("a widget arriving at the pocket is steered to the near side",
+  steer({}), { after: false })
+
+// One negative fixture per guard, so each is seen refusing rather than assumed
+// to. Removing any one of the three makes exactly one of these go red.
+check("nothing is steered when the drop would not add",
+  steer({ intent: "none" }), null)
+check("a member on its way out is not steered",
+  steer({ intent: "remove" }), null)
+// The side the members occupy in `left` is the one Bar.qml resolves through
+// nextVisibleModuleName(), which walks past every module that is not drawn —
+// and a collapsed pocket's members are exactly that. Steering there would put
+// the widget at the far end of the run instead of against the pocket.
+check("the section whose members do not lead from the end is not steered",
+  steer({ nearestAtEnd: false }), null)
+// A second pocket entry, or a pocket that cannot find its own entry, refuses
+// to write `members`. Steering anyway would move a widget the user did not aim
+// there and then not record it as a member.
+check("a pocket that may not write does not steer either",
+  steer({ mayWrite: false }), null)
+check("an empty state steers nothing", Model.steerDropAfter({}), null)
+check("no state at all steers nothing", Model.steerDropAfter(undefined), null)
+
+// The marker rect is compared field by field because Bar.qml's dropMarkerRect()
+// returns a fresh object on every call: by identity nothing is ever equal, and
+// the pocket would rewrite the marker on every pointer move forever.
+const RECT = { x: 10, y: 0, width: 3, height: 24 }
+
+check("a fresh object with the same fields is the same marker",
+  Model.sameMarkerRect(RECT, { x: 10, y: 0, width: 3, height: 24 }), true)
+check("a marker on the other side of the slot is a different marker",
+  Model.sameMarkerRect(RECT, { x: 42, y: 0, width: 3, height: 24 }), false)
+check("a different y is a different marker",
+  Model.sameMarkerRect(RECT, { x: 10, y: 5, width: 3, height: 24 }), false)
+check("a different width is a different marker",
+  Model.sameMarkerRect(RECT, { x: 10, y: 0, width: 4, height: 24 }), false)
+check("a different height is a different marker",
+  Model.sameMarkerRect(RECT, { x: 10, y: 0, width: 3, height: 25 }), false)
+// dropMarkerRect() returns null when the slot is gone, and the bar clears the
+// geometry to null between drags. Neither may read as "already correct".
+check("no marker yet is not the same marker", Model.sameMarkerRect(null, RECT), false)
+check("a marker against nothing is not the same marker",
+  Model.sameMarkerRect(RECT, null), false)
+check("two absent markers are still not the same marker",
+  Model.sameMarkerRect(null, null), false)
+
 // ------------------------------------------------------- entry counting
 
 // The bug this replaces: bar.moduleWidgets() counts live instances, and the
