@@ -20,8 +20,9 @@ and the changelog.
 Everything below was measured on this machine: Omarchy 4.0.0.alpha, Quickshell
 0.3.1, Qt 6.11.2, Hyprland 0.56.2, with three outputs in logical coordinates —
 eDP-1 at x=0 (1152×720), HDMI-A-1 at x=1152 (1600×900), DP-2 at x=2752
-(1280×720). The installed `Bar.qml` is byte-identical to upstream tag `v4.0.1`
-and to `quattro` HEAD, so none of this is a local artefact.
+(1280×720). The installed `Bar.qml` is byte-identical to upstream tag `v4.0.1`,
+and to the `quattro` branch as it stood on this date, so none of this is a local
+artefact. The tag is the durable half of that claim; the branch has moved on.
 
 The harnesses live outside this repository, under the session scratchpad as
 `harness/e1` … `harness/e9`. Each loads the host's own functions verbatim —
@@ -72,11 +73,13 @@ It fires when two surfaces share an origin:
   answered was not the counterpart of the one clicked but whichever widget
   covered the same point.
 
-Which surface loses is registration order: `moduleClickTargetAt` scans
-`clickTargets` backwards and returns the first hit, so the surface that
-registered *first* wins every contested click. `WidgetButton.syncClickRegistration`
-appends in creation order across windows, so this is stable within a session and
-arbitrary between sessions.
+Which surface loses is registration order. `registerClickTarget` appends, and
+`moduleClickTargetAt` scans backwards and returns the first hit, so the surface
+that registered **last** wins every contested click — which e5 shows directly:
+surfaceB registered first and every one of the nine cross-surface resolutions
+went to surfaceA. `WidgetButton.syncClickRegistration` appends in creation order
+across windows, so this is stable within a session and arbitrary between
+sessions.
 
 Two measurements pin the condition down further, and both narrow it to the
 outputs alone:
