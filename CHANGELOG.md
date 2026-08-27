@@ -70,7 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out from the inside. Both have since been measured, and the second one no
   longer carries the cause it was first given — see
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md), which
-  also settles which upstream issue the `SUPER+CTRL+1…9` caveat belongs to.
+  also settles that no upstream issue tracks the `SUPER+CTRL+1…9` caveat, and
+  that the one the README used to cite never did.
 - The README now says what the dragged order survives — a restart, a reboot, an
   `omarchy plugin update`, a member whose widget fails to load — and the known
   way to lose it.
