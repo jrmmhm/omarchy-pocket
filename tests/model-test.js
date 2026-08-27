@@ -176,6 +176,205 @@ contains("rejected ids are named",
 contains("a second pocket is called out",
   Model.describe({ members: ["a"], duplicateInstances: true }), "second Pocket entry")
 
+// ------------------------------------------------------- entry identity
+
+check("a bare string entry is its own id", Model.entryIdOf("omaplug"), "omaplug")
+check("an object entry answers with id", Model.entryIdOf({ id: "omaplug", members: "x" }), "omaplug")
+check("whitespace around an id is not part of it", Model.entryIdOf(" omaplug "), "omaplug")
+check("an entry without an id has none", Model.entryIdOf({ members: "x" }), "")
+check("null is not an entry", Model.entryIdOf(null), "")
+
+// ------------------------------------------------------- member ordering
+
+const LAYOUT_RIGHT = ["omarchy.tray", "mehiel.darky", "omaplug", "omarchy.tailscale", SELF, "jerome.focus"]
+
+check("members follow the layout, not the order they were added",
+  Model.orderMembers(["omarchy.tailscale", "mehiel.darky", "omaplug"], LAYOUT_RIGHT),
+  ["mehiel.darky", "omaplug", "omarchy.tailscale"])
+check("an already ordered list is left alone",
+  Model.orderMembers(["mehiel.darky", "omaplug"], LAYOUT_RIGHT), ["mehiel.darky", "omaplug"])
+// The point of the -1 sentinel: an id the layout does not know must not be
+// dropped, and two of them must not be reordered against each other either.
+check("ids the layout does not know collect at the end, in their own order",
+  Model.orderMembers(["../evil", "omaplug", "nope", "mehiel.darky"], LAYOUT_RIGHT),
+  ["mehiel.darky", "omaplug", "../evil", "nope"])
+// Long enough that an inconsistent comparator cannot come out right by luck:
+// V8 insertion-sorts short arrays and will hide a contradictory comparator.
+check("many unknowns still land behind every known id, in their own order",
+  Model.orderMembers(["z1", "omarchy.tailscale", "z2", "omarchy.tray", "z3",
+                      "omaplug", "z4", "mehiel.darky", "z5", "jerome.focus", "z6"], LAYOUT_RIGHT),
+  ["omarchy.tray", "mehiel.darky", "omaplug", "omarchy.tailscale", "jerome.focus",
+   "z1", "z2", "z3", "z4", "z5", "z6"])
+check("an empty layout leaves everything where it was",
+  Model.orderMembers(["b", "a"], []), ["b", "a"])
+check("ordering nothing yields nothing", Model.orderMembers([], LAYOUT_RIGHT), [])
+check("a missing list yields nothing", Model.orderMembers(undefined, LAYOUT_RIGHT), [])
+
+// -------------------------------------------------- adding and removing
+
+// Both work on the RAW list. A round trip through parseMembers would delete
+// the ids the tooltip is at that moment asking the user to fix, and that is
+// their config, not ours.
+check("a new member is appended", Model.withMember(["a"], "b"), ["a", "b"])
+check("adding twice changes nothing", Model.withMember(["a", "b"], "b"), ["a", "b"])
+check("a rejected id survives an unrelated add",
+  Model.withMember(["../evil", "a"], "b"), ["../evil", "a", "b"])
+check("adding nothing changes nothing", Model.withMember(["a"], ""), ["a"])
+check("adding to nothing starts the list", Model.withMember(undefined, "a"), ["a"])
+
+check("a member is removed", Model.withoutMember(["a", "b"], "a"), ["b"])
+check("removing what is not there changes nothing", Model.withoutMember(["a"], "b"), ["a"])
+check("a rejected id survives an unrelated removal",
+  Model.withoutMember(["../evil", "a", "b"], "a"), ["../evil", "b"])
+check("removing the last member empties the list", Model.withoutMember(["a"], "a"), [])
+
+// -------------------------------------------------------- serialisation
+
+check("a comma string stays a comma string",
+  Model.membersValue(["a", "b"], "a, b"), "a, b")
+check("an array stays an array",
+  Model.membersValue(["a", "b"], ["a"]), ["a", "b"])
+// What the bar actually injects is a sequence type, not an Array — the same
+// fixture the parser is pinned against.
+check("an array-like sequence is recognised as an array",
+  Model.membersValue(["a", "b"], { length: 1, 0: "a" }), ["a", "b"])
+// manifest.json declares members as a string with "" for a default, so a
+// pocket that never had the key must not suddenly grow an array.
+check("nothing to preserve writes the shape the manifest declares",
+  Model.membersValue(["a"], undefined), "a")
+check("an empty string is still a string", Model.membersValue(["a"], ""), "a")
+check("an emptied array stays an array", Model.membersValue([], ["a"]), [])
+check("an emptied string stays a string", Model.membersValue([], "a"), "")
+
+// ----------------------------------------------------------- drop rules
+
+function drop(overrides) {
+  return Model.dropDecision(Object.assign({
+    sourceId: "omarchy.bluetooth", selfId: SELF, anchorId: "omarchy.clock",
+    members: ["mehiel.darky", "omaplug"],
+    targetIsSelf: false, targetIsMember: false, hasTarget: true, innerEdge: false
+  }, overrides))
+}
+
+check("the inner edge takes a widget in",
+  drop({ targetIsSelf: true, innerEdge: true }), "add")
+check("the outer edge does not",
+  drop({ targetIsSelf: true, innerEdge: false }), "none")
+check("a neighbour is not the pocket", drop({ targetIsSelf: false }), "none")
+check("a member dropped on the inner edge is already in",
+  drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: true }), "none")
+check("a member dropped on the outer edge leaves",
+  drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: false }), "remove")
+check("a member dropped elsewhere on the bar leaves",
+  drop({ sourceId: "omaplug" }), "remove")
+check("a member dropped onto another member is only reordered",
+  drop({ sourceId: "omaplug", targetIsMember: true }), "none")
+// Released off the bar there is no drop target, the bar moves nothing, and
+// neither may the pocket — otherwise the most common failed gesture on the
+// bar would silently empty the pocket.
+check("a member released off the bar stays",
+  drop({ sourceId: "omaplug", hasTarget: false }), "none")
+
+// One negative fixture per refusal, so each guard is seen refusing rather
+// than assumed to.
+check("the pocket refuses to hold itself",
+  drop({ sourceId: SELF, targetIsSelf: true, innerEdge: true }), "none")
+check("the pocket refuses the center anchor",
+  drop({ sourceId: "omarchy.clock", targetIsSelf: true, innerEdge: true }), "none")
+check("a widget that merely shares the anchor's name pattern is fine",
+  drop({ sourceId: "omarchy.clockwork", targetIsSelf: true, innerEdge: true }), "add")
+check("with no anchor set, nothing is refused for being one",
+  Model.dropDecision({ sourceId: "omarchy.clock", selfId: SELF, anchorId: "",
+    members: [], targetIsSelf: true, innerEdge: true, hasTarget: true }), "add")
+check("a drag with no source decides nothing", drop({ sourceId: "" }), "none")
+check("an empty state decides nothing", Model.dropDecision({}), "none")
+check("no state at all decides nothing", Model.dropDecision(undefined), "none")
+
+// --------------------------------------------------------- config write
+
+function layoutFixture() {
+  return { version: 1, bar: { position: "top", layout: {
+    left: [{ id: "omarchy.menu" }],
+    right: [{ id: "omarchy.tray" }, { id: SELF, members: ["a"], showCount: true }]
+  } } }
+}
+
+{
+  const config = layoutFixture()
+  check("the write reports it found the entry",
+    Model.setMembersOnEntry(config, "right", SELF, "a, b"), true)
+  check("members is what was written",
+    config.bar.layout.right[1].members, "a, b")
+  // The user's file is not ours to tidy. Anything else on the entry — a
+  // setting from an older version, a key we have never heard of — stays.
+  check("every other key on the entry survives",
+    config.bar.layout.right[1].showCount, true)
+  check("no neighbouring entry is touched",
+    config.bar.layout.right[0], { id: "omarchy.tray" })
+}
+
+{
+  const config = { bar: { layout: { right: ["omarchy.tray", SELF] } } }
+  check("a bare string entry is promoted to an object",
+    Model.setMembersOnEntry(config, "right", SELF, "a"), true)
+  check("the promoted entry keeps its id",
+    config.bar.layout.right[1], { id: SELF, members: "a" })
+  check("the neighbouring string entry is left as a string",
+    config.bar.layout.right[0], "omarchy.tray")
+}
+
+{
+  const config = layoutFixture()
+  check("an entry that is not there is reported, not invented",
+    Model.setMembersOnEntry(config, "center", SELF, "a"), false)
+  check("a missing region is created rather than crashed on",
+    Array.isArray(config.bar.layout.center), true)
+  check("and it stays empty", config.bar.layout.center, [])
+}
+
+{
+  const config = { bar: { layout: { right: "not an array" } } }
+  check("a region that is not a list is replaced",
+    Model.setMembersOnEntry(config, "right", SELF, "a"), false)
+  check("with an empty list", config.bar.layout.right, [])
+}
+
+check("a config that is not an object is refused",
+  Model.setMembersOnEntry(null, "right", SELF, "a"), false)
+check("an empty id is refused",
+  Model.setMembersOnEntry(layoutFixture(), "right", "", "a"), false)
+
+{
+  const config = {}
+  check("a config with no bar at all is refused, not corrupted",
+    Model.setMembersOnEntry(config, "right", SELF, "a"), false)
+  check("and the scaffolding it needed was created",
+    JSON.stringify(config), JSON.stringify({ bar: { layout: { right: [] } } }))
+}
+
+// ------------------------------------------------------- entry counting
+
+// The bug this replaces: bar.moduleWidgets() counts live instances, and the
+// bar is built once per monitor. On the three-monitor session this was
+// measured on, a single pocket entry reported as three and the tooltip
+// claimed a second pocket that does not exist.
+const LAYOUT = { left: [{ id: "omarchy.menu" }], center: [{ id: "omarchy.clock" }],
+                 right: [{ id: "omarchy.tray" }, { id: SELF }] }
+
+check("one entry counts once", Model.countEntries(LAYOUT, SELF), 1)
+check("an id that is not in the layout counts zero",
+  Model.countEntries(LAYOUT, "nope"), 0)
+check("a second entry in the same region is counted",
+  Model.countEntries({ right: [{ id: SELF }, { id: SELF }] }, SELF), 2)
+check("a second entry in another region is counted",
+  Model.countEntries({ left: [SELF], right: [{ id: SELF }] }, SELF), 2)
+check("bare string entries count too",
+  Model.countEntries({ right: [SELF] }, SELF), 1)
+check("a region that is not a list is skipped, not crashed on",
+  Model.countEntries({ right: "nope", left: [{ id: SELF }] }, SELF), 1)
+check("no layout counts zero", Model.countEntries(undefined, SELF), 0)
+check("an empty id counts zero", Model.countEntries(LAYOUT, ""), 0)
+
 // --------------------------------------------------- manifest integrity
 
 // BarModel.customModuleType() infers a custom module from the entry's own keys:
