@@ -282,50 +282,151 @@ function drop(overrides) {
   return Model.dropDecision(Object.assign({
     sourceId: "omarchy.bluetooth", selfId: SELF, anchorId: "omarchy.clock",
     members: ["mehiel.darky", "omaplug"],
-    targetIsSelf: false, targetIsMember: false, hasTarget: true, innerEdge: false
+    targetIsSelf: false, hasTarget: true, gapTouchesMember: false
   }, overrides))
 }
 
 // Aiming at the pocket takes a widget in from either side. An earlier rule
 // gave the icon's two halves opposite meanings; on a real bar that meant half
 // the thing you aim at does the opposite of what aiming at it looks like.
-check("the inner edge takes a widget in",
-  drop({ targetIsSelf: true, innerEdge: true }), "add")
-check("the outer edge takes it in too",
-  drop({ targetIsSelf: true, innerEdge: false }), "add")
+check("aiming at the pocket takes a widget in",
+  drop({ targetIsSelf: true }), "add")
+check("and the gap it lands in does not change that",
+  drop({ targetIsSelf: true, gapTouchesMember: true }), "add")
 check("a neighbour is not the pocket", drop({ targetIsSelf: false }), "none")
-check("a member dropped on the near side is only reordered",
-  drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: true }), "none")
+
+// A member stays in for as long as the line is drawn against the group. This
+// is asked of the GAP, never of the slot the bar happened to pick: adjacent
+// slots share a gap, and the pocket's own resolved slots are filtered per
+// monitor. See docs/decisions/0004.
+check("a member dropped against the group is only reordered",
+  drop({ sourceId: "omaplug", gapTouchesMember: true }), "none")
+check("a member dropped in a gap with no member against it leaves",
+  drop({ sourceId: "omaplug", gapTouchesMember: false }), "remove")
+check("dropping a member onto the pocket from inside the run is a reorder",
+  drop({ sourceId: "omaplug", targetIsSelf: true, gapTouchesMember: true }), "none")
 check("a member dragged past the pocket leaves",
-  drop({ sourceId: "omaplug", targetIsSelf: true, innerEdge: false }), "remove")
-check("a member dropped elsewhere on the bar leaves",
-  drop({ sourceId: "omaplug" }), "remove")
-check("a member dropped onto another member is only reordered",
-  drop({ sourceId: "omaplug", targetIsMember: true }), "none")
+  drop({ sourceId: "omaplug", targetIsSelf: true, gapTouchesMember: false }), "remove")
 // Released off the bar there is no drop target, the bar moves nothing, and
 // neither may the pocket — otherwise the most common failed gesture on the
 // bar would silently empty the pocket.
 check("a member released off the bar stays",
   drop({ sourceId: "omaplug", hasTarget: false }), "none")
+check("and stays even where the gap would have said it leaves",
+  drop({ sourceId: "omaplug", hasTarget: false, gapTouchesMember: false }), "none")
+
+// The membership branch must take no per-instance input. On a bar built once
+// per monitor, barDragTarget is shared while each pocket resolves its member
+// slots against its own window — an input like that made the instance the drag
+// was NOT on eject the member. This pins the shape: everything but
+// targetIsSelf is an id or a plain fact, and targetIsSelf only gates `add`.
+check("a member's fate does not depend on which instance is asking",
+  drop({ sourceId: "omaplug", gapTouchesMember: true, targetIsSelf: false }),
+  drop({ sourceId: "omaplug", gapTouchesMember: true, targetIsSelf: true }))
 
 // One negative fixture per refusal, so each guard is seen refusing rather
 // than assumed to.
 check("the pocket refuses to hold itself",
-  drop({ sourceId: SELF, targetIsSelf: true, innerEdge: true }), "none")
-check("and refuses itself from the other side too",
-  drop({ sourceId: SELF, targetIsSelf: true, innerEdge: false }), "none")
+  drop({ sourceId: SELF, targetIsSelf: true }), "none")
+check("and refuses itself from a gap against the group too",
+  drop({ sourceId: SELF, targetIsSelf: true, gapTouchesMember: true }), "none")
 check("the pocket refuses the center anchor",
-  drop({ sourceId: "omarchy.clock", targetIsSelf: true, innerEdge: true }), "none")
-check("and refuses it from the other side too",
-  drop({ sourceId: "omarchy.clock", targetIsSelf: true, innerEdge: false }), "none")
+  drop({ sourceId: "omarchy.clock", targetIsSelf: true }), "none")
+check("and refuses it from a gap against the group too",
+  drop({ sourceId: "omarchy.clock", targetIsSelf: true, gapTouchesMember: true }), "none")
 check("a widget that merely shares the anchor's name pattern is fine",
-  drop({ sourceId: "omarchy.clockwork", targetIsSelf: true, innerEdge: true }), "add")
+  drop({ sourceId: "omarchy.clockwork", targetIsSelf: true }), "add")
 check("with no anchor set, nothing is refused for being one",
   Model.dropDecision({ sourceId: "omarchy.clock", selfId: SELF, anchorId: "",
-    members: [], targetIsSelf: true, innerEdge: true, hasTarget: true }), "add")
+    members: [], targetIsSelf: true, hasTarget: true }), "add")
 check("a drag with no source decides nothing", drop({ sourceId: "" }), "none")
 check("an empty state decides nothing", Model.dropDecision({}), "none")
 check("no state at all decides nothing", Model.dropDecision(undefined), "none")
+
+// ------------------------------------------------------------- the gap
+
+// The real `right` layout, with the pocket's members ahead of it. Every
+// position the bar can mark is walked, and the two targets that denote the
+// same gap must answer the same — that agreement is the whole fix.
+const RUN = ["omarchy.tray", "mehiel.darky", "ianswope.snapshots", "omaplug",
+             "omarchy.tailscale", "omarchy.bluetooth", SELF, "jerome.focus",
+             "omarchy.power"]
+const RUN_MEMBERS = ["mehiel.darky", "ianswope.snapshots", "omaplug",
+                     "omarchy.tailscale", "omarchy.bluetooth"]
+
+function gap(target, after) {
+  return Model.gapTouchesMember(RUN, RUN_MEMBERS, target, after)
+}
+
+// The defect this replaces: these two are the same gap, at the outer end of
+// the run, and the old rule answered them differently — which of them the bar
+// reports comes down to a sub-pixel tie in nearestDropTarget.
+check("the run's outer gap, reached from outside", gap("omarchy.tray", true), true)
+check("the same gap, reached from inside", gap("mehiel.darky", false), true)
+// And the gap past the pocket, which must answer "leaves" from both sides.
+check("the gap past the pocket, reached from the pocket", gap(SELF, true), false)
+check("the same gap, reached from the widget beyond it", gap("jerome.focus", false), false)
+
+check("a gap between two members is against the group", gap("omaplug", true), true)
+check("the gap against the pocket from inside the run", gap(SELF, false), true)
+check("the gap before the whole section is not", gap("omarchy.tray", false), false)
+check("a gap well past the pocket is not", gap("omarchy.power", true), false)
+check("nor the one before the last widget", gap("omarchy.power", false), false)
+
+// A widget the section does not hold has no gap here — a member in another
+// section is a mistake the tooltip already names, and dragging it there ends
+// its membership rather than silently keeping it.
+check("a target this section does not hold touches nothing",
+  gap("omarchy.audio", false), false)
+check("an empty target id touches nothing", gap("", false), false)
+check("a malformed entry does not resolve as a target",
+  Model.gapTouchesMember(["a", "", "b"], ["a"], "", true), false)
+check("no layout at all touches nothing",
+  Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false), false)
+check("no members at all touches nothing",
+  Model.gapTouchesMember(RUN, [], "mehiel.darky", false), false)
+check("an empty member id is not matched against a gap edge",
+  Model.gapTouchesMember(["a", "b"], [""], "a", true), false)
+
+// A single member is touched from both of its sides, so neither of the two
+// gaps around it can read as leaving.
+check("the only member, from its outer side",
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], "omarchy.tray", true), true)
+check("the only member, from its inner side",
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], SELF, false), true)
+
+// bar.layoutConfig is normalised and pins omarchy.tray to its section's inner
+// edge, while the bar's own move works on the raw shell.json section. When a
+// hand-written config puts the tray elsewhere the two orders differ by that
+// entry — the membership verdicts must not.
+const TRAY_LAST = ["mehiel.darky", "omaplug", SELF, "jerome.focus", "omarchy.tray"]
+check("the run's outer gap still reads the same with the tray displaced",
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "mehiel.darky", false), true)
+check("and the gap past the pocket still reads the same",
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], SELF, true), false)
+check("a displaced tray at the far end is not against the group",
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "omarchy.tray", false), false)
+
+// ------------------------------------------------------ member order
+
+// Reordering inside the run moves widgets without the pocket writing anything,
+// so the list has to notice on sight. Asked as "would ordering change it", so
+// the check and the repair cannot disagree.
+check("a list already in layout order is in order",
+  Model.membersInLayoutOrder(["mehiel.darky", "omaplug"], RUN), true)
+check("a swapped pair is not",
+  Model.membersInLayoutOrder(["omaplug", "mehiel.darky"], RUN), false)
+check("an empty list is in order", Model.membersInLayoutOrder([], RUN), true)
+check("one member is always in order",
+  Model.membersInLayoutOrder(["omaplug"], RUN), true)
+// Ids the layout does not hold keep their place, so a typo the user has not
+// fixed yet never makes this rewrite the list forever.
+check("an unknown id at the end leaves the list in order",
+  Model.membersInLayoutOrder(["mehiel.darky", "omaplug", "typo"], RUN), true)
+check("but a real inversion is still seen past one",
+  Model.membersInLayoutOrder(["omaplug", "mehiel.darky", "typo"], RUN), false)
+check("with no layout to compare against, order cannot be wrong",
+  Model.membersInLayoutOrder(["omaplug", "mehiel.darky"], []), true)
 
 // --------------------------------------------------------- config write
 
