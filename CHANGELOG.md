@@ -63,10 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).
 - The README now names two host limits that look like Pocket bugs and are not:
   a pocket on another screen folds up late, because Omarchy counts bar hover
-  once for the whole shell; and a click on one screen's bar can land on another
-  screen's pocket, because the bar hit-tests clicks against every monitor's
-  targets through coordinates Wayland does not give a client. Each says why a
-  plugin cannot filter it out from the inside.
+  once for the whole shell; and on outputs that overlap in the compositor's
+  layout, a left click on one screen's bar can land on another screen's pocket,
+  because the bar hit-tests clicks against every monitor's targets without
+  asking which screen they belong to. Each says why a plugin cannot filter it
+  out from the inside. Both have since been measured, and the second one no
+  longer carries the cause it was first given — see
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md), which
+  also settles which upstream issue the `SUPER+CTRL+1…9` caveat belongs to.
 - The README now says what the dragged order survives — a restart, a reboot, an
   `omarchy plugin update`, a member whose widget fails to load — and the known
   way to lose it.

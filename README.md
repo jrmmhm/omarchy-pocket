@@ -166,10 +166,13 @@ would make one screen's transient state everyone's.
 - **`SUPER+CTRL+1…9` renumbers.** Those bindings open "the Nth panel in the
   right section" and count only what is *drawn*, so a collapsed pocket shifts
   the numbering — and with a pocket it additionally depends on where your
-  pointer is. This is host behaviour, not something a plugin can fix; it already
-  happens today whenever a widget hides itself (no battery, no Bluetooth
-  adapter). Tracked upstream in
-  [omarchy#6355](https://github.com/basecamp/omarchy/issues/6355).
+  pointer is. Neither half is something a plugin can fix, and they are not the
+  same kind of thing. Counting only what is drawn is deliberate and documented
+  upstream; it already happens today whenever a widget hides itself (no battery,
+  no Bluetooth adapter). The dependence on your pointer is not: the count is
+  taken from whichever bar surface answers first, which assumes every monitor
+  draws the same widgets, and a pocket is what breaks that. See
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 - **Dragging a widget next to a collapsed pocket** drops it *behind* the hidden
   group, because the bar's drop targeting skips invisible slots.
 - **Dragging the pocket itself** does not take its members along; they stay
@@ -183,20 +186,24 @@ would make one screen's transient state everyone's.
   for the whole shell rather than once per screen, so while your pointer is on
   *any* monitor's bar, no pocket on any monitor folds. It only delays a fold —
   nothing opens by itself, and everything closes as soon as the pointer leaves
-  the bar. Reading it per screen is not available to a plugin: the only
+  the bar. The shared state is the host's own and predates any plugin: hover one
+  screen's centre section and the inactive indicators appear on every screen.
+  Reading it per screen is not available to a plugin: the only
   per-surface signal is which module slot the pointer is on, and that does not
   cover the empty runs between the sections, where the fold has to keep waiting.
-- **A click on one screen's bar can land on another screen's pocket.** The bar
-  hit-tests a click against the click targets of every monitor, and Qt maps a
-  point between two windows through global coordinates — which Wayland does not
-  give a client, so both bar surfaces report their origin as the screen corner
-  and are tested as though stacked on top of each other.
-  Where two pockets sit at the same distance from their bar's left edge,
-  clicking one can pin the other; clicking it again releases it. Pocket cannot
-  filter this out from the inside: a widget is handed a press with no record of
-  where it happened, and refusing presses that arrive without a hover would
-  break pinning in exactly the case it exists for — a bar panel is open, and its
-  input mask means no hover reaches the bar at all.
+- **On overlapping outputs, a left click on one screen's bar can land on another
+  screen's pocket.** The bar hit-tests a click against the click targets of every
+  monitor without asking which screen they belong to. That only reaches you where
+  two outputs overlap in the compositor's layout — mirrored, or positioned by
+  hand so their rectangles intersect — and where they do, it is every contested
+  click rather than an occasional one: clicking one pocket pins the other, and
+  clicking again releases it. On monitors side by side it was measured not to
+  happen at all. Pocket cannot filter this out from the inside: a widget is
+  handed a press with no record of where it happened, and refusing presses that
+  arrive without a hover would break pinning in exactly the case it exists for —
+  a bar panel is open, and its input mask means no hover reaches the bar at all.
+  What was measured, and the one condition that triggers it, are in
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 - **A member cannot be the `centerAnchor`.** That one slot carries a `visible`
   binding of the bar's own, and writing it would destroy the binding for the
   rest of the session. Pocket refuses it — the mark will not light up for it.
