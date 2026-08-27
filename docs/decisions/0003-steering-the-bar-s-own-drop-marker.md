@@ -43,7 +43,10 @@ the bar would then draw its insertion line on one side of the pocket and place
 the widget on the other. A marker that lies is worse than no override at all,
 because the pocket's whole drop rule is built on the promise that its answer
 and the line the user is looking at cannot disagree. Sampling both values into
-one binding and re-asserting both makes the host's write order irrelevant.
+one binding and re-asserting both makes the order of those two assignments
+irrelevant. It does not cover `barDragTarget`: moved behind the other two, the
+intent would still be one pointer move behind when the signal arrives, and the
+override would apply late — which costs the fast path, not the result.
 
 **The geometry has to be compared field by field.** `dropMarkerRect()` returns
 a fresh object on every call, so reference equality is always false and the
@@ -57,8 +60,13 @@ leaving the right side with a wrongly drawn line.
 equal-valued write to a `bool` property emits nothing, a `var` property holding
 a fresh object emits on every write, change signals are synchronous, and a
 write from inside the handler re-enters it. The override therefore carries a
-re-entrancy flag, cleared in a `finally` so a write that throws cannot leave it
-latched.
+re-entrancy flag, and clears it after a `try`/`catch` around the two writes, so
+that a host which turned one of them readonly cannot leave the flag latched and
+the override off for the rest of the session. `finally` would say that more
+directly and is deliberately not used: Qt 5's `qmlformat` segfaults on it, and
+that is the parser the README names as this project's syntax check. The write
+that decides the placement goes first, so a refusal there applies nothing at
+all rather than half of it.
 
 **Only one side is steerable.** `dropBarModuleAtTarget()` resolves
 `afterTarget === true` through `nextVisibleModuleName()`, which walks past every
@@ -86,8 +94,9 @@ reason the invariant was not replaced by this.
 
 The cost is real and worth naming: the plugin now writes two undocumented
 properties of the running host mid-gesture, which is a coupling direction 0001
-did not have. It buys roughly 1.5 s on a gesture a user performs rarely. The
-case for leaving it alone was argued and is recorded here as option A.
+did not have. What it buys is one bar rebuild on a gesture a user performs
+rarely; [0002](0002-members-belong-on-one-side.md) owns what a rebuild costs.
+The case for leaving it alone was argued and is recorded here as option A.
 
 One defect found while reviewing this change is **not** fixed by it, and is
 recorded so that closing 0002's open question does not read as closing the

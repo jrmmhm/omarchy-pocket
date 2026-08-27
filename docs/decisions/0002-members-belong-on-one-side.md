@@ -72,30 +72,46 @@ what any widget reorder costs in Omarchy with or without this plugin.
 the override applies, which is every section but `left`. The invariant is
 unchanged and still guarantees the result; it simply has nothing to repair.
 
-This file owns the number. Measured on the user's three-monitor session by
-sampling the shell process's CPU time across a write: **1.45 s** for a layout
-order change (three samples, 1.45 / 1.47 / 1.45), against **0.05 s** for a
-members-only change. The gap is what 0001 relies on when it writes membership
-ahead of the bar's own move; it is also why a second order change is worth
-arguing about at all. Every other file states the cost qualitatively and points
-here.
+This file owns the number, and every other file states the cost qualitatively
+and points here.
 
-Re-measured on 2026-08-27, after 0003, on the same session and the same way —
-and this time counting the writes with inotify rather than sampling for them,
-because a poll can miss two writes that land inside one interval:
+**One layout order change costs 1.2 to 1.5 s of shell CPU. A members-only
+change costs under 0.1 s and is not a rebuild at all.** Measured on the user's
+three-monitor session by sampling the shell process's `utime + stime` across a
+write, with the shell otherwise idle: 1.45 / 1.47 / 1.45 s on 2026-08-26, and
+1.21 / 1.36 s on 2026-08-27; 0.05 s and 0.07 s for members-only on those same
+days. The spread across sessions is the honest precision of this measurement,
+and nothing in either decision turns on the third digit. The gap between the
+two is what 0001 relies on when it writes membership ahead of the bar's own
+move; it is also why a second order change is worth arguing about at all.
 
-| what | writes to `shell.json` | CPU | rebuilds |
+Re-measured on 2026-08-27, after 0003. The writes are counted with inotify
+rather than sampled for, because a poll can miss two writes that land inside
+one interval — and the claim below is a write count:
+
+| what | writes to `shell.json` | rebuilds | CPU |
 | :--- | :--- | :--- | :--- |
-| a members-only change | 1 | 0.07 s | 0 |
-| one layout order change | 1 | 1.21 s | 1 |
-| a hand-edited wrong side, repaired by the invariant | 2 | 2.53 s | 2 |
-| a far-side drop, with the override | 2 | 2.28 s | 1 |
+| a members-only change, shell idle | 1 | 0 | 0.07 s |
+| one layout order change, shell idle | 1 | 1 | 1.21 s |
+| a hand-edited wrong side, repaired by the invariant, shell idle | 2 | 2 | 2.53 s |
+| a far-side drop, with the override — **whole gesture** | 2 | 1 | 2.28 s |
 
-The last row is the point. Two writes, one of them the cheap members-only
-change and one the layout move — the repair write is absent, and the repair is
-demonstrably a write of its own: given a hand-edited config with a member on
-the wrong side, exactly one further write appears and the member ends up
-against the pocket. The `left` section still pays the two-rebuild row.
+The last row is the point, and the column that carries it is the write count,
+not the CPU. Two writes: the cheap members-only change and the layout move. The
+repair write is absent — and the repair is demonstrably a write of its own,
+because given a hand-edited config with a member on the wrong side, exactly one
+further write appears and the member ends up against the pocket. One layout
+write is one rebuild.
+
+The CPU figure in that row is not comparable with the three above it and is
+listed only for completeness: those are single writes with the shell otherwise
+idle, while this one covers the whole gesture — the drag itself, the ghost
+window the bar renders under the pointer, the drop, and the pocket folding the
+new member away on three monitors. Its own components account for 1.28 s of it
+(1.21 + 0.07); the rest is the gesture. Read as a CPU comparison the row would
+suggest a 10% saving, which is why it is labelled rather than left to be
+misread. What the change removes is the second row's worth of work — one
+rebuild, 1.2 to 1.5 s — and the `left` section still pays it.
 
 Two adjacent ideas were refused during the same work, and are recorded here so
 they are not re-proposed as oversights.
