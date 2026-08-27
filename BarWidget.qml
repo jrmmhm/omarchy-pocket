@@ -42,8 +42,8 @@ BarWidget {
   // would hide the other screen's widgets too.
   //
   // Null is a state, not an impossibility: a dying instance loses its window
-  // while its bindings still run, and a live surface loses its window for the
-  // ~50 ms a monitor move unmaps it. Both are answered in Model.ownsSlot(),
+  // while its bindings still run, and a live surface loses its window for as
+  // long as a monitor move unmaps it. Both are answered in Model.ownsSlot(),
   // which matches nothing rather than everything. See docs/decisions/0005.
   readonly property var ownWindow: root.QsWindow ? root.QsWindow.window : null
 
@@ -53,10 +53,11 @@ BarWidget {
   readonly property bool hostComparesWindows: !!bar
     && typeof bar.slotWindow === "function" && typeof bar.sameWindow === "function"
 
-  // The host can tell surfaces apart and this instance does not know which one
-  // it is on. Nothing resolves in that state, and the tooltip says so instead
-  // of reporting every member as absent from a bar it never looked at.
-  readonly property bool surfaceUnknown: hostComparesWindows && ownWindow === null
+  // This instance does not know which bar surface it is on. Deliberately not
+  // conditioned on the host as well: ownsSlot() refuses on an unknown window
+  // whatever the host can do, so conditioning the tooltip differently would let
+  // it describe a pocket other than the one on screen.
+  readonly property bool surfaceUnknown: ownWindow === null
 
   function canonical(id) {
     return bar && typeof bar.canonicalWidgetId === "function"

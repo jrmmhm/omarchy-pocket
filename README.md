@@ -64,9 +64,9 @@ in `bar.layout` and `members` mirrors it, both in that one file, written by the
 host atomically — so a reboot is just a restart, and `omarchy plugin update`
 pulls a new version and rebuilds the widgets without touching the file at all. A
 member whose widget fails to load after an update keeps its place, because the
-place is read from the file rather than from what is running. The one thing that
-does lose the list is a plugin manager's disable/enable round-trip; that caveat
-is below.
+place is read from the file rather than from what is running. What does lose
+placement is switching a widget off and on again — the caveat below has both
+halves of that.
 
 ## Why this one keeps your setup honest
 
@@ -174,9 +174,11 @@ would make one screen's transient state everyone's.
   group, because the bar's drop targeting skips invisible slots.
 - **Dragging the pocket itself** does not take its members along; they stay
   where they were.
-- **A plugin manager's disable/enable round-trip can lose `members`**, because
-  re-enabling a bar widget rewrites its entry as a bare `{ "id": ... }`. Keep a
-  copy of the line if you toggle the pocket off and on.
+- **A disable/enable round-trip loses placement**, because re-enabling a bar
+  widget rewrites its entry as a bare `{ "id": ... }` at the widget's default
+  spot. Done to the pocket it takes `members` with it, so keep a copy of the
+  line; done to a *member* it takes that widget's place in the run, and Pocket
+  then records it at the end of the list where the bar left it.
 - **A pocket on another screen folds up late.** Omarchy counts bar hover once
   for the whole shell rather than once per screen, so while your pointer is on
   *any* monitor's bar, no pocket on any monitor folds. It only delays a fold —
@@ -185,10 +187,10 @@ would make one screen's transient state everyone's.
   per-surface signal is which module slot the pointer is on, and that does not
   cover the empty runs between the sections, where the fold has to keep waiting.
 - **A click on one screen's bar can land on another screen's pocket.** The bar
-  hit-tests a click against the click targets of every monitor, and since Qt
-  6.8 mapping a point between two windows goes through global coordinates —
-  which Wayland does not give a client, so both bar surfaces report their origin
-  as the screen corner and are tested as though stacked on top of each other.
+  hit-tests a click against the click targets of every monitor, and Qt maps a
+  point between two windows through global coordinates — which Wayland does not
+  give a client, so both bar surfaces report their origin as the screen corner
+  and are tested as though stacked on top of each other.
   Where two pockets sit at the same distance from their bar's left edge,
   clicking one can pin the other; clicking it again releases it. Pocket cannot
   filter this out from the inside: a widget is handed a press with no record of

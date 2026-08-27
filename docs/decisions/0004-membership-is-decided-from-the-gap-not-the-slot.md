@@ -1,6 +1,6 @@
 # 4. Membership is decided from the gap, not from the slot
 
-- Status: accepted
+- Status: accepted, complemented by [0005](0005-a-pocket-drives-only-its-own-screens-slots.md)
 - Date: 2026-08-27
 - Amends: [0001](0001-pocket-writes-its-own-members.md)
 

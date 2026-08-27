@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-27
+- Complements: [0004](0004-membership-is-decided-from-the-gap-not-the-slot.md)
 
 ## Context
 
@@ -60,9 +61,10 @@ fixed here; see Consequences.
 
 **A — Freeze while the window is unknown.** Resolve nothing and make `apply()`
 return early, changing neither `driven` nor any slot. Rejected: it introduces a
-state that can strand. It also drops `memberPanelOpen` and `memberHovered` for
-the duration, so a monitor moving while a member's panel is open folds the
-pocket up underneath that panel — strictly worse than today.
+state that can strand, and the freeze would have to be reasoned about at every
+site that walks `driven` rather than at the one that fills it. It buys nothing
+against the open-panel case either — the chosen option has that consequence too,
+and Consequences records it.
 
 **B — Latch the window.** Keep `ownWindow` as a plain property written only
 when `QsWindow.window` is non-null, so a transient null neither widens nor
@@ -144,9 +146,12 @@ breaks the parity with Omarchy's centre-section reveal that the README claims.
 It only ever delays a fold and never opens anything, so it is a README note.
 
 `Bar.qml::moduleClickTargetAt` hit-tests a click against `clickTargets` from
-every monitor, and `mapToItem` between two windows goes through global
-coordinates that Wayland does not give a client — both bar surfaces report the
-screen corner, so they are tested stacked on top of each other. Two pockets at
+every monitor, and `mapToItem(item, point)` between two windows goes through
+global coordinates that Wayland does not give a client — both bar surfaces
+report the screen corner, so they are tested stacked on top of each other. The
+round trip arrived in Qt 6.8 (`qtdeclarative` commit `06ace3e226b2`, guarded
+against a null window since 6.8.1, QTBUG-129500); before it the two scenes were
+composed as if they shared an origin, which on Wayland is the same answer. Two pockets at
 the same distance from their bar's left edge can therefore take each other's
 clicks, which pins the wrong screen's pocket. Refusing a press that arrives
 without a hover was the obvious guard and is wrong twice: `KeyboardPanel`
@@ -183,8 +188,11 @@ hiding its own members. Before the change the same three gestures produced the
 defect intermittently.
 
 This is an observation of the screens by the person who reported it, not an
-instrument reading; what the machine contributes is the negative half. The
-shell's log carries no `TypeError` from the plugin across the restart and the
-gestures, which is what a `resolution` binding that could not evaluate would
-produce on every `moduleSlots` change — so the new comparison did run, on all
-three surfaces, for every rebuild the test drove.
+instrument reading, and it is the only direct evidence there is. The shell's log
+adds one thing and no more: no `TypeError` from the plugin across the restart
+and the gestures, which is what a `resolution` binding reaching a missing
+`Model.ownsSlot` would produce on every `moduleSlots` change. That says the new
+call is well formed. It does **not** say the comparison ran — a binding that is
+never re-evaluated is equally silent — and the log is not otherwise quiet: the
+`hostDropMarker` binding loop from 0003 writes some eighty warnings per shell
+start and did so here too, unchanged from before this commit.

@@ -85,11 +85,11 @@ function rejectedMembers(value, selfId) {
 // An instance that does not know its own window matches NOTHING. It used to
 // match everything — the comparison was skipped whenever the window was null —
 // and null is reachable twice over: a dying instance loses its window while its
-// bindings are still live, and a live surface loses its window for the ~50 ms a
+// bindings are still live, and a live surface loses its window for as long as a
 // monitor move unmaps it. Either way the instance adopted another screen's
 // slots, and handed them back visible on the way out. The host's own
-// sameWindow() already answers this way; only the caller disagreed. See
-// docs/decisions/0005.
+// sameWindow() already answers this way; only the caller disagreed.
+// docs/decisions/0005 has both paths, their sources, and what each costs.
 //
 // A host that cannot tell its surfaces apart at all is the separate, older
 // case: there is one answer to give and the pocket gives it, which is the
@@ -523,10 +523,15 @@ function describe(state) {
   // and every member came back unfound — but it never looked, so saying "not on
   // this bar" would be a claim about widgets that are in fact right there. It
   // gets its own line, and the lines drawn from the resolution are suppressed.
+  //
   // Normally a state no one can see, because an instance without a window is on
-  // a surface that is not being drawn; permanently true only if this plugin
-  // ever loses its `Quickshell` import, which is exactly the regression the
-  // header of BarWidget.qml warns about.
+  // a surface that is not being drawn. It is permanent, and then this line is
+  // the only account of it, if the widget ever stops resolving its window at
+  // all — losing the `Quickshell` import is the way that happens, and the
+  // header of BarWidget.qml is where it is warned about. Kept in step with
+  // ownsSlot(): the same condition that makes the pocket own no slot is the one
+  // that puts this line up, so the tooltip cannot describe a different pocket
+  // than the one on screen.
   var unknown = s.surfaceUnknown === true
 
   // What the pocket actually holds, not what it was asked to hold. Counting the
