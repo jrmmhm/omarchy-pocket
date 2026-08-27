@@ -73,6 +73,187 @@ function rejectedMembers(value, selfId) {
   return out
 }
 
+// ------------------------------------------------------------ membership
+
+// The bar hands entries over as plain objects after a JSON round-trip, but a
+// hand-written shell.json may still carry a bare id string. Both shapes have
+// to answer "which widget is this".
+function entryIdOf(entry) {
+  if (typeof entry === "string") return entry.trim()
+  if (entry && typeof entry === "object" && typeof entry.id === "string") return entry.id.trim()
+  return ""
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+// Members are kept in the order their widgets physically sit on the bar, not
+// in the order they were added. The cascade in applyReveal() counts from the
+// member nearest the pocket outwards; if the list disagreed with the layout,
+// the animation would run in a direction that does not exist on screen. The
+// bar decides where a dropped widget lands, so the list follows the bar.
+//
+// Ids the layout does not know — a typo the user has not fixed yet — keep
+// their relative order and collect at the end rather than being dropped.
+function orderMembers(list, layoutIds) {
+  var rank = {}
+  var ids = layoutIds || []
+  for (var i = 0; i < ids.length; i++) {
+    var key = String(ids[i]).trim()
+    if (key !== "" && !(key in rank)) rank[key] = i
+  }
+
+  // One rank past the last known position, so every unknown id shares a rank
+  // and falls through to its original index. A sentinel that had to be
+  // special-cased in the comparator instead produced a comparator that could
+  // report a < b and b < a at once; a four-element array still came out right
+  // by luck, which is exactly the kind of green that means nothing.
+  var unknown = ids.length
+  var decorated = []
+  var source = list || []
+  for (var j = 0; j < source.length; j++) {
+    var id = String(source[j]).trim()
+    decorated.push({ value: source[j], rank: id in rank ? rank[id] : unknown, at: j })
+  }
+
+  // The `at` tiebreak is not redundant even though ES2019 requires a stable
+  // sort: this file also runs in Qt's V4 engine, which makes no such promise.
+  // node cannot show the difference, so no test can either — it is here on the
+  // engine's terms, not the test suite's.
+  decorated.sort(function (a, b) {
+    return a.rank === b.rank ? a.at - b.at : a.rank - b.rank
+  })
+
+  var out = []
+  for (var k = 0; k < decorated.length; k++) out.push(decorated[k].value)
+  return out
+}
+
+// Both operate on the RAW list — what the user actually wrote — and never on
+// the parsed one. Round-tripping through parseMembers would quietly delete the
+// very ids the tooltip is at that moment asking the user to fix.
+function withMember(rawList, id) {
+  var want = String(id || "").trim()
+  var out = (rawList || []).slice()
+  if (want === "") return out
+  for (var i = 0; i < out.length; i++) if (String(out[i]).trim() === want) return out
+  out.push(want)
+  return out
+}
+
+function withoutMember(rawList, id) {
+  var drop = String(id || "").trim()
+  var out = []
+  var source = rawList || []
+  for (var i = 0; i < source.length; i++) {
+    if (drop !== "" && String(source[i]).trim() === drop) continue
+    out.push(source[i])
+  }
+  return out
+}
+
+// Write back the shape that was found. A user who wrote a comma string gets a
+// comma string; one who wrote an array keeps an array. With nothing to
+// preserve the string wins, because that is what manifest.json declares the
+// setting to be.
+function membersValue(list, previousRaw) {
+  var items = []
+  var source = list || []
+  for (var i = 0; i < source.length; i++) {
+    var id = String(source[i]).trim()
+    if (id !== "") items.push(id)
+  }
+
+  if (previousRaw !== null && previousRaw !== undefined && typeof previousRaw !== "string"
+      && typeof previousRaw.length === "number") {
+    return items
+  }
+  return items.join(", ")
+}
+
+// What a finished drag means for membership. Deliberately expressed in terms
+// of the bar's own drop target rather than pointer coordinates: barDragTarget
+// and barDragAfter are the two values Bar.qml already uses to draw its drop
+// marker, so the pocket's answer and the line the user is looking at can never
+// disagree. Comparing the target against this instance's own slot is an object
+// identity test, which is correct per monitor and per center-anchor duplicate
+// without mapping a single coordinate.
+//
+// The rule in one sentence: the pocket has two edges, and dropping on the
+// inner one puts a widget in while dropping on the outer one takes it out.
+function dropDecision(state) {
+  var s = state || {}
+  var source = String(s.sourceId || "").trim()
+  if (source === "") return "none"
+
+  // Naming itself would hide the slot it lives in. Naming the center anchor
+  // would be refused later anyway — refusing it here keeps a permanent
+  // complaint out of the user's config instead of writing one into it.
+  if (source === String(s.selfId || "")) return "none"
+  if (s.anchorId && source === String(s.anchorId)) return "none"
+
+  var members = s.members || []
+  var isMember = false
+  for (var i = 0; i < members.length; i++) {
+    if (String(members[i]).trim() === source) { isMember = true; break }
+  }
+
+  var ontoInnerEdge = s.targetIsSelf === true && s.innerEdge === true
+  if (ontoInnerEdge) return isMember ? "none" : "add"
+
+  // Leaving needs somewhere to land. A drag released off the bar produces no
+  // target at all, the bar moves nothing, and neither does the pocket.
+  if (isMember && s.hasTarget === true && s.targetIsMember !== true) return "remove"
+
+  return "none"
+}
+
+// ------------------------------------------------------------- config write
+
+// Set `members` on this plugin's own entry inside a raw shell.json, mirroring
+// Bar.qml's own rawLayoutSection(): the config reaching a mutator is whatever
+// the user's file holds, so the region may be missing, may not be an array,
+// and its entries may be bare id strings. Every other key on the entry is left
+// exactly as it was. Reports whether an entry was found at all.
+function setMembersOnEntry(config, region, id, value) {
+  if (!isPlainObject(config)) return false
+  var want = String(id || "").trim()
+  if (want === "") return false
+
+  if (!isPlainObject(config.bar)) config.bar = {}
+  if (!isPlainObject(config.bar.layout)) config.bar.layout = {}
+  if (!Array.isArray(config.bar.layout[region])) config.bar.layout[region] = []
+
+  var entries = config.bar.layout[region]
+  for (var i = 0; i < entries.length; i++) {
+    if (entryIdOf(entries[i]) !== want) continue
+    if (!isPlainObject(entries[i])) entries[i] = { id: want }
+    entries[i].members = value
+    return true
+  }
+  return false
+}
+
+// How many entries the layout holds for one widget id. This is the honest
+// answer to "is there a second pocket": bar.moduleWidgets() counts live
+// instances, and the bar is built once per monitor — plus a second time for
+// every center widget when centerAnchor is set — so it reports a duplicate on
+// any setup with more than one screen.
+function countEntries(layout, id) {
+  var want = String(id || "").trim()
+  if (want === "") return 0
+
+  var regions = ["left", "center", "right"]
+  var total = 0
+  for (var r = 0; r < regions.length; r++) {
+    var entries = layout ? layout[regions[r]] : null
+    if (!entries || typeof entries.length !== "number") continue
+    for (var i = 0; i < entries.length; i++) if (entryIdOf(entries[i]) === want) total++
+  }
+  return total
+}
+
 // Each member's own share of the reveal, so they cascade out of the pocket
 // instead of all arriving at once. `index` counts from the member nearest the
 // pocket, which is the one that should lead.
@@ -115,7 +296,7 @@ function describe(state) {
   var lines = []
 
   if (members.length === 0) {
-    lines.push("Pocket is empty — set `members` on its bar entry")
+    lines.push("Pocket is empty — drag a widget onto its inner edge, or set `members` on its bar entry")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
   } else if (s.expanded) {
@@ -137,5 +318,8 @@ function describe(state) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
                      rejectedMembers: rejectedMembers, revealFraction: revealFraction,
-                     describe: describe }
+                     describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
+                     withMember: withMember, withoutMember: withoutMember,
+                     membersValue: membersValue, dropDecision: dropDecision,
+                     setMembersOnEntry: setMembersOnEntry, countEntries: countEntries }
 }
