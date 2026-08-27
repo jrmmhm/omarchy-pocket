@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The near half of the mark takes a widget in, which it never did. Module slots
+  sit flush against one another, so the gap at that edge is exactly as far from
+  the pocket as from the widget drawn before it, and the bar resolves the tie in
+  favour of whichever it built first — always the neighbour. The pocket asked
+  whether the bar had named its own slot, so half the icon answered nothing at
+  all, and the README's "from either side" was untrue for it. It now recognises
+  both names of that one gap. The drop steering keeps the narrower question and
+  refuses where the bar named the neighbour: steering there would have placed
+  the widget outside the run while the bar drew its line at the mark — on one
+  monitor, not just across several. Measured across the whole neighbourhood in
+  [decision 0008](docs/decisions/0008-the-mark-answers-on-both-of-its-edges.md).
+- The mark no longer lights up for a drop it would then refuse. A bar carrying a
+  second Pocket entry writes nothing at all, which the light did not know.
+
 - The bar's drop marker is no longer read through a property of Pocket's own,
   which the QML engine reported as a binding loop on every pointer move of a
   drag it was steering. What the steering does is unchanged — a change to either
@@ -50,6 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The mark answers both directions of the gesture. It lights while a release
+  would take a widget in, as before, and now also while a release would let a
+  member go — in the colour the bar draws its own insertion line in, so two
+  opposite answers cannot be mistaken for each other. Where a member leaves and
+  where it is merely reordered is unchanged: that boundary runs through the
+  middle of the icon, where the last gap inside the run meets the first gap
+  outside it, and the mark is now what says which of the two you are on.
+  [Decision 0008](docs/decisions/0008-the-mark-answers-on-both-of-its-edges.md)
+  has the measurement and the two README promises it sits between.
 - Dropping a widget onto the pocket from the far side now costs one bar rebuild
   instead of two. While the drag is running, Pocket tells the bar which side of
   the mark the widget belongs on, so the bar places it there in the first place

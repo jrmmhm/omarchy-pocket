@@ -32,14 +32,21 @@ Then drag the widgets you want it to hold onto it. That is the whole setup.
 
 ![Dropping a widget onto the dots puts it away; dragging a member past them takes it back](docs/pocket-drag.svg)
 
-**Drop a widget on the dots and it goes in.** From either side — the mark lights
-up while a release would collect it, so you know before you let go. The bar draws
-its own insertion line at the same time, and the two always agree.
+**Drop a widget on the dots and it goes in.** From either side, and from a
+little beyond them: what the pocket reads is the insertion line the bar is
+drawing, and that line belongs to the dots from the middle of one neighbour to
+the middle of the other. The mark lights up wherever a release would collect the
+widget, so you know before you let go, and the bar's own line agrees with it.
 
-**Drag a member past the dots and it comes out.** So does dropping it anywhere
-outside the group. Move it around *inside* the group — anywhere from against
-the dots to the far end of the run — and it just gets reordered, it does not
-come out.
+**Drag a member past the middle of the dots and it comes out**, and the mark
+tells you that too — in the same colour the bar draws its insertion line in,
+rather than the colour it uses for taking a widget in, because they are opposite
+answers. Dropping a member anywhere outside the group takes it out as well. Move
+it around *inside* the group — anywhere from against the dots to the far end of
+the run — and it just gets reordered, it does not come out. That boundary runs
+through the middle of the mark: the two halves of one icon are the last gap
+inside the run and the first gap outside it, which is why the mark says which
+one you are on.
 
 To reach a member you have to open the pocket first: a hidden widget is not on
 the bar to be grabbed. Hover the mark, then drag.
@@ -173,8 +180,13 @@ would make one screen's transient state everyone's.
   taken from whichever bar surface answers first, which assumes every monitor
   draws the same widgets, and a pocket is what breaks that. See
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
-- **Dragging a widget next to a collapsed pocket** drops it *behind* the hidden
-  group, because the bar's drop targeting skips invisible slots.
+- **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
+  hidden group takes up no room, so the widget beside it stands against the dots
+  and the bar draws its line there — which is the gesture for putting something
+  away, whether or not you meant it that way. One drag back out undoes it. With
+  the pocket *open* the members are back on the bar, so only the gap against the
+  dots themselves puts a widget in; dropped deeper into the fanned-out run it
+  lands there without joining.
 - **Dragging the pocket itself** does not take its members along; they stay
   where they were.
 - **A disable/enable round-trip loses placement**, because re-enabling a bar
