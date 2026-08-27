@@ -682,11 +682,18 @@ check("a widget arriving at the pocket is steered to the near side",
   steer({}), { after: false })
 
 // One negative fixture per guard, so each is seen refusing rather than assumed
-// to. Removing any one of the three makes exactly one of these go red.
+// to. Removing any one of the four makes exactly one of these go red.
 check("nothing is steered when the drop would not add",
   steer({ intent: "none" }), null)
 check("a member on its way out is not steered",
   steer({ intent: "remove" }), null)
+// Arming and being aimed at are not the same question since the mark answers
+// on both of its edges: at the near one the bar names the widget drawn before
+// the pocket, and steering against that target would move the marker to this
+// pocket while the bar placed the widget beside the neighbour. tests/qml
+// carries the wiring; this is the rule on its own.
+check("a pocket the bar is not naming does not steer",
+  steer({ aimedAtOwnSlot: false }), null)
 // The side the members occupy in `left` is the one Bar.qml resolves through
 // nextVisibleModuleName(), which walks past every module that is not drawn —
 // and a collapsed pocket's members are exactly that. Steering there would put

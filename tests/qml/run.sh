@@ -41,12 +41,32 @@ trap 'rm -rf "$WORK"' EXIT
 ln -s "$SHELL_DIR/Commons" "$WORK/Commons"
 ln -s "$SHELL_DIR/Ui" "$WORK/Ui"
 ln -s "$ROOT" "$WORK/plugin"
+# The bar's own drop-target arithmetic, linked rather than copied for the same
+# reason the plugin is: neighbourhood.qml asserts what THIS host answers, and a
+# copy would go on passing after the host changed its mind.
+ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
+
+CASES="steer steer-readonly neighbourhood"
+if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
+  echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
+  CASES="steer steer-readonly"
+fi
 
 status=0
-for name in steer steer-readonly; do
+for name in $CASES; do
   cp "$HERE/$name.qml" "$WORK/$name.qml"
+
+  # neighbourhood.qml needs a real window -- Model.ownsSlot() refuses every slot
+  # to an instance that does not know its surface -- and a real window must not
+  # appear on the user's screens in the middle of a test run. The other two need
+  # none and keep the platform they were written for.
+  #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
-  output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
+  if [ "$name" = "neighbourhood" ]; then
+    output="$(QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
+  else
+    output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
+  fi
 
   if printf '%s\n' "$output" | grep -q "Binding loop"; then
     echo "QML FAILED ($name: the engine reported a binding loop)"
