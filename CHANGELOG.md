@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reordering a widget *inside* the pocket no longer throws it out. It was
+  dropped from `members` while the bar left it sitting among the remaining
+  members — neither in the pocket nor out of it — and dropped exactly where it
+  already sat, nothing on screen changed at all. On a bar with more than one
+  monitor this happened at every position inside the group, because the pocket
+  on the screen the drag was not on read every member as a stranger; on a
+  single monitor it happened at the group's outer edge, on a sub-pixel tie in
+  which of the two adjacent slots the bar reported. Membership is now decided
+  from the gap the insertion line is drawn in, which is the same on every
+  screen and on both sides. See
+  [decision 0004](docs/decisions/0004-membership-is-decided-from-the-gap-not-the-slot.md).
+- The member list is kept in the order the widgets physically sit in even when
+  the pocket writes nothing itself, so the reveal cascade always runs in the
+  direction they are actually in. This also closes the `left`-section case
+  [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md)
+  recorded as open.
+
 ### Changed
 
 - Dropping a widget onto the pocket from the far side now costs one bar rebuild

@@ -37,7 +37,9 @@ up while a release would collect it, so you know before you let go. The bar draw
 its own insertion line at the same time, and the two always agree.
 
 **Drag a member past the dots and it comes out.** So does dropping it anywhere
-else on the bar. Dropping it back among the others just reorders the group.
+outside the group. Move it around *inside* the group — anywhere from against
+the dots to the far end of the run — and it just gets reordered, it does not
+come out.
 
 To reach a member you have to open the pocket first: a hidden widget is not on
 the bar to be grabbed. Hover the mark, then drag.

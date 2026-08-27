@@ -98,12 +98,18 @@ did not have. What it buys is one bar rebuild on a gesture a user performs
 rarely; [0002](0002-members-belong-on-one-side.md) owns what a rebuild costs.
 The case for leaving it alone was argued and is recorded here as option A.
 
-One defect found while reviewing this change is **not** fixed by it, and is
+One defect found while reviewing this change was **not** fixed by it, and is
 recorded so that closing 0002's open question does not read as closing the
 subject. In the `left` section, a widget dropped onto the pocket from the near
 side is placed by the bar past the hidden members — or, when the pocket's run
 ends the section, not moved at all — while `nextMembers()` records it as the
-member nearest the pocket. Layout order and member order then disagree
-permanently, and the reveal cascade runs in a direction that does not exist on
-screen. It predates this change, `firstMisplacedMember()` cannot see it because
-the widget is on the correct side, and fixing it is a separate decision.
+member nearest the pocket. Layout order and member order then disagree, and the
+reveal cascade runs in a direction that does not exist on screen. It predates
+this change, and `firstMisplacedMember()` cannot see it because the widget is
+on the correct side.
+
+[0004](0004-membership-is-decided-from-the-gap-not-the-slot.md) closed it, from
+the other end: the member list is now checked against the layout on sight and
+put back into its order, whatever put it out. The placement stays as described
+above — the `left` section still lands a near-side arrival past the hidden
+members — but the cascade no longer runs backwards over it.

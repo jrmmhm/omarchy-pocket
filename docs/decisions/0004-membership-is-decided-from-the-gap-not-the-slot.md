@@ -1,0 +1,135 @@
+# 4. Membership is decided from the gap, not from the slot
+
+- Status: accepted
+- Date: 2026-08-27
+- Amends: [0001](0001-pocket-writes-its-own-members.md)
+
+## Context
+
+0001 decided that a finished drag is read from the bar's own drop marker, so
+that what the pocket does and what the user is looking at cannot disagree. It
+expressed the rule in terms of the two values `Bar.qml` publishes: which slot
+the drop would land on, and which side of that slot the marker sits on.
+
+Reading the *slot* turned out to be the wrong half of that marker. The user
+aims at a **gap**, and a gap has two slots against it. Two consequences, both
+reproduced:
+
+**On a multi-monitor bar, every reorder inside the pocket ejects the member.**
+`Bar.qml` is one object with a window per screen, so `barDragTarget` is shared
+by every surface, while each pocket filters its member slots to its own window
+(`resolution`). The pocket on the screen the drag is *not* on therefore sees
+the target as "not one of my members", concludes the member is leaving, and
+writes that — and it is allowed to, because `mayWrite` counts layout entries
+and there is only one. Measured over the user's own layout: all ten reachable
+positions inside the run disagree between the two instances.
+
+**On a single monitor, one position is still wrong.**
+`BarModel.nearestDropTarget` picks the candidate with the nearest edge, and
+adjacent slots share a gap. The gap at the run's outer edge resolves either to
+the neighbour outside the run with the marker on its far side, or to the first
+member with the marker on its near side, depending on a sub-pixel tie. Those
+two denote the same insertion point and the old rule answered them differently
+— "leaves" against "reorder". The same gesture did different things on
+different attempts.
+
+In both cases the member is dropped from `members` while the bar leaves it
+sitting among the remaining members: neither in the pocket nor out of it. If
+the user drops it exactly where it already was, `moveModuleInConfig` declines
+to move anything at all and nothing on screen even changes.
+
+## Options
+
+**A — Filter the drop target per window before comparing.** Fixes the
+multi-monitor half and nothing else, and keeps a per-instance input in a rule
+that must be the same on every screen.
+
+**B — Special-case the run's outer edge.** Fixes the single-monitor half and
+nothing else.
+
+**C — Ask what the marker is drawn against, not which slot won.** Chosen.
+
+## Decision
+
+A member stays a member while the bar's insertion line is drawn against the
+group — that is, while the gap it marks has one of this pocket's members on
+either side of it. It leaves when the gap has none: past the pocket, beyond the
+outer end of the run, or anywhere else on the bar.
+
+`Model.gapTouchesMember()` answers exactly that, from the region's layout ids,
+the member ids, the target's id and the marker's side. `dropDecision()` loses
+both `targetIsMember` and `innerEdge`, and the rule collapses to two sentences:
+aiming at the pocket takes a non-member in, and a member stays in while the
+marker touches the group.
+
+**The rule takes no per-instance input, and that is the property to preserve.**
+Everything it reads is an id out of the layout, identical on every screen, so
+every pocket instance reaches the same conclusion. `targetIsSelf` stays an
+object identity test and stays safe, because it only ever gates the `add`
+branch and its fallthrough is "do nothing" — the instance that is not being
+aimed at declines rather than acting. Reintroducing `resolution.slots` into the
+membership branch, for any reason, restores the multi-monitor defect; a test
+pins the shape of the inputs so that it cannot happen quietly.
+
+Deleting `innerEdge` changes nothing. In the `right` and `center` sections the
+gap before the pocket touches the innermost member and the gap after it touches
+nothing, which is exactly what `innerEdge` said; in `left` it mirrors. Deleting
+`targetIsMember` changes exactly one thing on a single monitor — the run's outer
+edge, which was the defect.
+
+Two answers the new rule gives are deliberate rather than incidental:
+
+**A member the layout of this section does not hold is not touched by the
+gap.** Dragging it therefore ends its membership. That is the right answer: a
+member in another section is a mistake the tooltip already names, and the
+README already says dropping a member anywhere else on the bar takes it out.
+
+**A member refused as the `centerAnchor` still counts as a member here.** The
+rule is id-based on purpose, and `resolution` — which is what refuses it — is
+per-instance. Consulting it would be the very coupling this decision removes.
+
+## Consequences
+
+The gesture that was reported broken now behaves the same on one screen and on
+three, and at every position within the group.
+
+`isMemberSlot()` in `BarWidget.qml` had no other caller and is deleted with
+`onInnerEdge`. The pocket now reads one fewer of the bar's live objects.
+
+The rule is asserted in the coordinate system of `bar.layoutConfig`, which is
+normalised and has `omarchy.tray` pinned to its section's inner edge, while the
+bar's own move operates on the raw `shell.json` section. When a hand-written
+config has the tray somewhere else, the two orders differ by that one entry.
+The membership verdicts stay consistent across that difference — a test carries
+the displaced-tray fixture — but the position the widget lands in is the bar's
+to decide, not this rule's.
+
+A reorder inside the run moves widgets without this pocket writing anything, so
+the member list would no longer describe the order they sit in — and the
+cascade in `applyReveal()` counts from the member nearest the pocket outwards,
+so a list that disagrees animates in a direction that does not exist on screen.
+`membersInLayoutOrder()` therefore joins the placement invariant as a second
+standing check, repaired the same deferred way and for the same reasons. It is
+kept separate because it is a different mistake and a much cheaper one:
+`members` is an inline settings change, which the bar patches into the running
+widgets instead of rebuilding them — 0002 has what each costs.
+
+Asking it as "would `orderMembers()` change anything" rather than re-deriving
+the comparison is deliberate: the check and the repair then cannot drift into
+disagreeing about what "in order" means. Ids the layout does not hold keep
+their place, so a typo the user has not fixed yet never puts the list into a
+rewrite it can never satisfy.
+
+Measured on the user's three-monitor session, with every write counted by
+inotify: a member list put out of order by hand is repaired by exactly one
+write, 34 ms later, 0.03 s of shell CPU and no rebuild. A layout reorder —
+what the bar itself does — costs one layout write, its rebuild, and then that
+one repair.
+
+One observation from the live session is recorded unexplained rather than
+explained away: four of five real drag gestures produced three writes rather
+than two, the last two byte-identical, together 0.02 s of CPU. Reproducing
+each path on its own afterwards gave the expected counts above, so the third
+write does not come from either invariant in isolation. It changes no bytes
+and costs nothing measurable; it is written down here so that a later
+measurement has something to compare against.
