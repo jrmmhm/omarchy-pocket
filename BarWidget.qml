@@ -269,7 +269,7 @@ BarWidget {
   // bar patches into the running widgets instead of rebuilding them, and the
   // move that follows reads the config this call already updated.
   function commitDrop(intent, id) {
-    if (root.duplicateInstances) return
+    if (!Model.mayWrite(root.barLayout, root.moduleName)) return
     if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
     var region = root.ownRegion
@@ -324,7 +324,7 @@ BarWidget {
 
   function repairPlacement() {
     if (root.misplacedMember === "") return
-    if (root.duplicateInstances) return
+    if (!Model.mayWrite(root.barLayout, root.moduleName)) return
     if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
     var region = root.ownRegion

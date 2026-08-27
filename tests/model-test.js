@@ -135,8 +135,13 @@ check("an index past the end is the last member", rf(1, 99, 4), rf(1, 3, 4))
 
 // -------------------------------------------------------------- tooltip
 
-contains("empty pocket asks for members",
-  Model.describe({ members: [] }), "set `members`")
+// Pinned verbatim, not by substring. This line is the only thing an empty
+// pocket ever says, and it once went on explaining a drop rule that had
+// already been replaced -- a substring check for "set `members`" was green
+// throughout.
+check("the empty pocket's line, verbatim",
+  Model.describe({ members: [] }),
+  "Pocket is empty — drag a widget onto it, or set `members` on its bar entry")
 contains("collapsed pocket names its size",
   Model.describe({ members: ["a", "b"] }), "holding 2 widgets")
 check("one member is singular",
@@ -355,34 +360,33 @@ function layoutFixture() {
     config.bar.layout.right[0], "omarchy.tray")
 }
 
-{
-  const config = layoutFixture()
-  check("an entry that is not there is reported, not invented",
-    Model.setMembersOnEntry(config, "center", SELF, "a"), false)
-  check("a missing region is created rather than crashed on",
-    Array.isArray(config.bar.layout.center), true)
-  check("and it stays empty", config.bar.layout.center, [])
+// The README promises that the only thing Pocket writes is its own entry. A
+// refusal therefore has to leave the file byte-for-byte alone -- scaffolding a
+// missing section would be the host's business, not a plugin's, and would make
+// that promise false. Each of these checks the return value AND that nothing
+// moved.
+function untouched(label, config, mutate) {
+  const before = JSON.stringify(config)
+  check(label, mutate(config), false)
+  check(label + " — and the config is untouched", JSON.stringify(config), before)
 }
 
-{
-  const config = { bar: { layout: { right: "not an array" } } }
-  check("a region that is not a list is replaced",
-    Model.setMembersOnEntry(config, "right", SELF, "a"), false)
-  check("with an empty list", config.bar.layout.right, [])
-}
+untouched("an entry that is not in the region is reported, not invented",
+  layoutFixture(), c => Model.setMembersOnEntry(c, "center", SELF, "a"))
+untouched("a region that is not a list is refused",
+  { bar: { layout: { right: "not an array" } } },
+  c => Model.setMembersOnEntry(c, "right", SELF, "a"))
+untouched("a config with no bar at all is refused, not scaffolded",
+  {}, c => Model.setMembersOnEntry(c, "right", SELF, "a"))
+untouched("a config whose layout is not an object is refused",
+  { bar: { layout: 7 } }, c => Model.setMembersOnEntry(c, "right", SELF, "a"))
+untouched("an empty id is refused",
+  layoutFixture(), c => Model.setMembersOnEntry(c, "right", "", "a"))
+untouched("a missing section is refused by the placement repair too",
+  {}, c => Model.placeMemberBesideSelf(c, "right", "a", SELF, true))
 
 check("a config that is not an object is refused",
   Model.setMembersOnEntry(null, "right", SELF, "a"), false)
-check("an empty id is refused",
-  Model.setMembersOnEntry(layoutFixture(), "right", "", "a"), false)
-
-{
-  const config = {}
-  check("a config with no bar at all is refused, not corrupted",
-    Model.setMembersOnEntry(config, "right", SELF, "a"), false)
-  check("and the scaffolding it needed was created",
-    JSON.stringify(config), JSON.stringify({ bar: { layout: { right: [] } } }))
-}
 
 // ---------------------------------------------------- placement repair
 
@@ -436,6 +440,28 @@ check("no members, nothing misplaced",
     config.bar.layout.left.map(Model.entryIdOf), [SELF, "b", "a"])
 }
 
+// ADR 0002 claims the invariant converges. One misplaced member proves
+// nothing about that; this drives the real loop -- find one, move it, look
+// again -- with three of them scattered among widgets that are not members.
+{
+  const members = ["a", "b", "c"]
+  const config = { bar: { layout: { right: [
+    { id: "x" }, { id: "b" }, { id: SELF }, { id: "y" },
+    { id: "a" }, { id: "z" }, { id: "c" }] } } }
+  let passes = 0
+  for (;;) {
+    const ids = config.bar.layout.right.map(Model.entryIdOf)
+    const stray = Model.firstMisplacedMember(ids, SELF, members, true)
+    if (stray === "") break
+    if (++passes > 10) break
+    Model.placeMemberBesideSelf(config, "right", stray, SELF, true)
+  }
+  check("three misplaced members converge", passes, 2)
+  check("and every member ends up before the pocket, non-members undisturbed",
+    config.bar.layout.right.map(Model.entryIdOf),
+    ["x", "b", "a", "c", SELF, "y", "z"])
+}
+
 check("a member already on the correct side is left alone",
   Model.placeMemberBesideSelf({ bar: { layout: { right: [{ id: "a" }, { id: SELF }] } } },
     "right", "a", SELF, true), false)
@@ -473,6 +499,21 @@ check("a region that is not a list is skipped, not crashed on",
   Model.countEntries({ right: "nope", left: [{ id: SELF }] }, SELF), 1)
 check("no layout counts zero", Model.countEntries(undefined, SELF), 0)
 check("an empty id counts zero", Model.countEntries(LAYOUT, ""), 0)
+
+// The README carries this as a promise -- while a second pocket exists,
+// neither writes anything at all -- so it gets a test rather than living as a
+// condition inside a handler where nothing can see it.
+check("one pocket may write", Model.mayWrite(LAYOUT, SELF), true)
+check("two pockets may not",
+  Model.mayWrite({ right: [{ id: SELF }, { id: SELF }] }, SELF), false)
+check("two pockets in different regions may not either",
+  Model.mayWrite({ left: [SELF], right: [{ id: SELF }] }, SELF), false)
+// Not yet mounted is not the same as duplicated: a pocket that cannot find
+// itself must still be allowed to write, or the very first drag would be
+// refused on a bar whose layout has not been handed over yet.
+check("a pocket the layout does not hold yet may write",
+  Model.mayWrite(LAYOUT, "nope"), true)
+check("no layout at all may write", Model.mayWrite(null, SELF), true)
 
 // --------------------------------------------------- manifest integrity
 

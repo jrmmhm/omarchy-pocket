@@ -149,10 +149,12 @@ function withoutMember(rawList, id) {
 // The layout is consulted only for the members that did NOT move, because the
 // pocket writes before the bar does: at this moment the dragged widget is
 // still recorded at its old position, and ranking it there would put it at the
-// wrong end of the list. Its new position is not a guess — dropping on the
-// inner edge lands it against the pocket, which is the near end of the run by
-// definition. So order the survivors by the layout and append the newcomer to
-// the end that faces the pocket.
+// wrong end of the list. Its new position is not a guess either: a widget
+// aimed at the pocket ends up against the pocket, which is the near end of the
+// run by definition — from the far side the bar puts it on the wrong side
+// first and the placement invariant pulls it back, but the end of the run it
+// belongs to is the same one. So order the survivors by the layout and append
+// the newcomer to the end that faces the pocket.
 function nextMembers(rawList, layoutIds, id, intent, nearestAtEnd) {
   var ordered = orderMembers(withoutMember(rawList, id), layoutIds)
   if (intent !== "add") return ordered
@@ -230,21 +232,30 @@ function dropDecision(state) {
 
 // ------------------------------------------------------------- config write
 
-// Set `members` on this plugin's own entry inside a raw shell.json, mirroring
-// Bar.qml's own rawLayoutSection(): the config reaching a mutator is whatever
-// the user's file holds, so the region may be missing, may not be an array,
-// and its entries may be bare id strings. Every other key on the entry is left
-// exactly as it was. Reports whether an entry was found at all.
+// The entries of one layout section as the user's file actually holds them, or
+// null. Deliberately NOT Bar.qml's rawLayoutSection(), which creates whatever
+// is missing: the host may scaffold its own config, a plugin may not. If the
+// section this pocket claims to live in is absent, the honest conclusion is
+// that there is nothing here to edit — not that the file needs a new section.
+function rawSection(config, region) {
+  if (!isPlainObject(config)) return null
+  if (!isPlainObject(config.bar)) return null
+  if (!isPlainObject(config.bar.layout)) return null
+  var entries = config.bar.layout[region]
+  return Array.isArray(entries) ? entries : null
+}
+
+// Set `members` on this plugin's own entry inside a raw shell.json. The config
+// reaching a mutator is whatever the user's file holds, so entries may be bare
+// id strings. Every other key on the entry is left exactly as it was, and
+// nothing outside the entry is touched. Reports whether it was found at all.
 function setMembersOnEntry(config, region, id, value) {
-  if (!isPlainObject(config)) return false
   var want = String(id || "").trim()
   if (want === "") return false
 
-  if (!isPlainObject(config.bar)) config.bar = {}
-  if (!isPlainObject(config.bar.layout)) config.bar.layout = {}
-  if (!Array.isArray(config.bar.layout[region])) config.bar.layout[region] = []
+  var entries = rawSection(config, region)
+  if (entries === null) return false
 
-  var entries = config.bar.layout[region]
   for (var i = 0; i < entries.length; i++) {
     if (entryIdOf(entries[i]) !== want) continue
     if (!isPlainObject(entries[i])) entries[i] = { id: want }
@@ -291,16 +302,13 @@ function firstMisplacedMember(layoutIds, selfId, memberIds, nearestAtEnd) {
 // correct side is left exactly where the user put it, which is what keeps
 // this from fighting the ordering inside the run.
 function placeMemberBesideSelf(config, region, id, selfId, nearestAtEnd) {
-  if (!isPlainObject(config)) return false
   var want = String(id || "").trim()
   var self = String(selfId || "").trim()
   if (want === "" || self === "" || want === self) return false
 
-  if (!isPlainObject(config.bar)) config.bar = {}
-  if (!isPlainObject(config.bar.layout)) config.bar.layout = {}
-  if (!Array.isArray(config.bar.layout[region])) config.bar.layout[region] = []
+  var entries = rawSection(config, region)
+  if (entries === null) return false
 
-  var entries = config.bar.layout[region]
   var from = -1
   var selfAt = -1
   for (var i = 0; i < entries.length; i++) {
@@ -334,6 +342,14 @@ function countEntries(layout, id) {
     for (var i = 0; i < entries.length; i++) if (entryIdOf(entries[i]) === want) total++
   }
   return total
+}
+
+// Whether this pocket is allowed to write at all. Two pockets sharing a member
+// would fight over it, and the loser's write would land on the winner's entry
+// — so neither writes. The README carries this as a promise, which is why it
+// is a function with a test rather than a condition inside a handler.
+function mayWrite(layout, selfId) {
+  return countEntries(layout, selfId) <= 1
 }
 
 // Each member's own share of the reveal, so they cascade out of the pocket
@@ -378,7 +394,7 @@ function describe(state) {
   var lines = []
 
   if (members.length === 0) {
-    lines.push("Pocket is empty — drag a widget onto its inner edge, or set `members` on its bar entry")
+    lines.push("Pocket is empty — drag a widget onto it, or set `members` on its bar entry")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
   } else if (s.expanded) {
@@ -404,6 +420,6 @@ if (typeof module !== "undefined" && module.exports) {
                      withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
                      setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
-                     firstMisplacedMember: firstMisplacedMember,
+                     mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
                      placeMemberBesideSelf: placeMemberBesideSelf }
 }
