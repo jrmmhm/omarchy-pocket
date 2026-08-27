@@ -154,9 +154,10 @@ would make one screen's transient state everyone's.
 - **In the `left` section, dropping a widget in from the far side takes about
   twice as long.** Any widget reorder makes Omarchy rebuild every widget on
   every monitor, and putting a far-side arrival back where it belongs costs a
-  second rebuild. Everywhere else Pocket tells the bar where the widget belongs
-  while you are still dragging, so it lands there the first time and one rebuild
-  is all it costs. The measurements are in
+  second rebuild. Everywhere else the widget lands where it belongs the first
+  time and one rebuild is all it costs — because Pocket tells the bar where it
+  belongs while you are still dragging, or, at the near edge of the mark,
+  because the bar puts it there of its own accord. The measurements are in
   [decision 0002](docs/decisions/0002-members-belong-on-one-side.md), the reason
   `left` is the exception in
   [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).

@@ -90,7 +90,16 @@ another monitor's pocket. And `gapTouchesMember()` takes the first entry
 carrying the target's id, which for a widget the host allows twice — a spacer,
 the indicators — can be an entry in a different part of the layout entirely.
 
-**D — Ask the same question about both names of the one gap.** Chosen.
+**D — Ask the same question about both names of the one gap.** Chosen — and it
+inherits the third of C's three problems rather than escaping it, because the
+slot drawn before the mark has to be *found*, and finding it walks the layout.
+Taking the first slot carrying each id answers with the earlier copy for both
+entries of a repeated id: the mark's own neighbour goes unrecognised, so the
+near edge stays exactly as unarmed as before, while the gap beside that earlier
+copy arms the pocket two slots from the icon the user is aiming at. Both
+measured, both closed by consuming each slot as the walk uses it — slots are
+created in layout order, so the nth entry gets the nth slot. That detail is
+load-bearing, which is why it is here and not only in the code.
 
 ## Decision
 
@@ -176,7 +185,36 @@ may resolve either way. Neither changes the decision — asking about both names
 of the gap is right whichever name the host picks — but the table's middle
 column is a statement about `right`.
 
-**The second reported symptom was not reproduced.** Driving `resolution`,
+## Open: a member released against the mark's far edge stays in the pocket
+
+Reported from the live shell on the build this decision describes, and **not
+explained**. Dragging a member out and releasing it in the gap immediately
+behind the mark leaves it a member: the mark lights the way-out colour, the bar
+rebuilds, and the widget stays hidden. Released one slot further out — beyond a
+widget that is not a member — the same gesture works.
+
+What the file held afterwards, which is the whole of the evidence so far:
+`members` still listed the widget, while the layout had it sitting behind the
+pocket. So the decision was reached (the light proves the intent, and the light
+is gated on the same permission the write checks) and the removal did not
+survive into `shell.json`. The placement invariant should then have pulled that
+stranded member back against the mark, and had not done so either, which is the
+second half of the puzzle and may well be the same half.
+
+One explanation was ruled out by reading the host rather than by guessing at it:
+`shell.qml`'s `mutateShellConfig()` deep-copies `shellConfig` on every call, so
+the bar's own layout write could have been copying a snapshot taken before the
+pocket's `members` write and clobbering it. It cannot — `persistShellConfig()`
+assigns `shellConfig` before it touches the file, so the second mutator of one
+gesture starts from the first one's result. 0001's assumption holds.
+
+The instrument to build next is a recording of every write to `shell.json`
+across one such gesture, with the member list and the section order of each
+version: two writes are expected, and which one carries the id back is the
+question. Whatever it turns out to be, it is older than this decision — nothing
+here touches `commitDrop()`, the invariant, or the `remove` branch.
+
+**A third thing was suspected and was not found.** Driving `resolution`,
 `driven`, `apply()`, `hideDriven()` and `heldVisibleId` through a member leaving
 and a widget arriving, with every write to `visible` logged, showed no write
 landing on a slot that should not have had one. What the same harness did show
