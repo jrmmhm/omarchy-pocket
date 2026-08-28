@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- The README is rewritten for someone who has never heard of a bar widget. It
+  opens on a recording of the pocket opening and folding, says what the thing
+  is in three paragraphs of plain language, and follows the order every
+  neighbouring Omarchy plugin uses. It gained the two sections a published
+  plugin needs and did not have: how to remove it, and what it actually
+  requires — a Nerd Font among other things, since the mark is a glyph.
+- **The README's central claim about competing grouping widgets was wrong.** It
+  said that moving a widget into the top-level `plugins[]` array makes Omarchy
+  report it as *off*. Omarchy reports it as *on*: `isEnabled()` searches
+  `bar.layout` and `plugins[]` alike. The split it really produces is worse and
+  is now described accurately — the widget is reported enabled while not being
+  on the bar, so its keybinding fails into a log line, an off/on round trip
+  mounts it twice, and its settings move to a file no Omarchy tool reads. See
+  [decision 0010](docs/decisions/0010-the-publication-review-changes-documentation-not-code.md).
+- The two hand-drawn figures of the bar are replaced by recordings of a real
+  one, and the third is redrawn. Both drawings had the mark's dots inverted
+  since they were made — `U+F01D8` is `md-dots_horizontal` and the glyph turns
+  90° as the pocket opens, so collapsed is `•••` and open is `⋮`.
+  `pocket-layout.svg` stays, because a config file cannot be photographed; it is
+  redrawn with a light-mode variant built in. `docs/media.md` records the
+  output, scale, theme, region and encoder settings the captures were made with.
+- Eight limits that were real and unwritten are now written: a full pocket can
+  draw over the centre clock, the pin does not survive a bar rebuild, a member
+  in the `center` section fails every time rather than sometimes, a member in
+  another section is hidden as well as warned about, a monitor-profile switch
+  makes the members flash, the tooltip is a snapshot taken when the pointer
+  arrives, a vertical bar rotates the mark the other way and fans out sideways,
+  and a cancelled drag moves the widget only when it was on the far side.
+- Nineteen limits would be a wall, so the three that change the first hour stay
+  in the running text and the rest fold into themed `<details>` blocks.
+
 ### Fixed
 
 - A member dragged out of the pocket comes out and stays out. On a bar with more
@@ -80,8 +113,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The mark answers both directions of the gesture. It lights while a release
   would take a widget in, as before, and now also while a release would let a
-  member go — in the colour the bar draws its own insertion line in, so two
-  opposite answers cannot be mistaken for each other. Where a member leaves and
+  member go — in the colour the bar draws its own insertion line in. Whether
+  that reads as two colours is up to the theme, and this entry originally
+  claimed more than the code can deliver: the two states take the bar's alert
+  role and the theme's accent, and a theme that gives both the same value gives
+  one colour for both answers. Measured off a real drag on `solace-sunset`,
+  where they are both `#eb5864`; on the shipped `kanagawa` theme the accent
+  equals the bar's text colour, so the leaving state reads as unlit.
+  [Decision 0010](docs/decisions/0010-the-publication-review-changes-documentation-not-code.md)
+  has both measurements. Where a member leaves and
   where it is merely reordered is unchanged: that boundary runs through the
   middle of the icon, where the last gap inside the run meets the first gap
   outside it, and the mark is now what says which of the two you are on.
