@@ -185,34 +185,34 @@ may resolve either way. Neither changes the decision — asking about both names
 of the gap is right whichever name the host picks — but the table's middle
 column is a statement about `right`.
 
-## Open: a member released against the mark's far edge stays in the pocket
+## Closed: a member released against the mark's far edge stays in the pocket
 
-Reported from the live shell on the build this decision describes, and **not
-explained**. Dragging a member out and releasing it in the gap immediately
-behind the mark leaves it a member: the mark lights the way-out colour, the bar
-rebuilds, and the widget stays hidden. Released one slot further out — beyond a
-widget that is not a member — the same gesture works.
+Reported from the live shell on the build this decision describes, and left
+unexplained here. Dragging a member out and releasing it in the gap immediately
+behind the mark left it a member: the mark lit the way-out colour, the bar
+rebuilt, and the widget stayed hidden.
 
-What the file held afterwards, which is the whole of the evidence so far:
-`members` still listed the widget, while the layout had it sitting behind the
-pocket. So the decision was reached (the light proves the intent, and the light
-is gated on the same permission the write checks) and the removal did not
-survive into `shell.json`. The placement invariant should then have pulled that
-stranded member back against the mark, and had not done so either, which is the
-second half of the puzzle and may well be the same half.
+The instrument this section asked for — a recording of every write to
+`shell.json` across one such gesture — was built and answers it.
+[0009](0009-a-drag-decides-against-the-membership-it-started-with.md) owns the
+recordings and the cause: there are **three** writes rather than the two
+expected here, and the removal is written correctly and then undone by the same
+gesture, because the pocket's own write strips the membership the still-running
+decision is reading. Nothing in this decision is involved, which is what its
+last paragraph predicted.
 
-One explanation was ruled out by reading the host rather than by guessing at it:
-`shell.qml`'s `mutateShellConfig()` deep-copies `shellConfig` on every call, so
-the bar's own layout write could have been copying a snapshot taken before the
-pocket's `members` write and clobbering it. It cannot — `persistShellConfig()`
-assigns `shellConfig` before it touches the file, so the second mutator of one
-gesture starts from the first one's result. 0001's assumption holds.
+One explanation was ruled out here by reading the host rather than by guessing
+at it, and it held: `shell.qml`'s `mutateShellConfig()` deep-copies
+`shellConfig` on every call, but `persistShellConfig()` assigns `shellConfig`
+before it touches the file, so the second mutator of one gesture starts from the
+first one's result. 0001's assumption stands.
 
-The instrument to build next is a recording of every write to `shell.json`
-across one such gesture, with the member list and the section order of each
-version: two writes are expected, and which one carries the id back is the
-question. Whatever it turns out to be, it is older than this decision — nothing
-here touches `commitDrop()`, the invariant, or the `remove` branch.
+**One sentence above was wrong and is corrected in 0009 rather than deleted
+here.** This section reported that the placement invariant "should then have
+pulled that stranded member back … and had not done so either", and treated that
+as the second half of one puzzle. The recording shows the invariant working in
+one of the two gestures and silent in the other, so it was never the same half.
+0009 carries what was measured and keeps the remainder open.
 
 **A third thing was suspected and was not found.** Driving `resolution`,
 `driven`, `apply()`, `hideDriven()` and `heldVisibleId` through a member leaving

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A member dragged out of the pocket comes out and stays out. On a bar with more
+  than one screen it went straight back in: the removal was written correctly,
+  and sixteen milliseconds later the same gesture added it again. A members-only
+  write is an inline settings change, so the host hands the new list to every
+  pocket on every screen at once — in the middle of the one assignment that ends
+  the drag, and therefore before the pocket the drag was aimed at has finished
+  deciding. That pocket then saw a widget that was no longer a member sitting on
+  its own mark, which is what asking to be taken *in* looks like. A drag is now
+  decided against the member list as it stood when the drag began, so what the
+  pocket writes cannot change the answer it is still giving. Both recordings, the
+  race read out of the host, and the one thing still open are in
+  [decision 0009](docs/decisions/0009-a-drag-decides-against-the-membership-it-started-with.md),
+  which closes the case decision 0008 left open.
+
 - The near half of the mark takes a widget in, which it never did. Module slots
   sit flush against one another, so the gap at that edge is exactly as far from
   the pocket as from the widget drawn before it, and the bar resolves the tie in
