@@ -4,3 +4,9 @@
 # The figures are documentation, not source. Without this GitHub's language
 # bar reports the repository as mostly SVG.
 docs/*.svg linguist-documentation
+
+# The captures are binary, and the rule above them says `text=auto eol=lf`.
+# Git's own detection gets this right, but a misdetection would rewrite line
+# endings inside a GIF, so it is stated rather than trusted.
+*.png binary
+*.gif binary
