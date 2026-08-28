@@ -50,9 +50,17 @@ gpu-screen-recorder -w region -region 402x64+750+0 \
   -f 30 -k h264 -fm cfr -cursor yes -q very_high -o /tmp/pocket-raw.mp4
 
 # drag demo
-gpu-screen-recorder -w region -region 400x64+752+0 \
+gpu-screen-recorder -w region -region 390x64+762+0 \
   -f 30 -k h264 -fm cfr -cursor yes -q very_high -o /tmp/drag-human.mp4
 ```
+
+**Let the pointer leave the bar the moment you release.** Dropping a widget into
+the pocket hides it, which narrows the section, which slides every widget left
+of the drop point sideways — under a pointer that stayed where it was. The first
+usable take was spoiled that way: the pointer came to rest on the mark, the tray
+chevron arrived underneath it, and its drawer unfolded into frame for half a
+second. Nothing about it is a defect; it is the same reflow the README describes
+for a widget dropped beside a collapsed pocket, seen from the pointer's side.
 
 `omarchy screenrecord` (bound to `ALT+PRINT`) wraps the same recorder and picks
 its region with `slurp`; it is the easier path if you do not need the region to
@@ -73,10 +81,16 @@ ffmpeg -ss 0.25 -t 6.2 -i /tmp/pocket-raw.mp4 -vf \
 [b][p]paletteuse=dither=none:diff_mode=rectangle" -loop 0 -y docs/pocket-demo.gif
 
 # drag demo: bar only
-ffmpeg -ss 1.0 -t 12.3 -i /tmp/drag-human.mp4 -vf \
-  "crop=666:43:0:11,fps=15,split[a][b];[a]palettegen=max_colors=128:stats_mode=full[p];\
+ffmpeg -ss 56.0 -t 11.5 -i /tmp/drag-human.mp4 -vf \
+  "crop=650:43:0:11,fps=15,split[a][b];[a]palettegen=max_colors=128:stats_mode=full[p];\
 [b][p]paletteuse=dither=none:diff_mode=rectangle" -loop 0 -y docs/pocket-drag.gif
 ```
+
+The `-ss` is that large because the take is one long recording with the gesture
+somewhere inside it, which is the comfortable way to shoot this: start the
+recorder, take your time, trim afterwards. Find the gesture by scanning frames
+for the lit mark rather than by watching the clip — it is the only thing in
+frame that is red.
 
 `dither=none` and `diff_mode=rectangle` are the two settings that matter. Bar
 chrome has far fewer than 256 colours, so dithering adds noise that only defeats
@@ -104,6 +118,6 @@ acceleration and land somewhere different every take.
 virtual `uinput` pointer combined with compositor cursor warps does start a bar
 drag and does complete a drop — but the grab does not survive the pointer coming
 to rest, so what it records is the *cancelled* drag Pocket documents rather than
-the drop. It is visible in the capture: across 111 frames of one such take the
-mark never lit once, while a human take lit it for 2.2 s going in and 2.0 s
-coming out. If you re-shoot the drag, do it by hand.
+the drop. The measurement that shows it, and what a human take does instead, is
+in [decision 0010](decisions/0010-the-publication-review-changes-documentation-not-code.md).
+If you re-shoot the drag, do it by hand.

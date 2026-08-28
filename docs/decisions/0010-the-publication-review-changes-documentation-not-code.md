@@ -132,6 +132,16 @@ with, because none of it is recoverable from the files afterwards.
 button plus compositor cursor warps starts a real bar drag and completes a real
 drop, but the grab does not survive the pointer coming to rest — so it records
 the cancelled drag this plugin documents rather than the drop it was aiming for.
-Across 111 frames of such a take the mark never lit; a human take lit it for
-2.2 s going in and 2.0 s coming out. The drag recording in the README is a human
-gesture, and `shell.json` was byte-identical before and after it.
+Across 111 frames of such a take the mark never lit once; in the human take that
+ships it lights for 2.0 s going in and 2.1 s coming out. The drag recording in
+the README is therefore a human gesture, and `shell.json` was byte-identical
+before and after it — which is also the cheapest end-to-end proof that both
+gestures are each other's inverse.
+
+**The shipped take is the second one.** The first spoiled itself in a way worth
+keeping: the pointer stayed on the mark after the drop, the section narrowed
+because the dropped widget had just been hidden, and the tray chevron slid
+underneath the resting pointer and unfolded its drawer into frame. That is not a
+defect, it is the reflow the README describes for a widget dropped beside a
+collapsed pocket, arriving from the pointer's side instead of the widget's.
+`media.md` carries it as a shooting note.
