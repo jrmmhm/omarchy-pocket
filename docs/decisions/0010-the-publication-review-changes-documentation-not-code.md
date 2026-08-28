@@ -9,9 +9,9 @@
 
 Before publishing, the plugin was reviewed end to end against the host it runs
 on — `Bar.qml`, `shell.qml`, `services/PluginRegistry.qml`, `Ui/WidgetButton.qml`
-and `Commons/Color.qml` of Omarchy 4.0.0.alpha, whose bar is byte-identical to
-upstream `v4.0.1` — and against a live three-monitor session at three different
-output scales (1.5, 1.667, 2.4).
+and `Commons/Color.qml` of the Omarchy package named in
+[`media.md`](../media.md) — and against a live three-monitor session at three
+different output scales (1.5, 1.667, 2.4).
 
 Everything the review found was either a documentation defect or a behaviour the
 owner chose to leave alone. **No QML or JS changed.** That is the decision this
@@ -42,7 +42,12 @@ split is the defect:
   widget mounted from both places. The README's old "the manager's toggle can
   double-mount it" was right, and this is the path.
 - The widget's settings move to the grouping plugin's own file, which
-  `updateEntryInline()` and the settings form never look at.
+  `updateEntryInline()` and the settings form never look at. Read out of
+  `ianswope/omarchy-stack` at its published `0.1.0`: its `Panel.qml` mounts each
+  held widget itself and injects `entry.settings` from `~/.config/omarchy/
+  stacks.json`, and its README instructs the reader to move the folded widgets
+  into `plugins[]` — the same mechanism this file describes, documented by the
+  plugin that uses it.
 
 **The two drop colours can be one colour.** `activeColor` picks `Color.accent`
 for a member leaving and `bar.urgent` for a widget arriving. `bar.urgent` is
@@ -95,11 +100,12 @@ itself reaches for `mutateShellConfig` in three places for the same purpose.
 
 ## Consequences
 
-**The README grew a "Good to know" section with nineteen entries, and shrank.**
-Three of them sit in the running text because they change the first hour — a
-member in `center`, `omarchy.tray` as a member, and `SUPER+CTRL+1…9` — and the
-rest fold into four themed `<details>` blocks. Honesty was never the thing to
-trade away; the wall was.
+**The README grew a "Good to know" section, and shrank.** Three entries sit in
+the running text because they change the first hour — a member in `center`, a
+widget dragged in beside a collapsed pocket, and `SUPER+CTRL+1…9` — and the rest
+fold into four themed `<details>` blocks. Honesty was never the thing to trade
+away; the wall was. The README owns how many there are; no other file states a
+count, because a count in two places is a count that drifts.
 
 **Two drawings were retired in favour of two recordings.** `pocket-states.svg`
 and `pocket-drag.svg` both described things a capture shows better, and both had
@@ -109,6 +115,14 @@ collapsed is `•••` and open is `⋮`, and the figures had it inverted. A d
 of a live surface invents that class of error; a capture cannot.
 `pocket-layout.svg` stays, because a configuration file is the one thing here
 that cannot be photographed.
+
+**One edge condition came back clean, and is written down for that reason.** A
+changed bar size or output scale moves nothing that Pocket decides: there is no
+pixel literal anywhere in `BarWidget.qml`, the mark's slot comes from
+`Style.bar.iconSlot` like every other bar icon's, and the mark was seen
+rendering identically on outputs at scales 1.5, 1.667 and 2.4. A check that
+found nothing is indistinguishable from a check that was never made unless its
+result is recorded, so the README states it.
 
 **The recordings are perishable and say so.** `docs/media.md` records the
 output, scale, theme, bar size, font, region and encoder settings they were made

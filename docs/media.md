@@ -10,7 +10,7 @@ a re-shoot possible without guessing.
 
 | | |
 | :--- | :--- |
-| Omarchy | 4.0.0.alpha (bar byte-identical to upstream `v4.0.1`) |
+| Omarchy | `4.0.1-1` — what `omarchy version` and `pacman -Q omarchy` report, and what owns `plugins/bar/Bar.qml`. The in-tree marker `/usr/share/omarchy/version` still reads `4.0.0.alpha` and is the older of the two; where anything in this repository names a host version, this row is the one it means. |
 | Quickshell / Qt | 0.3.1 / 6.11.2 |
 | Hyprland | 0.56.2 |
 | Output | `eDP-1`, 1920×1200 device px at `scale = 1.6666666` → 1152×720 logical |

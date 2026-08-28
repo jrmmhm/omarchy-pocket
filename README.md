@@ -41,14 +41,31 @@ Omarchy 4.x with the Quickshell bar, and a Nerd Font set as the bar's font —
 the mark is a Nerd Font glyph, and a bar without one draws an empty box where
 it should be. No network access, no subprocesses.
 
-Pocket reads sixteen properties and functions off the bar host. Exactly one of
-them, `bar.urgent`, is documented as available to plugins; the rest are engine
+Bar size and screen scaling are not things Pocket has an opinion about. It
+hardcodes no pixel value anywhere, and the mark takes its slot from the same
+`Style` token every other bar icon uses, so a larger bar font, a different
+`size-horizontal`, or a fractional output scale move it exactly as they move
+its neighbours. Checked across three outputs at scales 1.5, 1.667 and 2.4.
+
+<details>
+<summary>What it leans on inside the shell, for anyone deciding whether to trust it across updates</summary>
+
+Pocket reaches for fifteen properties and functions on the bar object, plus
+`shell.mutateShellConfig` on the shell that bar exposes. Exactly one of them,
+`bar.urgent`, is documented as available to plugins; the rest are engine
 internals, and it also imports the shell's own `qs.Commons` and `qs.Ui`
-modules. Every *property* it reads is guarded, so a renamed one makes a feature
-stop applying rather than misbehave — but a renamed *module* is a hard load
-failure with no graceful half. Between Omarchy `4.0.0-beta3` and `4.0.1` the
-bar's API surface did not change by a single symbol; that is the basis for the
-version claim above, not a promise from upstream, because upstream makes none.
+modules.
+
+Every *property* it reads is guarded, so a renamed one makes a feature stop
+applying rather than misbehave — the drop steering simply stops steering, and
+the standing invariant still produces the correct layout. A renamed *module* is
+the exception: that is a hard load failure with no graceful half.
+
+Between Omarchy `4.0.0-beta3` and `4.0.1` the bar's API surface did not change
+by a single symbol. That is the basis for the version claim above — a
+measurement, not a promise from upstream, because upstream makes none.
+
+</details>
 
 ## Install
 
@@ -176,8 +193,14 @@ things nobody can tell apart.
 
 **Click the mark to pin it open**, click again to release. That is the way out
 of the cases where no leave event is ever coming — a workspace switch that
-teleports the cursor, an application grabbing the pointer. The pin lasts for the
-session and is never written to disk.
+teleports the cursor, an application grabbing the pointer.
+
+The pin holds until you click it again or until the bar is rebuilt, and any
+change to the layout rebuilds it: a drop, a member being put back on the right
+side, enabling any plugin at all. It is never written to disk either, because
+`shell.json` is shared by every bar surface and persisting it would make one
+screen's transient state everyone's. Treat it as a pointer aid for the next few
+seconds, not as a mode.
 
 ## Good to know
 
@@ -189,9 +212,14 @@ Three things change your first hour with it:
   placeholder is created first, so Pocket binds that one every time. A member in
   a different section than the pocket *is* hidden, but it fans out over there on
   its own, which looks like a bug rather than a choice. The tooltip names both
-  cases.
-- **`omarchy.tray` is a poor member.** Omarchy pins it to its section's inner
-  edge on every config load, and its own drawer assumes it sits there.
+  cases. (Separately, a member may not be the `centerAnchor` itself — that is a
+  different mechanism and Pocket refuses it outright.)
+- **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
+  hidden group takes up no room, so the widget beside it stands against the mark
+  and the bar draws its line there — which is the gesture for putting something
+  away, whether or not you meant it that way. One drag back out undoes it. With
+  the pocket *open* the members are back on the bar, so only the gap against the
+  mark itself puts a widget in.
 - **`SUPER+CTRL+1…9` renumbers.** Those bindings open "the Nth panel in the
   right section" and count only what is *drawn*, so a collapsed pocket shifts
   the numbering.
@@ -231,12 +259,6 @@ Three things change your first hour with it:
 <details>
 <summary><b>While dragging</b></summary>
 
-- **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
-  hidden group takes up no room, so the widget beside it stands against the mark
-  and the bar draws its line there — which is the gesture for putting something
-  away, whether or not you meant it that way. One drag back out undoes it. With
-  the pocket *open* the members are back on the bar, so only the gap against the
-  mark itself puts a widget in.
 - **A drag cancelled from outside cannot be told from a drop.** Qt emits
   `canceled` *instead of* `released` with nothing to distinguish them, so if
   something steals the pointer while the mark is lit, the widget joins the
@@ -265,15 +287,13 @@ Three things change your first hour with it:
   the left will draw over the centre section on a narrow screen rather than push
   it aside. How many fit is your screen's business; Pocket does not change it,
   it only decides when they are asked for.
-- **The pin does not survive a bar rebuild.** Any change to the layout rebuilds
-  every widget on every monitor, and the pin lives on the widget — so a drop, a
-  placement repair, or enabling any plugin at all drops the pin and lets the
-  pocket fold. Hovering re-opens it; clicking pins it again.
+- **`omarchy.tray` is a poor member.** Omarchy pins it to its section's inner
+  edge on every config load, and its own drawer assumes it sits there.
 - **A disable/enable round-trip loses placement.** Re-enabling a bar widget
   rewrites its entry as a bare `{ "id": ... }` at the widget's default spot.
-  Done to the pocket it takes `members` with it, so keep a copy of the line;
-  done to a *member* it takes that widget's place in the run, and Pocket then
-  records it at the end of the list where the bar left it.
+  Done to a *member* it takes that widget's place in the run, and Pocket then
+  records it at the end of the list where the bar left it. Done to the pocket it
+  takes `members` with it, for the reason [Remove](#remove) explains.
 - **A member cannot be the `centerAnchor`.** That one slot carries a `visible`
   binding of the bar's own, and writing it would destroy the binding for the
   rest of the session. Pocket refuses it — the mark will not light up for it.

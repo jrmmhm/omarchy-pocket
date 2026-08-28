@@ -37,8 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes the members flash, the tooltip is a snapshot taken when the pointer
   arrives, a vertical bar rotates the mark the other way and fans out sideways,
   and a cancelled drag moves the widget only when it was on the far side.
-- Nineteen limits would be a wall, so the three that change the first hour stay
-  in the running text and the rest fold into themed `<details>` blocks.
+- The whole list of limits would be a wall, so the three that change the first
+  hour stay in the running text and the rest fold into themed `<details>`
+  blocks.
 
 ### Fixed
 
