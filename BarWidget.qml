@@ -216,12 +216,37 @@ BarWidget {
   readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
   readonly property string dragTargetId: dragTarget ? canonical(dragTarget.moduleName) : ""
 
+  // What this pocket held when the drag began, and what the whole gesture is
+  // decided against.
+  //
+  // Deliberately not the live list. A members-only write is an inline settings
+  // change, so the host patches it into EVERY instance's `settings` — including
+  // the instances whose falling edge has not run yet, because `clearBarDrag()`
+  // nulls `barDragSource` in one statement and the entire cascade, this
+  // pocket's write included, happens inside it. The instance the drag is aimed
+  // at then recomputes with the member already stripped while its own slot is
+  // still the drop target, and `dropDecision()` reads that as a widget arriving
+  // from outside: the gesture that has just taken a widget out puts it straight
+  // back, 16 ms later. It needs a second instance to happen at all, which is
+  // why a single-window harness never saw it. Both write recordings are in
+  // docs/decisions/0009.
+  //
+  // Copied rather than referenced, so that the snapshot does not rest on
+  // Model.parseMembers() returning a fresh array on every evaluation.
+  property var dragMembers: []
+
+  // Read by the drop decision and by nothing else. What the pocket holds NOW —
+  // `resolution`, the tooltip, `misplacedMember`, `membersMisordered` — stays on
+  // the live list: those describe the bar, not the gesture, and freezing them
+  // would make the tooltip contradict the widgets beside it.
+  readonly property var gestureMembers: root.dragSeen ? root.dragMembers : root.memberIds
+
   // The gap the bar is drawing its line in, answered from ids rather than from
   // this instance's own resolved slots. `resolution` is filtered to one window,
   // and the bar is built once per monitor — reading it here made the instance
   // the drag was NOT on see every member as a stranger and eject it.
   readonly property bool dropGapTouchesMember: Model.gapTouchesMember(
-    root.layoutIds(root.ownRegion), root.memberIds, root.dragTargetId, root.dragAfter)
+    root.layoutIds(root.ownRegion), root.gestureMembers, root.dragTargetId, root.dragAfter)
 
   // The slot the bar names when it draws its line against the mark's NEAR edge.
   //
@@ -302,7 +327,7 @@ BarWidget {
       sourceId: root.dragSourceId,
       selfId: root.moduleName,
       anchorId: root.anchorId,
-      members: root.memberIds,
+      members: root.gestureMembers,
       targetIsSelf: root.aimsAtSelf,
       hasTarget: !!root.dragTarget,
       gapTouchesMember: root.dropGapTouchesMember
@@ -336,14 +361,24 @@ BarWidget {
   }
 
   onDragSourceChanged: {
-    if (root.dragSource) { root.dragSeen = true; return }
+    if (root.dragSource) {
+      root.dragSeen = true
+      root.dragMembers = root.memberIds.slice()
+      return
+    }
 
     // Always cleared on the falling edge. Bar.qml calls clearBarDrag() on every
     // press too, and a sample left from the previous drag must never be able to
     // decide the next one.
+    //
+    // The intent is read before the snapshot is dropped, because dropping it
+    // re-evaluates dropIntent synchronously. Nothing comes of that today — the
+    // drag source is already null and the binding refuses on it — but the two
+    // lines are in this order on purpose and not by accident.
     var intent = root.dragSeen ? root.pendingIntent : "none"
     var id = root.pendingId
     root.dragSeen = false
+    root.dragMembers = []
     root.pendingIntent = "none"
     root.pendingId = ""
     if (intent !== "none") root.commitDrop(intent, id)
