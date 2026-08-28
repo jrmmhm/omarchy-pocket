@@ -235,11 +235,13 @@ qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 
 `Model.js` holds everything decidable without a running shell and is unit-tested
 with `node`; `BarWidget.qml` keeps only what needs live objects. Most of that
-second half needs a real bar and is covered by using it, but one piece of it is
+second half needs a real bar and is covered by using it, but two pieces of it are
 not: `tests/qml/` loads `BarWidget.qml` in Quickshell against an object that is
 not a bar, and pins the drop steering — which fails silently in both directions
-it can fail. It runs as part of `tests/run.sh` and skips itself where Quickshell
-or an Omarchy shell is absent, which is every CI runner.
+it can fail — and the membership a drag is decided against, which the pocket's
+own write used to be able to change mid-gesture. It runs as part of
+`tests/run.sh` and skips itself where Quickshell or an Omarchy shell is absent,
+which is every CI runner.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

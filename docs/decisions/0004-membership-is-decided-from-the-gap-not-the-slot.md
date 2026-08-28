@@ -1,6 +1,7 @@
 # 4. Membership is decided from the gap, not from the slot
 
-- Status: accepted, complemented by [0005](0005-a-pocket-drives-only-its-own-screens-slots.md)
+- Status: accepted, complemented by [0005](0005-a-pocket-drives-only-its-own-screens-slots.md),
+  guard narrowed by [0009](0009-a-drag-decides-against-the-membership-it-started-with.md)
 - Date: 2026-08-27
 - Amends: [0001](0001-pocket-writes-its-own-members.md)
 
@@ -74,6 +75,18 @@ asking — but it can only vary the inputs the rule has, so it would not catch a
 new per-instance input being added. This paragraph is the guard; the test is
 the reminder.
 
+[0009](0009-a-drag-decides-against-the-membership-it-started-with.md) narrows
+what "no per-instance input" covers, and the distinction is worth having here
+rather than only there. The list the rule reads is now taken when the drag
+begins, and the *content* is still identical on every screen — one shared
+property's rising edge, one config. What became per-instance is *when* an
+instance stops reading the live list: one that has already committed is back on
+it while its peers are still on their snapshot. That difference is reachable
+only in the moments after a peer's write, and the only outcome constructible
+from it is a repeat write of the value that peer already wrote. Reintroducing
+`resolution.slots` remains forbidden for the reason above; a snapshot of ids is
+not that.
+
 Deleting `innerEdge` changes nothing. In the `right` and `center` sections the
 gap before the pocket touches the innermost member and the gap after it touches
 nothing, which is exactly what `innerEdge` said; in `left` it mirrors. Deleting
@@ -133,6 +146,13 @@ One observation from the live session: four of five real drag gestures produced
 three writes rather than two, the last two byte-identical, together 0.02 s of
 CPU. Reproducing each path on its own afterwards gave the expected counts
 above, so it is not either invariant on its own.
+
+**That reading is refused by a later measurement, and
+[0009](0009-a-drag-decides-against-the-membership-it-started-with.md) owns the
+correction.** `FileView.setText()` does not replace the file when the content is
+unchanged, so two byte-identical writes are one file event and cannot be what
+was counted. The candidate below is refuted with it; the third write 0009
+recorded is a defect, not the price of agreement.
 
 The candidate — derived from the code, not measured — is this decision working
 as intended. The bar's drag properties live on the shared bar root, so every

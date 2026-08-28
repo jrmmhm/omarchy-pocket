@@ -189,9 +189,72 @@ QtObject {
     if (harness.step === 3) return harness.checkSteering()
     if (harness.step === 4) return harness.openPocket()
     if (harness.step === 5) return harness.sweepOpen()
-    if (harness.step === 6) return harness.checkRepeatedIds()
-    if (harness.step === 7) return harness.checkRefusedLight()
-    if (harness.step === 8) return harness.finish()
+    if (harness.step === 6) return harness.checkMembershipLatch()
+    if (harness.step === 7) return harness.checkRepeatedIds()
+    if (harness.step === 8) return harness.checkRefusedLight()
+    if (harness.step === 9) return harness.finish()
+  }
+
+  // The pocket's own write comes back in the middle of the gesture, and the
+  // gesture must not change its mind about it.
+  //
+  // A members-only change is an inline settings delta, so the host assigns the
+  // new list to every instance's `settings` — while, on a bar with more than one
+  // surface, another instance's falling edge is still running inside the single
+  // `barDragSource = null` that started all of this. Assigning `settings` here
+  // is that event, to the byte. Before the snapshot the stripped membership
+  // turned the source into a stranger, `dropDecision()` answered "add", and the
+  // widget that had just come out went straight back in. docs/decisions/0009
+  // owns the recordings and the timings.
+  //
+  // Three positions, because two reads take the membership and one case cannot
+  // see both. The first two are watched red on the missing snapshot itself. The
+  // third is green either way today and is here for the other read: leave
+  // `dropGapTouchesMember` on the live list and it answers "remove", because
+  // neither slot against that gap is a member any more.
+  function checkMembershipLatch() {
+    harness.layout()
+    var mark = harness.slotFor("jrmmhm.pocket")
+    var stripped = "ianswope.snapshots, mehiel.darky, omarchy.tailscale"
+
+    harness.check("a member past the middle of the dots is on its way out",
+      harness.ask(mark.x + mark.width - 1, "omaplug"), "remove")
+    harness.pocket.settings = { members: stripped }
+    harness.check("and the pocket's own removal, patched back mid-gesture, does not turn it around",
+      harness.pocket.dropIntent, "remove")
+    harness.check("nor reaches the sample the drop is committed from",
+      harness.pocket.pendingIntent, "remove")
+    harness.endDrag()
+    harness.pocket.settings = { members: harness.members }
+
+    // Against the dots the bar names the last member with the marker on its far
+    // side, which is the mark's near edge under its other name — so `aimsAtSelf`
+    // holds here, and a stripped membership answered "add" at the one position
+    // the README promises is a reorder.
+    harness.check("against the dots a member is only reordered",
+      harness.ask(mark.x + 1, "omaplug"), "none")
+    harness.pocket.settings = { members: stripped }
+    harness.check("and it stays a reorder when the removal is patched in",
+      harness.pocket.dropIntent, "none")
+    harness.endDrag()
+    harness.pocket.settings = { members: harness.members }
+
+    harness.check("at the outer edge of the run it is a reorder too",
+      harness.ask(70, "omaplug"), "none")
+    harness.pocket.settings = { members: stripped }
+    harness.check("and that gap keeps reading as inside the group",
+      harness.pocket.dropIntent, "none")
+    harness.endDrag()
+    harness.pocket.settings = { members: harness.members }
+
+    harness.check("the snapshot does not outlive the drag",
+      harness.pocket.dragMembers.length, 0)
+    // And the decision falls back to the live list outside a gesture, which is
+    // what an instance built while a drag is already running depends on: it saw
+    // no rising edge, so it has no snapshot, and serving it the empty one would
+    // make every widget on the bar read as a stranger.
+    harness.check("and outside a drag the decision is back on the live list",
+      harness.pocket.gestureMembers.length, 4)
   }
 
   // A section that carries the same widget twice — the host allows it for a
