@@ -131,16 +131,37 @@ or in between, the list it decides against is the one it began the gesture with.
 
 ## Consequences
 
-**The number of writes is not the measure; their content is.** `commitDrop()`
-still reads `setting("members", "")` live, so an instance that reaches its
-falling edge after a peer has written re-writes the same value — the
-byte-identical second write 0004 already measures and accepts. The criterion for
-this decision is that no write ever carries the id back.
+**The number of writes is not the measure; their content is** — and it could not
+be the measure even if one wanted it to be. `commitDrop()` still reads
+`setting("members", "")` live, so an instance reaching its falling edge after a
+peer has written re-writes the same value; whether that reaches the file at all
+is not observable with this instrument. `FileView.setText()` with unchanged
+content does not replace the file: measured on Quickshell 0.3.1 by calling
+`setText` three times with the text the file already held and once with different
+text, under `inotifywait`, which saw **one** atomic replace and not four. Every
+write this recording can see therefore carries a change, and the criterion for
+this decision is that none of them ever carries the id back.
 
 Measured after the change, same session, same gesture, same instrument: **two
-writes.** The removal at +0 ms, the bar's own layout move at +581 ms, and
-nothing else — no re-add and no placement repair, because with the membership
-correct there is nothing misplaced left to repair.
+visible writes.** The removal at +0 ms, the bar's own layout move at +581 ms,
+and nothing else — no re-add and no placement repair, because with the membership
+correct there is nothing misplaced left to repair. The layout write puts the
+widget two entries past the mark rather than one, because
+`Bar.qml::nextVisibleModuleName()` walks past every module that is not drawn and
+`jerome.claude-attention` was hidden at the time. It is drawn directly beside the
+dots, which is where it was released; the same host rule is already recorded for
+the opposite direction in `Model.js::steerDropAfter()`.
+
+**0004's byte-identical write is corrected here.** It reports that "four of five
+real drag gestures produced three writes rather than two, the last two
+byte-identical", and derives from it that every instance writes and the repeats
+cost nothing. The measurement above refuses the reading: two byte-identical
+writes are one file event, so whatever those recordings saw, it was not that.
+The count of three is exactly what the recordings in this file show, and the
+third write in them is the defect this file names — offered as the candidate,
+because 0004's session was not re-run. What survives of 0004 unharmed is its
+conclusion, that agreement between instances is worth its cost; what does not is
+the shape of the cost.
 
 **0004's guard paragraph is narrower than it reads.** It says the membership rule
 takes no per-instance input, and that everything it reads is an id out of the

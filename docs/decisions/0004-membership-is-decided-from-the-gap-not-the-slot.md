@@ -83,9 +83,9 @@ property's rising edge, one config. What became per-instance is *when* an
 instance stops reading the live list: one that has already committed is back on
 it while its peers are still on their snapshot. That difference is reachable
 only in the moments after a peer's write, and the only outcome constructible
-from it is the byte-identical repeat write this file already measures below.
-Reintroducing `resolution.slots` remains forbidden for the reason above; a
-snapshot of ids is not that.
+from it is a repeat write of the value that peer already wrote. Reintroducing
+`resolution.slots` remains forbidden for the reason above; a snapshot of ids is
+not that.
 
 Deleting `innerEdge` changes nothing. In the `right` and `center` sections the
 gap before the pocket touches the innermost member and the gap after it touches
@@ -146,6 +146,13 @@ One observation from the live session: four of five real drag gestures produced
 three writes rather than two, the last two byte-identical, together 0.02 s of
 CPU. Reproducing each path on its own afterwards gave the expected counts
 above, so it is not either invariant on its own.
+
+**That reading is refused by a later measurement, and
+[0009](0009-a-drag-decides-against-the-membership-it-started-with.md) owns the
+correction.** `FileView.setText()` does not replace the file when the content is
+unchanged, so two byte-identical writes are one file event and cannot be what
+was counted. The candidate below is refuted with it; the third write 0009
+recorded is a defect, not the price of agreement.
 
 The candidate — derived from the code, not measured — is this decision working
 as intended. The bar's drag properties live on the shared bar root, so every

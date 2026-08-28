@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A member dragged out of the pocket comes out and stays out. On a bar with more
   than one screen it went straight back in: the removal was written correctly,
-  and sixteen milliseconds later the same gesture added it again. A members-only
+  and a few milliseconds later the same gesture added it again. A members-only
   write is an inline settings change, so the host hands the new list to every
   pocket on every screen at once — in the middle of the one assignment that ends
   the drag, and therefore before the pocket the drag was aimed at has finished

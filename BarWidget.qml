@@ -227,9 +227,9 @@ BarWidget {
   // at then recomputes with the member already stripped while its own slot is
   // still the drop target, and `dropDecision()` reads that as a widget arriving
   // from outside: the gesture that has just taken a widget out puts it straight
-  // back, 16 ms later. It needs a second instance to happen at all, which is
-  // why a single-window harness never saw it. Both write recordings are in
-  // docs/decisions/0009.
+  // back, within the same handful of milliseconds. It needs a second instance to
+  // happen at all, which is why a single-window harness never saw it. Both write
+  // recordings and their timings are in docs/decisions/0009.
   //
   // Copied rather than referenced, so that the snapshot does not rest on
   // Model.parseMembers() returning a fresh array on every evaluation.

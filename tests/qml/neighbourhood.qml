@@ -204,7 +204,8 @@ QtObject {
   // `barDragSource = null` that started all of this. Assigning `settings` here
   // is that event, to the byte. Before the snapshot the stripped membership
   // turned the source into a stranger, `dropDecision()` answered "add", and the
-  // widget that had just come out went back in 16 ms later.
+  // widget that had just come out went straight back in. docs/decisions/0009
+  // owns the recordings and the timings.
   //
   // Three positions, because two reads take the membership and one case cannot
   // see both. The first two are watched red on the missing snapshot itself. The
@@ -248,6 +249,12 @@ QtObject {
 
     harness.check("the snapshot does not outlive the drag",
       harness.pocket.dragMembers.length, 0)
+    // And the decision falls back to the live list outside a gesture, which is
+    // what an instance built while a drag is already running depends on: it saw
+    // no rising edge, so it has no snapshot, and serving it the empty one would
+    // make every widget on the bar read as a stranger.
+    harness.check("and outside a drag the decision is back on the live list",
+      harness.pocket.gestureMembers.length, 4)
   }
 
   // A section that carries the same widget twice — the host allows it for a
