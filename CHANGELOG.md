@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-08-29
+
+### Fixed
+
+- **A mistyped `members` entry could forge a tooltip line.** A value carrying a
+  line break grew a line of its own, and the line it grew could read exactly
+  like one of Pocket's own warnings — `A second Pocket entry exists` appeared on
+  a bar that has only one. Every value the tooltip names is now escaped, so it
+  occupies the one line it was given.
+- **A mistyped `members` entry could make the tooltip wider than the screen.**
+  The bar's tooltip label does not wrap and the popup window is sized from it,
+  so a long enough list of unusable entries asked for a surface wider than any
+  display. The line now names what fits and counts the rest; the measurements
+  are in decision 0011.
+- **The tooltip did not guarantee how it would be rendered.** It is handed to a
+  `Text` the host owns, which sets no `textFormat` and therefore decides per
+  string whether to parse it as markup — and a positive answer there parses
+  `<img src=…>` and fetches it. On 0.3.0 the answer was always plain, because
+  Qt's heuristic stops at the first line break and the first line is always
+  Pocket's own; that was an accident of two properties nothing asserted, and it
+  is now a property of the code with tests to match. This closes the finding the
+  Omarchy marketplace review raised against 0.3.0. It is not a privilege
+  boundary: anyone who can edit this plugin's layout entry can already run
+  arbitrary QML from the same entry, and the CHANGELOG does not claim otherwise.
+  See [decision 0011](docs/decisions/0011-the-tooltip-escapes-because-it-does-not-own-its-sink.md).
+
 ## [0.3.0] — 2026-08-28
 
 ### Documentation
@@ -207,7 +233,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.1.0

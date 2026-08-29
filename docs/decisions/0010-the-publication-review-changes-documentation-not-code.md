@@ -19,6 +19,13 @@ file records, because three of those choices are the kind that read as bugs to
 the next person who finds them, and a non-fix that nobody wrote down is
 indistinguishable from an oversight.
 
+> Superseded in part by
+> [0011](0011-the-tooltip-escapes-because-it-does-not-own-its-sink.md). This
+> review read `Ui/WidgetButton.qml` and `Bar.qml` and did not look at what the
+> tooltip's own text could do inside them; the marketplace review of the release
+> commit did, and `Model.js` changed as a result. The sentence above is true of
+> this review and no longer true of the plugin.
+
 ## What was wrong, and is now corrected in the README
 
 **The central claim about `plugins[]` was false.** The README stated that moving

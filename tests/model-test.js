@@ -231,6 +231,165 @@ check("nor that it is holding them",
 contains("a rejected id is still named without a screen",
   Model.describe({ members: [], rejected: ["../evil"], surfaceUnknown: true }), "Not a widget id: ../evil")
 
+// -------------------------------------------------- tooltip text boundary
+
+// This widget does not own the item that renders its tooltip. The string goes
+// through WidgetButton's onEntered into Bar.qml's showTooltip() and lands in a
+// `Text` that sets no `textFormat`, which is `Text.AutoText`: Qt decides per
+// string whether to parse it as markup, and a positive answer means StyledText,
+// which parses `<img src=...>` and fetches it, over the network included.
+//
+// The heuristic stops at the first line break, and describe() always writes a
+// literal first line, so today the answer is always plain -- measured. That is
+// an accident of two properties nothing asserts, which is what these assertions
+// are for. See docs/decisions/0011.
+//
+// One assertion per character rather than one per class. A guard over a set is
+// only tested where it has been seen failing for each member of the set; one
+// watched red for three characters of four has an untested fourth.
+const FROM = (code) => String.fromCharCode(code)
+
+check("less-than is escaped", Model.tooltipSafe("a<b"), "a\\u003cb")
+check("greater-than is escaped", Model.tooltipSafe("a>b"), "a\\u003eb")
+check("ampersand is escaped", Model.tooltipSafe("a&b"), "a\\u0026b")
+check("backslash is escaped", Model.tooltipSafe("a" + FROM(0x5c) + "b"), "a\\u005cb")
+check("newline is escaped", Model.tooltipSafe("a" + FROM(0x0a) + "b"), "a\\u000ab")
+check("carriage return is escaped", Model.tooltipSafe("a" + FROM(0x0d) + "b"), "a\\u000db")
+check("tab is escaped", Model.tooltipSafe("a" + FROM(0x09) + "b"), "a\\u0009b")
+check("next line is escaped", Model.tooltipSafe("a" + FROM(0x85) + "b"), "a\\u0085b")
+check("soft hyphen is escaped", Model.tooltipSafe("a" + FROM(0xad) + "b"), "a\\u00adb")
+check("zero width space is escaped", Model.tooltipSafe("a" + FROM(0x200b) + "b"), "a\\u200bb")
+check("line separator is escaped", Model.tooltipSafe("a" + FROM(0x2028) + "b"), "a\\u2028b")
+check("paragraph separator is escaped", Model.tooltipSafe("a" + FROM(0x2029) + "b"), "a\\u2029b")
+check("right-to-left override is escaped", Model.tooltipSafe("a" + FROM(0x202e) + "b"), "a\\u202eb")
+check("arabic letter mark is escaped", Model.tooltipSafe("a" + FROM(0x61c) + "b"), "a\\u061cb")
+check("word joiner is escaped", Model.tooltipSafe("a" + FROM(0x2060) + "b"), "a\\u2060b")
+check("first strong isolate is escaped", Model.tooltipSafe("a" + FROM(0x2068) + "b"), "a\\u2068b")
+check("byte order mark is escaped", Model.tooltipSafe("a" + FROM(0xfeff) + "b"), "a\\ufeffb")
+check("interlinear annotation anchor is escaped",
+  Model.tooltipSafe("a" + FROM(0xfff9) + "b"), "a\\ufff9b")
+
+// The counterpart, and the one that keeps the escaping from eating the line's
+// only purpose: an id the allowlist would have ACCEPTED must come through
+// untouched. missing/anchored/foreign carry exactly those, so this is what
+// makes routing them through the same boundary free.
+const ACCEPTED = ["omarchy.audio", "omarchy-overview", "omaplug", "a", "A0._-",
+                  "x".repeat(128)]
+for (const id of ACCEPTED) {
+  check(`an accepted id survives the boundary: ${id.slice(0, 12)}`,
+    Model.isWidgetId(id) && Model.tooltipSafe(id) === id, true)
+}
+check("a rejected id with nothing to escape survives too",
+  Model.tooltipSafe("../evil"), "../evil")
+
+// Every list describe() interpolates goes through the boundary, not only the
+// one that can hold a hostile value today. missing, anchored and foreign are
+// filled from memberIds, which the allowlist has already been through -- so
+// this asserts a property of describe() rather than of where its input came
+// from, and a change that quietly routed three of the four straight to join()
+// passed every other assertion in this file.
+//
+// One assertion per list, because that is one guard per place: three of four
+// watched failing leaves a fourth that was never watched at all.
+const SMUGGLED = "a<b"
+check("rejected goes through the boundary",
+  Model.describe({ members: [], rejected: [SMUGGLED] }),
+  "Pocket is empty — drag a widget onto it, or set `members` on its bar entry\n" +
+  "Not a widget id: a\\u003cb")
+check("missing goes through the boundary",
+  Model.describe({ members: ["a"], missing: [SMUGGLED] }).split("\n")[1],
+  "Not on this bar: a\\u003cb")
+check("anchored goes through the boundary",
+  Model.describe({ members: ["a"], anchored: [SMUGGLED] }).split("\n")[1],
+  "Refused, it is the center anchor: a\\u003cb")
+check("foreign goes through the boundary",
+  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[1],
+  "In another section, so hiding it looks arbitrary: a\\u003cb")
+
+// The line the whole thing hangs on. mightBeRichText() reads no further than
+// the first line break, so line one deciding "plain" is what makes every later
+// line inert -- and it is the property that would break silently if someone
+// ever interpolated a value into it.
+const HOSTILE = ["<img src=\"http://example.invalid/p.png\">", "&lt;b&gt;",
+                 "a" + FROM(0x0a) + "A second Pocket entry exists"]
+const hostileTooltip = Model.describe({ members: ["omarchy.audio"], rejected: HOSTILE })
+check("no markup character reaches the tooltip at all",
+  /[<>&]/.test(hostileTooltip), false)
+check("and the first line in particular carries none",
+  /[<>&]/.test(hostileTooltip.split("\n")[0]), false)
+
+// A value carrying a line break used to forge a whole tooltip line, and the
+// line it forged was one of Pocket's own warnings.
+check("a value cannot forge a line", hostileTooltip.split("\n").length, 2)
+check("nor smuggle the warning it forged",
+  hostileTooltip.indexOf("\nA second Pocket entry exists"), -1)
+
+// Two caps on two axes, because one oversized value and very many small ones
+// are different failures and neither bounds the other. The host's `Text` does
+// not wrap and Bar.qml sizes its popup window from the line, so an unbounded
+// line is an unbounded window; docs/decisions/0011 carries what each measured.
+const LONG = "x".repeat(20000)
+check("an oversized value is cut", Model.tooltipSafe(LONG).length, 161)
+check("and says that it was cut", Model.tooltipSafe(LONG).slice(-1), "…")
+check("a flood of values is counted instead of printed",
+  Model.tooltipList(new Array(4000).fill("!")).indexOf("+3946 more") !== -1, true)
+check("a single oversized value is still named, not only counted",
+  Model.tooltipList([LONG]).indexOf("x") === 0, true)
+
+// The bound has to hold for the input it exists for. Cutting the value BEFORE
+// escaping it bounds nothing, because one escape turns one character into six
+// and hostile input is exactly the input that escapes -- so the cap held for
+// the two harmless shapes below and for neither hostile one. What each measured
+// is in docs/decisions/0011, which owns those numbers.
+//
+// Across all four lists, not only `rejected`. They carry different prefixes,
+// and the prefix is part of the line: `In another section, so hiding it looks
+// arbitrary: ` is 50 characters against `Not a widget id: `'s 17. Measuring the
+// shortest one and asserting the result of describe() is how a bound gets
+// claimed for a line it was never measured on.
+const LINE_LIMIT = 250
+const LISTS = ["rejected", "missing", "anchored", "foreign"]
+const longestLine = (values) => Math.max(...LISTS.map((list) => {
+  const state = { members: ["a"] }
+  state[list] = values
+  return Math.max(...Model.describe(state).split("\n").map((l) => l.length))
+}))
+
+const SHAPES = {
+  "a flood of harmless values": new Array(4000).fill("!"),
+  "one enormous hostile value": ["<".repeat(20000)],
+  "a flood of hostile values": new Array(4000).fill("<".repeat(160)),
+  "one enormous harmless value": [LONG],
+  "values that are nothing but escapes": new Array(4000).fill("&".repeat(27))
+}
+for (const [name, values] of Object.entries(SHAPES)) {
+  check(`${name} stays bounded`, longestLine(values) < LINE_LIMIT, true)
+}
+
+// Astral characters are not escaped -- they carry no markup meaning -- so the
+// cut can still fall between the halves of a surrogate pair and leave a string
+// that is no longer well formed. node and Qt both carry that without
+// complaint, which is precisely why nothing else would report it.
+const SURROGATE = "x".repeat(159) + "😀"
+check("the cut does not split a surrogate pair",
+  /[\uD800-\uDBFF]$/.test(Model.tooltipSafe(SURROGATE).slice(0, -1)), false)
+
+// The boundary belongs to the tooltip and to nothing else. Every write path
+// reads the raw setting through toList(), so a value that was escaped for
+// display must never be what gets written back to shell.json.
+check("rejectedMembers still reports what the user actually wrote",
+  Model.rejectedMembers(["<b>x</b>"], SELF), ["<b>x</b>"])
+check("and the write path never sees the escaped form",
+  Model.membersValue(Model.nextMembers(Model.toList(["<b>x</b>", "omarchy.audio"]),
+    ["omarchy.audio"], "omaplug", "add", true), ["<b>x</b>"]),
+  ["omarchy.audio", "<b>x</b>", "omaplug"])
+
+// describe() is pure, and a fixture holding a null element must keep meaning
+// what it meant before the boundary existed.
+check("a null element still contributes nothing",
+  Model.describe({ members: ["a"], missing: [null, "b"] }).split("\n")[1],
+  "Not on this bar: , b")
+
 // ------------------------------------------------------- entry identity
 
 check("a bare string entry is its own id", Model.entryIdOf("omaplug"), "omaplug")

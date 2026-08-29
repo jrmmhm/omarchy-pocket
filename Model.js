@@ -519,9 +519,153 @@ function revealFraction(progress, index, count, maxStagger) {
   return Math.max(0, Math.min(1, (p - stagger * i) / span))
 }
 
+// ---------------------------------------------------------- tooltip text
+
+// The plugin's text boundary. Everything a value contributes to the tooltip
+// goes through here first, because the widget does not own the item that
+// renders it: the string travels through Bar.qml's showTooltip() into a `Text`
+// with no `textFormat`, which is `Text.AutoText`. Qt answers that with
+// Qt::mightBeRichText(), and a positive answer means StyledText — which parses
+// `<img src=…>` and loads it, over the network included. Qt's own documentation
+// names two ways out, explicit `Text.PlainText` at the sink or stripping the
+// content, and only the second one is a plugin's to take.
+//
+// Escaping to `&lt;` would be the wrong half of that advice. It is the answer
+// for a sink known to be rich; against AutoText it is also a way IN, because
+// mightBeRichText() returns true on an `&lt;` before the first line break. The
+// `&` has to go, not just the `<` it introduces.
+//
+// Escapes rather than one replacement glyph, because the only reason this line
+// exists is to let the user find the entry again in shell.json. A `<`, an `&`
+// and a tab that all render as the same box are three mistakes nobody can tell
+// apart. Backslash is escaped along with them, so every backslash in the output
+// belongs to an escape this function wrote and no output can be read two ways.
+// The cut is the one lossy step, and it says so with its own marker — it can
+// land inside an escape, and what is left of one is ASCII letters and digits
+// with an ellipsis behind them. See docs/decisions/0011.
+
+// Written as code point ranges rather than as a character class, for two
+// reasons that are both about being read. A regex literal full of escapes is a
+// line nobody proof-reads, and half of these characters are invisible — spelling
+// them out is the only way the set can be checked against what it claims. It
+// also keeps this file free of regex escape semantics, which is one engine
+// difference fewer between node and Qt's V4.
+var TOOLTIP_UNSAFE_RANGES = [
+  [0x26, 0x26],     // & — the entity introducer, and on its own enough to turn
+                    // Qt's AutoText heuristic to rich by way of &lt;
+  [0x3c, 0x3c],     // <
+  [0x3e, 0x3e],     // >
+  [0x5c, 0x5c],     // backslash, so the escaping below can never be read two ways
+  [0x00, 0x1f],     // the C0 controls, newline and tab among them
+  [0x7f, 0x9f],     // delete and the C1 controls
+  [0xad, 0xad],     // soft hyphen
+  [0x61c, 0x61c],   // arabic letter mark, a bidi control like the ones below
+  [0x200b, 0x200f], // zero width space through right-to-left mark
+  [0x2028, 0x202e], // line and paragraph separator, bidi embedding and override
+  [0x2060, 0x206f], // word joiner and the deprecated format characters
+  [0xfeff, 0xfeff], // zero width no-break space
+  [0xfff9, 0xfffb]  // the interlinear annotation marks
+]
+
+// Only U+000A and U+2028 actually forge a line in the host's `Text`; the rest
+// of this set is deliberate excess. A tab or a right-to-left override inside a
+// widget id is a mistake worth seeing spelled out, and the bidi controls are
+// the one group that can rewrite the line's meaning without changing a single
+// metric — including the `Not a widget id: ` this file wrote itself.
+//
+// It is not every invisible character, and does not claim to be: the ordinary
+// space separators pass through, and a range test over UTF-16 units cannot
+// reach an astral format character at all. What it covers is what can change
+// what the line MEANS. See docs/decisions/0011.
+function tooltipUnsafe(code) {
+  for (var i = 0; i < TOOLTIP_UNSAFE_RANGES.length; i++) {
+    if (code >= TOOLTIP_UNSAFE_RANGES[i][0] && code <= TOOLTIP_UNSAFE_RANGES[i][1]) return true
+  }
+  return false
+}
+
+// Two caps, because one oversized value and very many small ones are different
+// failures and neither bounds the other. The host's `Text` does not wrap and
+// Bar.qml sizes the popup window from it, so an unbounded line is an unbounded
+// window; docs/decisions/0011 carries what each measured.
+//
+// 160 for the value, chosen above ID_PATTERN's own 128-character ceiling so
+// that every id the allowlist would have ACCEPTED passes through unchanged —
+// this line carries ids that were merely not found, too.
+var MAX_LABEL = 160
+var MAX_LINE = 160
+
+function tooltipEscape(code) {
+  var hex = code.toString(16)
+  while (hex.length < 4) hex = "0" + hex
+  return "\\u" + hex
+}
+
+// One value, rendered so that it means the same thing under every textFormat a
+// host may resolve, and occupies exactly one line.
+function tooltipSafe(value) {
+  if (value === null || value === undefined) return ""
+  var text = String(value)
+
+  // Escape first, cut afterwards. The other order is the obvious one and it
+  // does not bound anything: one escape turns one character into six, so a
+  // value cut to 160 first came back out at 960, and the cap that was supposed
+  // to keep the line short only ever held for values that had nothing to
+  // escape. The whole point is a bound that holds for hostile input, and
+  // hostile input is exactly the input that escapes.
+  var out = ""
+  for (var i = 0; i < text.length; i++) {
+    var code = text.charCodeAt(i)
+    out += tooltipUnsafe(code) ? tooltipEscape(code) : text.charAt(i)
+  }
+
+  if (out.length > MAX_LABEL) {
+    out = out.slice(0, MAX_LABEL)
+    // Astral characters are not escaped — they carry no markup meaning — so the
+    // cut can still fall between the halves of a surrogate pair and leave a
+    // string that is no longer well formed. Drop the orphan rather than pass it
+    // on. A cut through an escape sequence needs no such care: what is left of
+    // it is ASCII letters and digits, which mean nothing anywhere.
+    var last = out.charCodeAt(out.length - 1)
+    if (last >= 0xd800 && last <= 0xdbff) out = out.slice(0, out.length - 1)
+    out += "…"
+  }
+
+  return out
+}
+
+// One tooltip line's worth of values. What does not fit is counted rather than
+// left out in silence — the line names a configuration mistake, and a mistake
+// the tooltip silently stops mentioning is one the user goes on looking for.
+function tooltipList(values) {
+  var source = values || []
+  var out = []
+  var length = 0
+
+  for (var i = 0; i < source.length; i++) {
+    var item = tooltipSafe(source[i])
+    // The first value is always taken. A single oversized entry is still worth
+    // naming, and reporting it only as a count would name nothing at all.
+    if (out.length > 0 && length + item.length + 2 > MAX_LINE) break
+    length += item.length + (out.length > 0 ? 2 : 0)
+    out.push(item)
+  }
+
+  var line = out.join(", ")
+  var rest = source.length - out.length
+  return rest > 0 ? line + ", +" + rest + " more" : line
+}
+
 // One tooltip line per condition, most actionable first. The pocket is the only
 // place these problems surface: a member that never appears produces no error
 // anywhere else in the shell.
+//
+// Every value it interpolates goes through tooltipList(), including the three
+// lists that can only hold ids the allowlist already accepted. That those are
+// safe is an argument about where they came from, and an argument about
+// provenance is exactly what made this tooltip's safety accidental in the first
+// place. Here it is a property of the function, and it costs an accepted id
+// nothing.
 function describe(state) {
   var s = state || {}
   var members = s.members || []
@@ -565,10 +709,10 @@ function describe(state) {
   }
 
   if (s.pinned) lines.push("Pinned — click to release")
-  if (rejected.length > 0) lines.push("Not a widget id: " + rejected.join(", "))
-  if (!unknown && missing.length > 0) lines.push("Not on this bar: " + missing.join(", "))
-  if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + anchored.join(", "))
-  if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + foreign.join(", "))
+  if (rejected.length > 0) lines.push("Not a widget id: " + tooltipList(rejected))
+  if (!unknown && missing.length > 0) lines.push("Not on this bar: " + tooltipList(missing))
+  if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + tooltipList(anchored))
+  if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + tooltipList(foreign))
   if (s.duplicateInstances) lines.push("A second Pocket entry exists — they will fight over shared members")
 
   return lines.join("\n")
@@ -577,6 +721,7 @@ function describe(state) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
                      rejectedMembers: rejectedMembers, revealFraction: revealFraction,
+                     tooltipSafe: tooltipSafe, tooltipList: tooltipList,
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
