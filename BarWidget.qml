@@ -790,6 +790,11 @@ BarWidget {
     // own — two animations on one value fight and the slower one wins twice.
     textRotation: (root.vertical ? 90 : 0) + root.revealProgress * 90
 
+    // The plugin's only text sink, and the reason Model.describe() escapes what
+    // it interpolates. From here the string travels through WidgetButton's
+    // onEntered into Bar.qml's showTooltip(), and lands in a `Text` that sets no
+    // `textFormat` — so the host, not this file, decides whether it is parsed as
+    // markup. Nothing assigned here may depend on that decision.
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
       rejected: root.rejectedIds, missing: root.resolution.missing,
