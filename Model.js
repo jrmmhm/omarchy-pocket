@@ -556,6 +556,7 @@ var TOOLTIP_UNSAFE_RANGES = [
   [0x00, 0x1f],     // the C0 controls, newline and tab among them
   [0x7f, 0x9f],     // delete and the C1 controls
   [0xad, 0xad],     // soft hyphen
+  [0x61c, 0x61c],   // arabic letter mark, a bidi control like the ones below
   [0x200b, 0x200f], // zero width space through right-to-left mark
   [0x2028, 0x202e], // line and paragraph separator, bidi embedding and override
   [0x2060, 0x206f], // word joiner and the deprecated format characters
@@ -568,6 +569,11 @@ var TOOLTIP_UNSAFE_RANGES = [
 // widget id is a mistake worth seeing spelled out, and the bidi controls are
 // the one group that can rewrite the line's meaning without changing a single
 // metric — including the `Not a widget id: ` this file wrote itself.
+//
+// It is not every invisible character, and does not claim to be: the ordinary
+// space separators pass through, and a range test over UTF-16 units cannot
+// reach an astral format character at all. What it covers is what can change
+// what the line MEANS. See docs/decisions/0011.
 function tooltipUnsafe(code) {
   for (var i = 0; i < TOOLTIP_UNSAFE_RANGES.length; i++) {
     if (code >= TOOLTIP_UNSAFE_RANGES[i][0] && code <= TOOLTIP_UNSAFE_RANGES[i][1]) return true
@@ -575,11 +581,10 @@ function tooltipUnsafe(code) {
   return false
 }
 
-// Two caps, because the two measured defects sit on different axes and neither
-// bounds the other. One entry of 20000 characters and 4000 entries of one
-// character produce lines of 20000 and 12015 characters; the host's `Text` does
-// not wrap and Bar.qml sizes the popup window off it, so the second asked for a
-// surface 51482 pixels wide.
+// Two caps, because one oversized value and very many small ones are different
+// failures and neither bounds the other. The host's `Text` does not wrap and
+// Bar.qml sizes the popup window from it, so an unbounded line is an unbounded
+// window; docs/decisions/0011 carries what each measured.
 //
 // 160 for the value, chosen above ID_PATTERN's own 128-character ceiling so
 // that every id the allowlist would have ACCEPTED passes through unchanged —
@@ -599,20 +604,30 @@ function tooltipSafe(value) {
   if (value === null || value === undefined) return ""
   var text = String(value)
 
-  if (text.length > MAX_LABEL) {
-    text = text.slice(0, MAX_LABEL)
-    // A cut through a surrogate pair leaves a lone high surrogate behind, which
-    // is not a well-formed string any more. Drop it rather than pass it on.
-    var last = text.charCodeAt(text.length - 1)
-    if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, text.length - 1)
-    text += "…"
-  }
-
+  // Escape first, cut afterwards. The other order is the obvious one and it
+  // does not bound anything: one escape turns one character into six, so a
+  // value cut to 160 first came back out at 960, and the cap that was supposed
+  // to keep the line short only ever held for values that had nothing to
+  // escape. The whole point is a bound that holds for hostile input, and
+  // hostile input is exactly the input that escapes.
   var out = ""
   for (var i = 0; i < text.length; i++) {
     var code = text.charCodeAt(i)
     out += tooltipUnsafe(code) ? tooltipEscape(code) : text.charAt(i)
   }
+
+  if (out.length > MAX_LABEL) {
+    out = out.slice(0, MAX_LABEL)
+    // Astral characters are not escaped — they carry no markup meaning — so the
+    // cut can still fall between the halves of a surrogate pair and leave a
+    // string that is no longer well formed. Drop the orphan rather than pass it
+    // on. A cut through an escape sequence needs no such care: what is left of
+    // it is ASCII letters and digits, which mean nothing anywhere.
+    var last = out.charCodeAt(out.length - 1)
+    if (last >= 0xd800 && last <= 0xdbff) out = out.slice(0, out.length - 1)
+    out += "…"
+  }
+
   return out
 }
 
