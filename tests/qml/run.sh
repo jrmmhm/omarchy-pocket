@@ -46,10 +46,15 @@ ln -s "$ROOT" "$WORK/plugin"
 # copy would go on passing after the host changed its mind.
 ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
 
-CASES="steer steer-readonly neighbourhood"
+# `model` is listed in both branches on purpose. It needs nothing from the host
+# at all -- it runs Model.js in Qt's V4 engine and asserts against it -- so a
+# shell that costs us the neighbourhood sweep must not silently cost us this one
+# too. A case that quietly stops running is the kind of green tests/run.sh warns
+# about in its own header.
+CASES="model steer steer-readonly neighbourhood"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="steer steer-readonly"
+  CASES="model steer steer-readonly"
 fi
 
 status=0

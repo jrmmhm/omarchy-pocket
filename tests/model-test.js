@@ -231,6 +231,109 @@ check("nor that it is holding them",
 contains("a rejected id is still named without a screen",
   Model.describe({ members: [], rejected: ["../evil"], surfaceUnknown: true }), "Not a widget id: ../evil")
 
+// -------------------------------------------------- tooltip text boundary
+
+// This widget does not own the item that renders its tooltip. The string goes
+// through WidgetButton's onEntered into Bar.qml's showTooltip() and lands in a
+// `Text` that sets no `textFormat`, which is `Text.AutoText`: Qt decides per
+// string whether to parse it as markup, and a positive answer means StyledText,
+// which parses `<img src=...>` and fetches it, over the network included.
+//
+// The heuristic stops at the first line break, and describe() always writes a
+// literal first line, so today the answer is always plain -- measured. That is
+// an accident of two properties nothing asserts, which is what these assertions
+// are for. See docs/decisions/0011.
+//
+// One assertion per character rather than one per class. A guard over a set is
+// only tested where it has been seen failing for each member of the set; one
+// watched red for three characters of four has an untested fourth.
+const FROM = (code) => String.fromCharCode(code)
+
+check("less-than is escaped", Model.tooltipSafe("a<b"), "a\\u003cb")
+check("greater-than is escaped", Model.tooltipSafe("a>b"), "a\\u003eb")
+check("ampersand is escaped", Model.tooltipSafe("a&b"), "a\\u0026b")
+check("backslash is escaped", Model.tooltipSafe("a" + FROM(0x5c) + "b"), "a\\u005cb")
+check("newline is escaped", Model.tooltipSafe("a" + FROM(0x0a) + "b"), "a\\u000ab")
+check("carriage return is escaped", Model.tooltipSafe("a" + FROM(0x0d) + "b"), "a\\u000db")
+check("tab is escaped", Model.tooltipSafe("a" + FROM(0x09) + "b"), "a\\u0009b")
+check("next line is escaped", Model.tooltipSafe("a" + FROM(0x85) + "b"), "a\\u0085b")
+check("soft hyphen is escaped", Model.tooltipSafe("a" + FROM(0xad) + "b"), "a\\u00adb")
+check("zero width space is escaped", Model.tooltipSafe("a" + FROM(0x200b) + "b"), "a\\u200bb")
+check("line separator is escaped", Model.tooltipSafe("a" + FROM(0x2028) + "b"), "a\\u2028b")
+check("paragraph separator is escaped", Model.tooltipSafe("a" + FROM(0x2029) + "b"), "a\\u2029b")
+check("right-to-left override is escaped", Model.tooltipSafe("a" + FROM(0x202e) + "b"), "a\\u202eb")
+check("word joiner is escaped", Model.tooltipSafe("a" + FROM(0x2060) + "b"), "a\\u2060b")
+check("byte order mark is escaped", Model.tooltipSafe("a" + FROM(0xfeff) + "b"), "a\\ufeffb")
+
+// The counterpart, and the one that keeps the escaping from eating the line's
+// only purpose: an id the allowlist would have ACCEPTED must come through
+// untouched. missing/anchored/foreign carry exactly those, so this is what
+// makes routing them through the same boundary free.
+const ACCEPTED = ["omarchy.audio", "omarchy-overview", "omaplug", "a", "A0._-",
+                  "x".repeat(128)]
+for (const id of ACCEPTED) {
+  check(`an accepted id survives the boundary: ${id.slice(0, 12)}`,
+    Model.isWidgetId(id) && Model.tooltipSafe(id) === id, true)
+}
+check("a rejected id with nothing to escape survives too",
+  Model.tooltipSafe("../evil"), "../evil")
+
+// The line the whole thing hangs on. mightBeRichText() reads no further than
+// the first line break, so line one deciding "plain" is what makes every later
+// line inert -- and it is the property that would break silently if someone
+// ever interpolated a value into it.
+const HOSTILE = ["<img src=\"http://example.invalid/p.png\">", "&lt;b&gt;",
+                 "a" + FROM(0x0a) + "A second Pocket entry exists"]
+const hostileTooltip = Model.describe({ members: ["omarchy.audio"], rejected: HOSTILE })
+check("no markup character reaches the tooltip at all",
+  /[<>&]/.test(hostileTooltip), false)
+check("and the first line in particular carries none",
+  /[<>&]/.test(hostileTooltip.split("\n")[0]), false)
+
+// A value carrying a line break used to forge a whole tooltip line, and the
+// line it forged was one of Pocket's own warnings.
+check("a value cannot forge a line", hostileTooltip.split("\n").length, 2)
+check("nor smuggle the warning it forged",
+  hostileTooltip.indexOf("\nA second Pocket entry exists"), -1)
+
+// Two caps on two axes, because neither bounds the other: one 20000-character
+// entry and 4000 one-character entries both produced a tooltip line the host
+// sized its popup window from -- 20000 and 12015 characters, the second asking
+// for a surface 51482 pixels wide.
+const LONG = "x".repeat(20000)
+check("an oversized value is cut", Model.tooltipSafe(LONG).length, 161)
+check("and says that it was cut", Model.tooltipSafe(LONG).slice(-1), "…")
+check("a flood of values is counted instead of printed",
+  Model.tooltipList(new Array(4000).fill("!")).indexOf("+3946 more") !== -1, true)
+check("so the line stays bounded",
+  Math.max(...Model.describe({ members: [], rejected: new Array(4000).fill("!") })
+    .split("\n").map((line) => line.length)) < 200, true)
+check("a single oversized value is still named, not only counted",
+  Model.tooltipList([LONG]).indexOf("x") === 0, true)
+
+// Cutting between the halves of a surrogate pair leaves a string that is no
+// longer well formed. node and Qt both carry it without complaint, which is
+// precisely why nothing else would report it.
+const SURROGATE = "x".repeat(159) + "😀"
+check("the cut does not split a surrogate pair",
+  /[\uD800-\uDBFF]$/.test(Model.tooltipSafe(SURROGATE).slice(0, -1)), false)
+
+// The boundary belongs to the tooltip and to nothing else. Every write path
+// reads the raw setting through toList(), so a value that was escaped for
+// display must never be what gets written back to shell.json.
+check("rejectedMembers still reports what the user actually wrote",
+  Model.rejectedMembers(["<b>x</b>"], SELF), ["<b>x</b>"])
+check("and the write path never sees the escaped form",
+  Model.membersValue(Model.nextMembers(Model.toList(["<b>x</b>", "omarchy.audio"]),
+    ["omarchy.audio"], "omaplug", "add", true), ["<b>x</b>"]),
+  ["omarchy.audio", "<b>x</b>", "omaplug"])
+
+// describe() is pure, and a fixture holding a null element must keep meaning
+// what it meant before the boundary existed.
+check("a null element still contributes nothing",
+  Model.describe({ members: ["a"], missing: [null, "b"] }).split("\n")[1],
+  "Not on this bar: , b")
+
 // ------------------------------------------------------- entry identity
 
 check("a bare string entry is its own id", Model.entryIdOf("omaplug"), "omaplug")
