@@ -32,6 +32,13 @@ QtObject {
 
   function from(code) { return String.fromCharCode(code) }
 
+  function longestLine(rejected) {
+    var lines = Model.describe({ members: [], rejected: rejected }).split("\n")
+    var longest = 0
+    for (var i = 0; i < lines.length; i++) longest = Math.max(longest, lines[i].length)
+    return longest
+  }
+
   // Driven from a timer for the same reason steer.qml is: Qt.exit() does
   // nothing until the event loop runs, and from Component.onCompleted the
   // process hangs until the runner's timeout kills it — which looks like a pass,
@@ -70,14 +77,18 @@ QtObject {
     check("V4 lets no markup character through", /[<>&]/.test(tooltip), false)
     check("V4 lets a value forge no line", tooltip.split("\n").length, 2)
 
-    // Bounded on the other axis too, which the per-value cap does not cover:
-    // 4000 single-character entries produced a 12015-character line.
-    var flood = []
-    for (var i = 0; i < 4000; i++) flood.push("!")
-    var lines = Model.describe({ members: [], rejected: flood }).split("\n")
-    var longest = 0
-    for (var j = 0; j < lines.length; j++) longest = Math.max(longest, lines[j].length)
-    check("V4 keeps the line bounded", longest < 200, true)
+    // Bounded on the other axis too, which the per-value cap does not cover.
+    // Twice, because the harmless flood and the hostile one reach the caps by
+    // different routes, and the hostile one is the shape that was measured
+    // escaping past a cap applied too early. docs/decisions/0011 has the
+    // numbers.
+    var harmless = []
+    var hostile = []
+    var wide = ""
+    for (var w = 0; w < 160; w++) wide += "<"
+    for (var i = 0; i < 4000; i++) { harmless.push("!"); hostile.push(wide) }
+    check("V4 keeps a harmless flood bounded", harness.longestLine(harmless) < 200, true)
+    check("V4 keeps a hostile flood bounded", harness.longestLine(hostile) < 200, true)
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
@@ -85,6 +96,11 @@ QtObject {
 
   // Declared as a property so the engine hands runCase() the same kind of value
   // a setting does, rather than a literal built inside the function.
+  //
+  // `example.invalid` is reserved by RFC 2606 and resolves nowhere. It is used
+  // instead of a real host because a fixture that ever DID reach a rich text
+  // parser would fetch it, and a suite that quietly makes network requests is
+  // worse than the defect it is testing for.
   property var hostileSetting: ["<img src=\"http://example.invalid/p.png\">",
                                "a" + String.fromCharCode(0x0a) + "A second Pocket entry exists"]
 }

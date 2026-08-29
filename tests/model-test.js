@@ -278,6 +278,30 @@ for (const id of ACCEPTED) {
 check("a rejected id with nothing to escape survives too",
   Model.tooltipSafe("../evil"), "../evil")
 
+// Every list describe() interpolates goes through the boundary, not only the
+// one that can hold a hostile value today. missing, anchored and foreign are
+// filled from memberIds, which the allowlist has already been through -- so
+// this asserts a property of describe() rather than of where its input came
+// from, and a change that quietly routed three of the four straight to join()
+// passed every other assertion in this file.
+//
+// One assertion per list, because that is one guard per place: three of four
+// watched failing leaves a fourth that was never watched at all.
+const SMUGGLED = "a<b"
+check("rejected goes through the boundary",
+  Model.describe({ members: [], rejected: [SMUGGLED] }),
+  "Pocket is empty — drag a widget onto it, or set `members` on its bar entry\n" +
+  "Not a widget id: a\\u003cb")
+check("missing goes through the boundary",
+  Model.describe({ members: ["a"], missing: [SMUGGLED] }).split("\n")[1],
+  "Not on this bar: a\\u003cb")
+check("anchored goes through the boundary",
+  Model.describe({ members: ["a"], anchored: [SMUGGLED] }).split("\n")[1],
+  "Refused, it is the center anchor: a\\u003cb")
+check("foreign goes through the boundary",
+  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[1],
+  "In another section, so hiding it looks arbitrary: a\\u003cb")
+
 // The line the whole thing hangs on. mightBeRichText() reads no further than
 // the first line break, so line one deciding "plain" is what makes every later
 // line inert -- and it is the property that would break silently if someone
@@ -296,24 +320,41 @@ check("a value cannot forge a line", hostileTooltip.split("\n").length, 2)
 check("nor smuggle the warning it forged",
   hostileTooltip.indexOf("\nA second Pocket entry exists"), -1)
 
-// Two caps on two axes, because neither bounds the other: one 20000-character
-// entry and 4000 one-character entries both produced a tooltip line the host
-// sized its popup window from -- 20000 and 12015 characters, the second asking
-// for a surface 51482 pixels wide.
+// Two caps on two axes, because one oversized value and very many small ones
+// are different failures and neither bounds the other. The host's `Text` does
+// not wrap and Bar.qml sizes its popup window from the line, so an unbounded
+// line is an unbounded window; docs/decisions/0011 carries what each measured.
 const LONG = "x".repeat(20000)
 check("an oversized value is cut", Model.tooltipSafe(LONG).length, 161)
 check("and says that it was cut", Model.tooltipSafe(LONG).slice(-1), "…")
 check("a flood of values is counted instead of printed",
   Model.tooltipList(new Array(4000).fill("!")).indexOf("+3946 more") !== -1, true)
-check("so the line stays bounded",
-  Math.max(...Model.describe({ members: [], rejected: new Array(4000).fill("!") })
-    .split("\n").map((line) => line.length)) < 200, true)
 check("a single oversized value is still named, not only counted",
   Model.tooltipList([LONG]).indexOf("x") === 0, true)
 
-// Cutting between the halves of a surrogate pair leaves a string that is no
-// longer well formed. node and Qt both carry it without complaint, which is
-// precisely why nothing else would report it.
+// The bound has to hold for the input it exists for. Cutting the value BEFORE
+// escaping it bounds nothing, because one escape turns one character into six
+// and hostile input is exactly the input that escapes: cut-then-escape left the
+// three hostile cases below at 978, 989 and 189 characters while the harmless
+// one measured 178, so the cap only ever held where it was not needed. One
+// assertion per shape, because they reach the two caps by different routes.
+const LINE_LIMIT = 200
+const longestLine = (rejected) =>
+  Math.max(...Model.describe({ members: [], rejected }).split("\n").map((l) => l.length))
+
+check("a flood of harmless values stays bounded",
+  longestLine(new Array(4000).fill("!")) < LINE_LIMIT, true)
+check("one enormous hostile value stays bounded",
+  longestLine(["<".repeat(20000)]) < LINE_LIMIT, true)
+check("a flood of hostile values stays bounded",
+  longestLine(new Array(4000).fill("<".repeat(160))) < LINE_LIMIT, true)
+check("one enormous harmless value stays bounded",
+  longestLine([LONG]) < LINE_LIMIT, true)
+
+// Astral characters are not escaped -- they carry no markup meaning -- so the
+// cut can still fall between the halves of a surrogate pair and leave a string
+// that is no longer well formed. node and Qt both carry that without
+// complaint, which is precisely why nothing else would report it.
 const SURROGATE = "x".repeat(159) + "😀"
 check("the cut does not split a surrogate pair",
   /[\uD800-\uDBFF]$/.test(Model.tooltipSafe(SURROGATE).slice(0, -1)), false)
