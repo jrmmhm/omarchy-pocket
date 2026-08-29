@@ -97,6 +97,15 @@ and 4000 values of one character are different failures. The per-value cap is
 allowlist would have *accepted* passes through untouched — the same line also
 carries ids that were merely not found.
 
+**The value is escaped first and cut afterwards, and the other order is a
+trap.** Cutting first is the obvious order and it bounds nothing: one escape
+turns one character into six, so a value cut to 160 came back out at 960. The
+first version of this change had it that way, and the review that caught it
+measured what the cap was actually worth — 978 and 989 characters for the two
+hostile shapes against 178 for the harmless one, so the cap held only where it
+was not needed. Both shapes now measure under 200. The bound has to hold for
+hostile input, and hostile input is exactly the input that escapes.
+
 **All four lists, not only `rejected`.** `missing`, `anchored` and `foreign` can
 only hold ids that already passed the allowlist, so the escaping is provably a
 no-op for them. That proof is an argument about where the values came from, and
@@ -131,3 +140,14 @@ a configuration mistake, and that is the word the CHANGELOG uses.
 - A test asserting that `AutoText` and `PlainText` render `describe()` output
   identically was written and thrown away: it is green on `0a01e26`, so it would
   have asserted a property that was already true and caught nothing.
+- The hostile fixtures name `example.invalid`, which RFC 2606 reserves and which
+  resolves nowhere. A fixture that ever did reach a rich text parser would fetch
+  its `src`, and a suite that quietly makes network requests is worse than the
+  defect it is testing for. The same reasoning kept a deliberately rich `<img>`
+  out of the positive control: it would have been flaky, because `QQuickPixmap`
+  loads asynchronously and the assertion would race the placeholder.
+- The escaped set is not every invisible character and the README does not claim
+  it is. The ordinary space separators pass through, and a range test over
+  UTF-16 code units cannot reach an astral format character at all — U+E0020's
+  tag characters go through as surrogate pairs. What is covered is what can
+  change what the line *means*: markup, line forging, and the bidi controls.

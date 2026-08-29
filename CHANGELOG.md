@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   occupies the one line it was given.
 - **A mistyped `members` entry could make the tooltip wider than the screen.**
   The bar's tooltip label does not wrap and the popup window is sized from it,
-  so 4000 unusable entries asked for a surface 100833 px wide. The line now
-  names what fits and counts the rest; the same case measures 1606 px.
+  so a long enough list of unusable entries asked for a surface wider than any
+  display. The line now names what fits and counts the rest; the measurements
+  are in decision 0011.
 - **The tooltip did not guarantee how it would be rendered.** It is handed to a
   `Text` the host owns, which sets no `textFormat` and therefore decides per
   string whether to parse it as markup — and a positive answer there parses

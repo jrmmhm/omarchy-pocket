@@ -301,11 +301,12 @@ Three things change your first hour with it:
   in the tooltip; while one exists, Pocket refuses to write anything at all.
 - **An unusable id is shown escaped.** The tooltip is rendered by the bar, not
   by Pocket, in an item that decides for itself whether to read the text as
-  markup — so anything Pocket did not write is passed through with `<`, `>`, `&`
-  and every invisible character spelled out as `\uXXXX`, kept to one line, and
-  shortened past 160 characters. A long list of them is named as far as it fits
-  and counted after that. What you typed is still what is stored; only the
-  display is escaped.
+  markup — so anything Pocket did not write is passed through with `<`, `>`, `&`,
+  the backslash, and the characters that would break or reorder the line spelled
+  out as `\uXXXX`. It is kept to one line and shortened past 160 characters, and
+  a long list of them is named as far as it fits and counted after that. What
+  you typed is still what is stored; only the display is escaped. See
+  [decision 0011](docs/decisions/0011-the-tooltip-escapes-because-it-does-not-own-its-sink.md).
 - **The tooltip is a snapshot.** The bar reads a widget's tooltip once, when the
   pointer arrives, and does not update it while the pointer stays. So the lines
   that describe a state your pointer just caused — "Pocket open", "Pinned" —
