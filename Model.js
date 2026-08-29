@@ -538,8 +538,11 @@ function revealFraction(progress, index, count, maxStagger) {
 // Escapes rather than one replacement glyph, because the only reason this line
 // exists is to let the user find the entry again in shell.json. A `<`, an `&`
 // and a tab that all render as the same box are three mistakes nobody can tell
-// apart. Backslash is escaped along with them, so the output can never be read
-// two ways. See docs/decisions/0011.
+// apart. Backslash is escaped along with them, so every backslash in the output
+// belongs to an escape this function wrote and no output can be read two ways.
+// The cut is the one lossy step, and it says so with its own marker — it can
+// land inside an escape, and what is left of one is ASCII letters and digits
+// with an ellipsis behind them. See docs/decisions/0011.
 
 // Written as code point ranges rather than as a character class, for two
 // reasons that are both about being read. A regex literal full of escapes is a

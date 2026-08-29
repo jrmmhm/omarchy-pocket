@@ -262,8 +262,12 @@ check("zero width space is escaped", Model.tooltipSafe("a" + FROM(0x200b) + "b")
 check("line separator is escaped", Model.tooltipSafe("a" + FROM(0x2028) + "b"), "a\\u2028b")
 check("paragraph separator is escaped", Model.tooltipSafe("a" + FROM(0x2029) + "b"), "a\\u2029b")
 check("right-to-left override is escaped", Model.tooltipSafe("a" + FROM(0x202e) + "b"), "a\\u202eb")
+check("arabic letter mark is escaped", Model.tooltipSafe("a" + FROM(0x61c) + "b"), "a\\u061cb")
 check("word joiner is escaped", Model.tooltipSafe("a" + FROM(0x2060) + "b"), "a\\u2060b")
+check("first strong isolate is escaped", Model.tooltipSafe("a" + FROM(0x2068) + "b"), "a\\u2068b")
 check("byte order mark is escaped", Model.tooltipSafe("a" + FROM(0xfeff) + "b"), "a\\ufeffb")
+check("interlinear annotation anchor is escaped",
+  Model.tooltipSafe("a" + FROM(0xfff9) + "b"), "a\\ufff9b")
 
 // The counterpart, and the one that keeps the escaping from eating the line's
 // only purpose: an id the allowlist would have ACCEPTED must come through
@@ -334,22 +338,33 @@ check("a single oversized value is still named, not only counted",
 
 // The bound has to hold for the input it exists for. Cutting the value BEFORE
 // escaping it bounds nothing, because one escape turns one character into six
-// and hostile input is exactly the input that escapes: cut-then-escape left the
-// three hostile cases below at 978, 989 and 189 characters while the harmless
-// one measured 178, so the cap only ever held where it was not needed. One
-// assertion per shape, because they reach the two caps by different routes.
-const LINE_LIMIT = 200
-const longestLine = (rejected) =>
-  Math.max(...Model.describe({ members: [], rejected }).split("\n").map((l) => l.length))
+// and hostile input is exactly the input that escapes -- so the cap held for
+// the two harmless shapes below and for neither hostile one. What each measured
+// is in docs/decisions/0011, which owns those numbers.
+//
+// Across all four lists, not only `rejected`. They carry different prefixes,
+// and the prefix is part of the line: `In another section, so hiding it looks
+// arbitrary: ` is 50 characters against `Not a widget id: `'s 17. Measuring the
+// shortest one and asserting the result of describe() is how a bound gets
+// claimed for a line it was never measured on.
+const LINE_LIMIT = 250
+const LISTS = ["rejected", "missing", "anchored", "foreign"]
+const longestLine = (values) => Math.max(...LISTS.map((list) => {
+  const state = { members: ["a"] }
+  state[list] = values
+  return Math.max(...Model.describe(state).split("\n").map((l) => l.length))
+}))
 
-check("a flood of harmless values stays bounded",
-  longestLine(new Array(4000).fill("!")) < LINE_LIMIT, true)
-check("one enormous hostile value stays bounded",
-  longestLine(["<".repeat(20000)]) < LINE_LIMIT, true)
-check("a flood of hostile values stays bounded",
-  longestLine(new Array(4000).fill("<".repeat(160))) < LINE_LIMIT, true)
-check("one enormous harmless value stays bounded",
-  longestLine([LONG]) < LINE_LIMIT, true)
+const SHAPES = {
+  "a flood of harmless values": new Array(4000).fill("!"),
+  "one enormous hostile value": ["<".repeat(20000)],
+  "a flood of hostile values": new Array(4000).fill("<".repeat(160)),
+  "one enormous harmless value": [LONG],
+  "values that are nothing but escapes": new Array(4000).fill("&".repeat(27))
+}
+for (const [name, values] of Object.entries(SHAPES)) {
+  check(`${name} stays bounded`, longestLine(values) < LINE_LIMIT, true)
+}
 
 // Astral characters are not escaped -- they carry no markup meaning -- so the
 // cut can still fall between the halves of a surrogate pair and leave a string

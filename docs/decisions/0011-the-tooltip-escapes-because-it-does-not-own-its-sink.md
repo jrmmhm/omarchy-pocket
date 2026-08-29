@@ -89,7 +89,10 @@ go, not just the `<` it introduces.
 find the entry again in `shell.json`. A `<`, an `&` and a tab that all render as
 the same box are three different mistakes nobody can tell apart. A `\uXXXX`
 escape is ugly and reversible, which is the correct trade for a line whose whole
-job is to be acted on.
+job is to be acted on. Reversible up to the cut, that is: the cut is the one
+lossy step and marks itself, and because it now falls on the escaped text it can
+land inside an escape sequence. What is left of one is ASCII letters and digits
+with an ellipsis behind them — unambiguous as a cut, and meaningless to a parser.
 
 **Both caps, because neither bounds the other.** One value of 20000 characters
 and 4000 values of one character are different failures. The per-value cap is
