@@ -42,8 +42,9 @@ the matching `manifest.json` version, and at both of them `[Unreleased]`
 is empty, which is the file saying the same thing.
 
 **What this repository already does.** All three existing tags are
-unsigned annotated tags reading `Pocket <version> — <summary>`, on
-first-parent commits of `main`. They were not cut at the moment of
+unsigned annotated tags on first-parent commits of `main`; two of them
+read `Pocket <version> — <summary>` and `v0.1.0` is the bare
+`Pocket 0.1.0`. They were not cut at the moment of
 release: `v0.1.0` and `v0.2.0` share the tagger timestamp
 `2026-08-27 12:34:08` — one sitting — while `v0.1.0`'s target is from the
 previous night and `v0.2.0`'s target is 56 seconds old and six commits
@@ -95,8 +96,9 @@ carries the difference from here on.
 **Verify the target before pushing, because a tag is effectively final.**
 A clone that already holds a tag does not move it on a plain fetch, so a
 tag on the wrong commit cannot be corrected outward. A tag push also runs
-no workflow — `ci.yml` fires on `push: branches: [main]` and
-`pull_request` — so there is no red run to catch a mistake either. The
+no workflow — `ci.yml` fires on `push: branches: [main]`, `pull_request`
+and `workflow_dispatch`, none of which a tag reaches — so there is no red
+run to catch a mistake either. The
 check that stands in for it is `git show <sha>:manifest.json` against the
 version the tag names, run for both before the push.
 
@@ -140,8 +142,9 @@ the same way for every version the file names rather than only for the
 newest.
 
 **An installed pocket is untouched.** No file the runtime reads was
-changed, and the two Omarchy commands that reach this repository read only
-`origin HEAD`.
+changed, and the command that updates one reads `origin HEAD` alone —
+`omarchy-plugin-add`'s clone does take the tags, but only for an install
+that did not exist yet.
 
 **The tags are the record on GitHub and nowhere else.** A checkout made
 before today will never receive `v0.3.1` or `v0.3.2`; anyone reconstructing
