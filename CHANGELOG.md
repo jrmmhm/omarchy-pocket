@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-08-30
+
+A full audit of the published plugin against the shell it runs in, and of every
+claim its README and marketplace entry make against what the code does. All of
+it is in
+[decision 0012](docs/decisions/0012-the-audit-of-the-published-plugin.md), which
+owns the measurements.
+
+### Fixed
+
+- **A member could be missing from the bar with nothing to say so.** A widget id
+  is a name, and a few names — `toString`, `constructor`, `valueOf` and four
+  more — are answered by any JavaScript object before anything is put in it.
+  Pocket kept its duplicate check on such an object, so a member with one of
+  those ids was dropped as a duplicate it had never been, and dropped early
+  enough that the tooltip did not mention it either.
+- **The same cause rewrote your `shell.json` and never settled.** With such an
+  id present, the member list could not be put into layout order at all: the
+  comparison it rests on produced no answer, and in Qt's engine — the one the
+  bar runs — the result had no stable form. Pocket concluded the list was out of
+  order for ever and rewrote it into a different wrong order on every bar
+  rebuild. The two engines this code runs in disagree here, which is why the
+  test suite now runs these cases in both; two of them are green on the broken
+  code in the test engine alone.
+- **A `members` entry Pocket could not read at all vanished before anything
+  could name it.** A list of four such entries left the tooltip reporting an
+  empty pocket. They are now named by their position, which is what finds them
+  again in the file.
+- **A renamed `bar.moduleSlots` broke the widget instead of stopping it.** That
+  was the one property of the fifteen it reads that was guarded against a
+  missing bar and not against a missing property, and the tooltip — the surface
+  that exists to explain a pocket that cannot work — was among the things that
+  stopped working. `bar.urgent` had the same gap and is guarded too, so the
+  README's promise now holds for all fifteen.
+
+### Performance
+
+- **The tooltip no longer escapes what it is about to throw away.** The line has
+  always been capped; the work behind it was not, and one oversized entry in
+  `members` cost 111 ms every time the pointer arrived. It now stops at the cap
+  and produces the identical string.
+
+### Documentation
+
+- **The marketplace description contradicted itself.** It said Pocket tucks the
+  widgets "into one slot" one sentence before saying they never leave the bar
+  layout — and keeping their own slots is the entire argument for this plugin
+  over the alternatives.
+- **`SUPER+CTRL+1…9` does not renumber for every member.** The count skips
+  anything without a panel of its own, so tucking away the tray, the workspaces,
+  the indicators or the keyboard layout changes it by nothing. Both the README
+  and decision 0007 claimed otherwise, and 0007 also carried a mechanism for the
+  multi-monitor half that measurement disproves: a widget counts while *any*
+  screen still draws it.
+- Two further sentences the code contradicted: the mark is lit while the pocket
+  is pinned as well as during a drag, and a drag reorders `members` even while
+  an unparseable id is present.
+
 ## [0.3.1] — 2026-08-29
 
 ### Fixed

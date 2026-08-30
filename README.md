@@ -96,8 +96,10 @@ it.
 To reach a member you have to open the pocket first — a hidden widget is not on
 the bar to be grabbed. Point at the mark, then drag.
 
-The mark lights up while a release would change what the pocket holds, so you
-get the answer before you let go rather than an explanation after. It lights in
+While you are dragging, the mark lights up when a release would change what the
+pocket holds, so you get the answer before you let go rather than an explanation
+after. (It is also lit for as long as the pocket is pinned open, which is the
+same light saying something else entirely — see [The mark](#the-mark).) It lights in
 the bar's alert colour while a widget is about to go *in*, and in the colour the
 bar draws its own insertion line in while a member is about to come *out* —
 opposite answers, different roles.
@@ -127,7 +129,9 @@ rewritten when the two disagree — that order is what the fan-out follows, so a
 list that disagrees with the bar animates in a direction that is not there. If
 you write `members` by hand in a different order, expect it back in layout
 order. Ids Pocket could not parse are left exactly where you wrote them, and
-while one of those is present it does not touch the order at all.
+while one of those is present it never rewrites the order *on its own* — a drag
+still does, because a drag is a change you asked for and it has to record where
+the widget went.
 
 ## Settings
 
@@ -193,7 +197,9 @@ things nobody can tell apart.
 
 **Click the mark to pin it open**, click again to release. That is the way out
 of the cases where no leave event is ever coming — a workspace switch that
-teleports the cursor, an application grabbing the pointer.
+teleports the cursor, an application grabbing the pointer. A pinned mark stays
+lit for as long as it is pinned, in the same alert colour a drag uses; the
+tooltip is what tells the two apart, and it says `Pinned` in words.
 
 The pin holds until you click it again or until the bar is rebuilt, and any
 change to the layout rebuilds it: a drop, a member being put back on the right
@@ -220,9 +226,14 @@ Three things change your first hour with it:
   away, whether or not you meant it that way. One drag back out undoes it. With
   the pocket *open* the members are back on the bar, so only the gap against the
   mark itself puts a widget in.
-- **`SUPER+CTRL+1…9` renumbers.** Those bindings open "the Nth panel in the
-  right section" and count only what is *drawn*, so a collapsed pocket shifts
-  the numbering.
+- **`SUPER+CTRL+1…9` renumbers, but only for some members.** Those bindings open
+  "the Nth panel in the right section", and the count skips both what is not
+  *drawn* and anything without a panel of its own. So tucking away the tray, the
+  workspaces, the indicators or the keyboard layout changes the numbering by
+  nothing at all, while tucking away the audio, network or Tailscale widget
+  shifts everything after it. Measured on this bar: with the pocket closed
+  `SUPER+CTRL+1` opened `omarchy.agents`, and with it open the same key opened
+  the first member instead.
 
 <details>
 <summary><b>On more than one monitor</b></summary>
@@ -248,10 +259,11 @@ Three things change your first hour with it:
   which screen it is on drives no slots at all — so it hands them back visible
   and takes them again when the window returns. It happens on a surface that is
   unmapped, so what is left is at most a single frame as it comes back.
-- **`SUPER+CTRL+1…9` additionally depends on where your pointer is.** The count
-  is taken from whichever bar surface answers first, which assumes every monitor
-  draws the same widgets, and a pocket is what breaks that. Counting only what
-  is drawn is deliberate and documented upstream; this half is not. See
+- **`SUPER+CTRL+1…9` counts a widget that any one screen is still drawing.** So
+  a member only leaves the numbering once every screen's pocket is closed, and
+  one pocket standing open anywhere puts it back — measured. Counting only what
+  is drawn is deliberate and documented upstream; counting it across screens is
+  not. See
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 
 </details>
@@ -335,7 +347,7 @@ does not smooth over:
 </details>
 
 The tooltip is where all of this surfaces at runtime — it names every member it
-could not find, could not use, or would not touch.
+could not read, could not find, could not use, or would not touch.
 
 ## Remove
 
