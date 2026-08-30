@@ -341,9 +341,11 @@ check("a rejected id with nothing to escape survives too",
 // One assertion per list, because that is one guard per place: three of four
 // watched failing leaves a fourth that was never watched at all.
 const SMUGGLED = "a<b"
+// The first line here changed with the "Pocket is empty" fix above; what this
+// assertion is for -- that the value reaches the line escaped -- did not.
 check("rejected goes through the boundary",
   Model.describe({ members: [], rejected: [SMUGGLED] }),
-  "Pocket is empty — drag a widget onto it, or set `members` on its bar entry\n" +
+  "Pocket holding nothing — nothing in `members` could be used\n" +
   "Not a widget id: a\\u003cb")
 check("missing goes through the boundary",
   Model.describe({ members: ["a"], missing: [SMUGGLED] }).split("\n")[1],

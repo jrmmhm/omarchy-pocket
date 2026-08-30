@@ -765,8 +765,14 @@ function describe(state) {
 
   if (unknown) {
     lines.push("Pocket cannot tell which screen it is on — it is hiding nothing")
-  } else if (members.length === 0) {
+  } else if (members.length === 0 && rejected.length === 0 && unreadable.length === 0) {
     lines.push("Pocket is empty — drag a widget onto it, or set `members` on its bar entry")
+  } else if (members.length === 0) {
+    // Empty, but not for want of being told. Saying "set `members`" here is
+    // instructing the user to do the thing they have already done, and the
+    // lines below are about to explain why it did not take -- which is the
+    // whole reason unreadableEntries() exists.
+    lines.push("Pocket holding nothing — nothing in `members` could be used")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
   } else if (s.expanded) {

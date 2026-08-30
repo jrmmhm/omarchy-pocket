@@ -234,7 +234,21 @@ BarWidget {
   // Qt delivers no hover at all under a mouse grab, scene coordinates are per
   // window, and a bar surface exists per monitor. Object identity has none of
   // those problems.
-  readonly property var dragSource: bar ? bar.barDragSource : null
+  // `barDragSource` is guarded on the property for the same reason `barSlots`
+  // is, and it was the last one that needed it. Not because anything throws:
+  // because `dragHoldsOpen` below asks `dragSource !== null`, and an undefined
+  // is not null. A host that renamed this symbol made that term true the first
+  // time the pocket opened, `holdOpen` latched, and the fold timer returned
+  // early on every tick for the rest of the session — the pocket stayed fanned
+  // out with no way to close it. Measured against a bar publishing everything
+  // else: `dragHoldsOpen` and `holdOpen` both true with no drag in existence.
+  //
+  // The remaining three drag reads need no guard and are left alone, which is
+  // checkable rather than assumed: `barDragTarget` is only ever read through
+  // `!!` or an identity test against a slot, and `barDragAfter` through
+  // `=== true`, so an undefined cannot survive either; `barDragTargetGeometry`
+  // is read only inside steerDrop(), behind an `in` check.
+  readonly property var dragSource: bar && ("barDragSource" in bar) ? bar.barDragSource : null
   readonly property var dragTarget: bar ? bar.barDragTarget : null
   readonly property bool dragAfter: bar ? bar.barDragAfter === true : false
   readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
@@ -811,7 +825,6 @@ BarWidget {
     // reason `barSlots` above is: a null check answers a missing host, not a
     // renamed symbol, and assigning an undefined to a `color` leaves the button
     // painting whatever it painted last while warning once per evaluation.
-    // These two were the file's last unguarded host reads.
     activeColor: root.dropReleases
       ? Color.accent
       : (root.bar && ("urgent" in root.bar) ? root.bar.urgent : Color.urgent)
