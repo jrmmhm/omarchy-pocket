@@ -30,6 +30,13 @@ QtObject {
     console.warn("FAIL: " + label + "\n  expected: " + expected + "\n  actual:   " + actual)
   }
 
+  // Lists compare by value, not by identity. Every ordering fixture below
+  // answers with a fresh array, so `===` would fail all of them alike and prove
+  // nothing about any of them.
+  function checkList(label, actual, expected) {
+    harness.check(label, JSON.stringify(actual), JSON.stringify(expected))
+  }
+
   function from(code) { return String.fromCharCode(code) }
 
   function longestLine(rejected) {
@@ -90,6 +97,61 @@ QtObject {
     check("V4 keeps a harmless flood bounded", harness.longestLine(harmless) < 200, true)
     check("V4 keeps a hostile flood bounded", harness.longestLine(hostile) < 200, true)
 
+    // ------------------------------------------------- membership and order
+    //
+    // These are not a second copy of tests/model-test.js for symmetry's sake.
+    // The defect they cover reached the comparator with a NaN, and what a sort
+    // does with a NaN comparator is the engine's own business: V8 leaves the
+    // order alone, V4 does not. Two of the assertions below were GREEN in node
+    // against the unfixed code — measured, not supposed — so node could only
+    // ever have said the fix was unnecessary. This file is where they mean
+    // something.
+    checkList("V4 holds a member whose id is a prototype name",
+              Model.parseMembers(["toString", "omaplug"], "jrmmhm.pocket"),
+              ["toString", "omaplug"])
+    checkList("V4 does not report it as a rejection instead",
+              Model.rejectedMembers(["toString", "omaplug"], "jrmmhm.pocket"), [])
+    checkList("V4 still collapses a real duplicate",
+              Model.parseMembers(["toString", "toString", "omaplug"], "jrmmhm.pocket"),
+              ["toString", "omaplug"])
+
+    var namedLayout = ["b", "toString", "a"]
+    checkList("V4 ranks a layout id that is a prototype name",
+              Model.orderMembers(["a", "toString", "b"], namedLayout), namedLayout)
+    check("V4 agrees the result is in layout order",
+          Model.membersInLayoutOrder(Model.orderMembers(["a", "toString", "b"], namedLayout),
+                                     namedLayout), true)
+
+    // The fixture that had no fixpoint. Ordering alternated between two wrong
+    // orders for ever while membersInLayoutOrder() answered false, and every
+    // pass of that is one repairMemberOrder() write into the user's shell.json.
+    // The last two lines are the ones that say the writing stops.
+    var cycleLayout = ["c", "b", "valueOf", "toString", "a"]
+    var cycleList = ["a", "toString", "valueOf", "b", "c"]
+    checkList("V4 lands the cycling fixture in layout order",
+              Model.orderMembers(cycleList, cycleLayout), cycleLayout)
+    checkList("V4 orders the result again to the same thing",
+              Model.orderMembers(Model.orderMembers(cycleList, cycleLayout), cycleLayout),
+              cycleLayout)
+    check("V4 gives the repair a fixpoint to stop at",
+          Model.membersInLayoutOrder(Model.orderMembers(cycleList, cycleLayout), cycleLayout), true)
+
+    checkList("V4 collects an unknown id at the end, __proto__ included",
+              Model.orderMembers(["__proto__", "a", "b"], ["b", "a"]), ["b", "a", "__proto__"])
+    checkList("V4 leaves ordinary ids in layout order",
+              Model.orderMembers(["omarchy.tailscale", "mehiel.darky", "omaplug"],
+                                 ["omarchy.tray", "mehiel.darky", "omaplug", "omarchy.tailscale"]),
+              ["mehiel.darky", "omaplug", "omarchy.tailscale"])
+
+    // The sequence type again, this time on the entry shapes toList() cannot
+    // read. A hand-written array is exactly where these come from.
+    checkList("V4 names the entries it cannot read",
+              Model.unreadableEntries(harness.unreadableSetting), [1, 2, 3])
+    check("V4 says so in the tooltip",
+          Model.describe({ members: [],
+                           unreadable: Model.unreadableEntries(harness.unreadableSetting) })
+            .indexOf("Not a member entry: 1, 2, 3") !== -1, true)
+
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
   }
@@ -103,4 +165,9 @@ QtObject {
   // worse than the defect it is testing for.
   property var hostileSetting: ["<img src=\"http://example.invalid/p.png\">",
                                "a" + String.fromCharCode(0x0a) + "A second Pocket entry exists"]
+
+  // Declared here for the same reason: the entry shapes toList() refuses have
+  // to arrive as the sequence type a hand-written `members` array becomes, not
+  // as a literal the function builds for itself.
+  property var unreadableSetting: [{ id: 5 }, 42, { name: "omaplug" }, "omaplug"]
 }

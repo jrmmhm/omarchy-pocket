@@ -96,8 +96,10 @@ it.
 To reach a member you have to open the pocket first — a hidden widget is not on
 the bar to be grabbed. Point at the mark, then drag.
 
-The mark lights up while a release would change what the pocket holds, so you
-get the answer before you let go rather than an explanation after. It lights in
+While you are dragging, the mark lights up when a release would change what the
+pocket holds, so you get the answer before you let go rather than an explanation
+after. (It is also lit for as long as the pocket is pinned open, which is the
+same light saying something else entirely — see [The mark](#the-mark).) It lights in
 the bar's alert colour while a widget is about to go *in*, and in the colour the
 bar draws its own insertion line in while a member is about to come *out* —
 opposite answers, different roles.
@@ -126,8 +128,11 @@ The `members` list is kept in the order the widgets physically sit in, and
 rewritten when the two disagree — that order is what the fan-out follows, so a
 list that disagrees with the bar animates in a direction that is not there. If
 you write `members` by hand in a different order, expect it back in layout
-order. Ids Pocket could not parse are left exactly where you wrote them, and
-while one of those is present it does not touch the order at all.
+order. An id Pocket could not parse is kept rather than deleted, and while one
+is present Pocket never rewrites the order *on its own*. A drag still does,
+because a drag is a change you asked for and it has to record where the widget
+went — and an unparsed id has no place on the bar to be sorted against, so it
+collects at the end of the list when that happens.
 
 ## Settings
 
@@ -193,7 +198,9 @@ things nobody can tell apart.
 
 **Click the mark to pin it open**, click again to release. That is the way out
 of the cases where no leave event is ever coming — a workspace switch that
-teleports the cursor, an application grabbing the pointer.
+teleports the cursor, an application grabbing the pointer. A pinned mark stays
+lit for as long as it is pinned, in the same alert colour a drag uses; the
+tooltip is what tells the two apart, and it says `Pinned` in words.
 
 The pin holds until you click it again or until the bar is rebuilt, and any
 change to the layout rebuilds it: a drop, a member being put back on the right
@@ -220,9 +227,14 @@ Three things change your first hour with it:
   away, whether or not you meant it that way. One drag back out undoes it. With
   the pocket *open* the members are back on the bar, so only the gap against the
   mark itself puts a widget in.
-- **`SUPER+CTRL+1…9` renumbers.** Those bindings open "the Nth panel in the
-  right section" and count only what is *drawn*, so a collapsed pocket shifts
-  the numbering.
+- **`SUPER+CTRL+1…9` renumbers, but only for some members.** Those bindings open
+  "the Nth panel in the right section", and the count skips both what is not
+  *drawn* and anything without a panel of its own. So tucking away the tray, the
+  workspaces, the indicators or the keyboard layout changes the numbering by
+  nothing at all, while tucking away the audio, network or Tailscale widget
+  shifts everything after it. Which widgets fall on which side of that is
+  measured in
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 
 <details>
 <summary><b>On more than one monitor</b></summary>
@@ -248,10 +260,11 @@ Three things change your first hour with it:
   which screen it is on drives no slots at all — so it hands them back visible
   and takes them again when the window returns. It happens on a surface that is
   unmapped, so what is left is at most a single frame as it comes back.
-- **`SUPER+CTRL+1…9` additionally depends on where your pointer is.** The count
-  is taken from whichever bar surface answers first, which assumes every monitor
-  draws the same widgets, and a pocket is what breaks that. Counting only what
-  is drawn is deliberate and documented upstream; this half is not. See
+- **`SUPER+CTRL+1…9` counts a widget that any one screen is still drawing.** So
+  a member only leaves the numbering once every screen's pocket is closed, and
+  one pocket standing open anywhere puts it back. Counting across screens is
+  documented upstream — but its stated reason is that every monitor draws the
+  same widgets, and a pocket is what makes that untrue. See
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 
 </details>
@@ -335,7 +348,10 @@ does not smooth over:
 </details>
 
 The tooltip is where all of this surfaces at runtime — it names every member it
-could not find, could not use, or would not touch.
+could not find, could not use, or would not touch. An entry it could not read at
+all has no id to name, so it is reported by its position in the list instead:
+`Not a member entry: 1, 3` means the first and third things in `members` are not
+a widget id and not `{ "id": … }` either.
 
 ## Remove
 
@@ -360,13 +376,18 @@ qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
 `Model.js` holds everything decidable without a running shell and is unit-tested
-with `node`; `BarWidget.qml` keeps only what needs live objects. Most of that
-second half needs a real bar and is covered by using it, but two pieces of it
-are not: `tests/qml/` loads `BarWidget.qml` in Quickshell against an object that
-is not a bar, and pins the drop steering — which fails silently in both
-directions it can fail — and the membership a drag is decided against. It runs
-as part of `tests/run.sh` and skips itself where Quickshell or an Omarchy shell
-is absent, which is every CI runner.
+with `node` — and, because Qt's own JavaScript engine answers differently where
+it matters, in that engine too. A green `node` run is half the answer here, not
+the whole one: two assertions in this suite pass in `node` against code the bar
+would break on.
+
+`BarWidget.qml` keeps only what needs live objects. Most of that needs a real
+bar and is covered by using it, but three pieces are not: `tests/qml/` loads
+`BarWidget.qml` in Quickshell against objects that are not bars, and pins the
+drop steering — which fails silently in both directions it can fail — the
+membership a drag is decided against, and how the widget degrades when the host
+stops publishing a symbol it reads. It runs as part of `tests/run.sh` and skips
+itself where Quickshell or an Omarchy shell is absent, which is every CI runner.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

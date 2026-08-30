@@ -35,6 +35,12 @@ BarWidget {
   readonly property var memberIds: Model.parseMembers(setting("members", ""), root.moduleName)
   readonly property var rejectedIds: Model.rejectedMembers(setting("members", ""), root.moduleName)
 
+  // Positions of entries the parser could not read at all. They are dropped
+  // inside toList(), which runs before rejectedIds can see anything, so without
+  // this a `members` list made only of them left the tooltip reporting an empty
+  // pocket to someone who had configured four widgets.
+  readonly property var unreadableAt: Model.unreadableEntries(setting("members", ""))
+
   // ------------------------------------------------------------- identity
 
   // The bar exists once per monitor and every surface's slots land in the same
@@ -70,12 +76,12 @@ BarWidget {
 
   // ----------------------------------------------------------- resolution
 
-  // Reading `bar.moduleSlots` and `bar.centerAnchor` inside the binding is what
-  // makes this reactive: the array is replaced on every register/unregister, so
-  // a layout rebuild — which destroys and recreates every slot — re-runs this
-  // and lets apply() re-assert the tucked state the rebuild reset.
+  // Reading `barSlots` and `bar.centerAnchor` inside the binding is what makes
+  // this reactive: the array is replaced on every register/unregister, so a
+  // layout rebuild — which destroys and recreates every slot — re-runs this and
+  // lets apply() re-assert the tucked state the rebuild reset.
   readonly property var resolution: {
-    var slots = bar ? bar.moduleSlots : []
+    var slots = root.barSlots
     var ids = root.memberIds
     var anchor = root.anchorId
     var mine = root.ownWindow
@@ -122,7 +128,7 @@ BarWidget {
   // here. Identity against this object is also what makes the drop rule below
   // correct on a multi-monitor bar without mapping a single coordinate.
   readonly property var ownSlot: {
-    var slots = bar ? bar.moduleSlots : []
+    var slots = root.barSlots
     for (var i = 0; i < slots.length; i++) {
       if (slots[i] && slots[i].activeItem === root) return slots[i]
     }
@@ -136,6 +142,24 @@ BarWidget {
   // The layout as the bar holds it, which is the only honest answer to "how
   // many pockets are there". Guarded because a custom bar need not have it.
   readonly property var barLayout: bar && ("layoutConfig" in bar) ? bar.layoutConfig : null
+
+  // Every module slot the bar has registered, on every one of its surfaces.
+  //
+  // Guarded like `barLayout` above, and read through one property rather than
+  // at each of the three places that want it, because it was the one host
+  // property this file took on trust. `bar ? bar.moduleSlots : []` guards a
+  // null bar and not a renamed property, so a host without it handed `slots.length`
+  // an undefined: measured against a bar publishing all fourteen other symbols,
+  // five TypeErrors per evaluation — `resolution` and `ownSlot` directly, then
+  // `memberHovered`, `apply()` and the tooltip through them. The tooltip is the
+  // one surface that exists to explain a pocket that cannot work, and it was the
+  // one that went dark. The README promises a renamed property stops a feature
+  // rather than breaking one; for this property it did not.
+  //
+  // Still reactive: the array is replaced on every register and unregister, so
+  // a binding that reads this property re-runs exactly as one reading
+  // `bar.moduleSlots` did.
+  readonly property var barSlots: bar && bar.moduleSlots ? bar.moduleSlots : []
 
   function layoutIds(region) {
     var entries = root.barLayout ? root.barLayout[region] : null
@@ -210,7 +234,21 @@ BarWidget {
   // Qt delivers no hover at all under a mouse grab, scene coordinates are per
   // window, and a bar surface exists per monitor. Object identity has none of
   // those problems.
-  readonly property var dragSource: bar ? bar.barDragSource : null
+  // `barDragSource` is guarded on the property for the same reason `barSlots`
+  // is, and it was the last one that needed it. Not because anything throws:
+  // because `dragHoldsOpen` below asks `dragSource !== null`, and an undefined
+  // is not null. A host that renamed this symbol made that term true the first
+  // time the pocket opened, `holdOpen` latched, and the fold timer returned
+  // early on every tick for the rest of the session — the pocket stayed fanned
+  // out with no way to close it. Measured against a bar publishing everything
+  // else: `dragHoldsOpen` and `holdOpen` both true with no drag in existence.
+  //
+  // The remaining three drag reads need no guard and are left alone, which is
+  // checkable rather than assumed: `barDragTarget` is only ever read through
+  // `!!` or an identity test against a slot, and `barDragAfter` through
+  // `=== true`, so an undefined cannot survive either; `barDragTargetGeometry`
+  // is read only inside steerDrop(), behind an `in` check.
+  readonly property var dragSource: bar && ("barDragSource" in bar) ? bar.barDragSource : null
   readonly property var dragTarget: bar ? bar.barDragTarget : null
   readonly property bool dragAfter: bar ? bar.barDragAfter === true : false
   readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
@@ -268,7 +306,7 @@ BarWidget {
   // steering, and stops there.
   readonly property var slotBeforeSelf: {
     var ids = root.layoutIds(root.ownRegion)
-    var slots = bar ? bar.moduleSlots : []
+    var slots = root.barSlots
     var mine = root.ownWindow
     var last = null
     // A slot answers for one layout entry and then steps aside. The host lets
@@ -769,9 +807,13 @@ BarWidget {
   BarIconButton {
     id: button
     bar: root.bar
-    // Lit while a release would change what the pocket holds — the answer given
-    // before the drop, not explained after it. The same predicates decide the
-    // write, so the light cannot promise something the drop then refuses.
+    // Lit in two unrelated situations, and the older comment here named only
+    // one of them. While a drag is running it is the answer to "would letting
+    // go change what the pocket holds", given before the drop rather than
+    // explained after it, and the same predicates decide the write, so the
+    // light cannot promise something the drop then refuses. With no drag at
+    // all it means the pocket is pinned open — a state the user asked for by
+    // clicking, and the tooltip names it in words.
     active: root.pinned || root.dropArmed || root.dropReleases
     // Two answers, two colours, because they are opposite answers and the
     // difference is the whole gesture: taking a widget in keeps the colour the
@@ -779,7 +821,13 @@ BarWidget {
     // Bar.qml paints its own insertion line in — the line the user is looking
     // at while the pocket decides. A theme whose accent is its bar text reads
     // that state as unlit, which is the state it replaced.
-    activeColor: root.dropReleases ? Color.accent : (root.bar ? root.bar.urgent : Color.urgent)
+    // `urgent` is guarded on the property and not only on the bar, for the
+    // reason `barSlots` above is: a null check answers a missing host, not a
+    // renamed symbol, and assigning an undefined to a `color` leaves the button
+    // painting whatever it painted last while warning once per evaluation.
+    activeColor: root.dropReleases
+      ? Color.accent
+      : (root.bar && ("urgent" in root.bar) ? root.bar.urgent : Color.urgent)
     // Deliberately not the stock tray's chevron: the tray sits in the same
     // section doing a visually similar thing, and two identical glyphs side by
     // side are two things a user cannot tell apart. Dots read as "there is more
@@ -797,7 +845,8 @@ BarWidget {
     // markup. Nothing assigned here may depend on that decision.
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
-      rejected: root.rejectedIds, missing: root.resolution.missing,
+      rejected: root.rejectedIds, unreadable: root.unreadableAt,
+      missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
       duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown
     })

@@ -244,6 +244,45 @@ is a consequence of the same mistake this file is about, found while checking
 the reference, and it is left where it was found rather than opened as a third
 report.
 
+> **Corrected 2026-08-30 by [0012](0012-the-audit-of-the-published-plugin.md),
+> which measured what this paragraph reasoned about.** Three things above are
+> wrong, and they are the three this file's own closing rule warns against.
+>
+> **"The other half is not documented" is false.** `Bar.qml` documents it
+> directly above `panelWidgetIdAt()`: "Counting any bar surface is enough: every
+> monitor lays its bar out from the one layout, and summoning the id routes
+> through pickPanelSlot, which opens the focused monitor's copy whichever
+> surface was counted." What is undocumented is not the counting but its
+> premise — a pocket is what makes "every monitor lays its bar out from the one
+> layout" untrue on screen, and the comment does not consider that. The next
+> paragraph of this file says as much and then contradicts itself.
+>
+> **"Which surface answers decides the number" does not follow.**
+> `panelWidgetIdAt()` returns `slot.moduleName`, which is the same id whichever
+> surface supplied it. The loop is per layout entry, not per surface: for each
+> entry it takes the first slot anywhere that is drawn, so what varies is only
+> whether an entry is counted **at all**. The rule is that a widget counts while
+> **any** screen still draws it, and a member therefore leaves the numbering
+> only once every screen's pocket is closed. Measured live on the two outputs
+> named in 0012: with the focused screen's pocket open and the other's closed,
+> `SUPER+CTRL+1` resolved to a member (`omaplug`) rather than past it; with both
+> closed the same key resolved to `omarchy.agents`.
+>
+> **And the paragraph omits the term that dominates the whole caveat.**
+> `panelNavigationSlots()` also requires `typeof item.open === "function"`,
+> `typeof item.close === "function"` and `item.opened !== undefined` — so a
+> widget with no panel of its own is never counted, drawn or not. Measured
+> against the installed shell: none of `widgets/ActiveWindow.qml`,
+> `Indicators.qml`, `KeyboardLayout.qml`, `Microphone.qml`, `Spacer.qml`,
+> `SystemUpdate.qml`, `Tray.qml` (which has `close()` alone) or `Workspaces.qml`
+> defines the set, and neither does this plugin. Tucking any of those away
+> changes the numbering by exactly nothing, on any number of screens, which is
+> the opposite of what the README built on this paragraph used to say. This
+> list is owned here; the README and the CHANGELOG name it.
+>
+> The upstream recommendation is unaffected: it was about
+> `moduleClickTargetAt`, and nothing here touches it.
+
 **Two reports go upstream, neither of them yet filed.** Neither limit is
 reported in `basecamp/omarchy`, open or closed, and no PR addresses either. The
 drafts are held for approval; nothing has been posted.
