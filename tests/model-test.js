@@ -474,6 +474,20 @@ check("the line goes through the boundary like every other",
   Model.describe({ members: [], unreadable: ["a<b"] }).split("\n")[1],
   "Not a member entry: a\\u003cb")
 
+// Appending the explanation is only half the fix. "Pocket is empty — drag a
+// widget onto it, or set `members`" is an instruction to do the thing the user
+// has already done, and it is the sentence the whole change exists because of.
+// It now speaks only for a pocket nobody has configured.
+check("a pocket nobody configured still says so",
+  Model.describe({ members: [] }).split("\n")[0],
+  "Pocket is empty — drag a widget onto it, or set `members` on its bar entry")
+check("one that was configured and could not be read does not",
+  Model.describe({ members: [], unreadable: [1, 2, 3, 4] }).split("\n")[0],
+  "Pocket holding nothing — nothing in `members` could be used")
+check("and neither does one whose entries were all refused",
+  Model.describe({ members: [], rejected: ["../evil"] }).split("\n")[0],
+  "Pocket holding nothing — nothing in `members` could be used")
+
 // The boundary belongs to the tooltip and to nothing else. Every write path
 // reads the raw setting through toList(), so a value that was escaped for
 // display must never be what gets written back to shell.json.
@@ -557,6 +571,28 @@ check("and it is still reported as a rejection",
   Model.rejectedMembers(["__proto__"], SELF), ["__proto__"])
 check("as an unknown id it collects at the end like any other",
   Model.orderMembers(["__proto__", "a", "b"], ["b", "a"]), ["b", "a", "__proto__"])
+
+// Two properties the rewrite now rests on and nothing else states. The lookup
+// object answered both by accident -- an empty key was never inserted, and the
+// `!(key in rank)` guard kept the first index of a repeated one -- so they have
+// to be asserted now that a linear scan answers them on purpose.
+//
+// The empty-id guard is load-bearing rather than defensive: without it, a
+// fuzz over 200000 (list, layout) pairs drawn from an alphabet that includes
+// the empty string disagrees with the shipped behaviour 12301 times, because
+// an empty member id would match an empty layout entry and rank on a slot that
+// names nothing.
+check("an empty member id is unknown, not matched against an empty layout entry",
+  Model.orderMembers(["", "a"], ["", "a"]), ["a", ""])
+check("an empty id among knowns still collects at the end",
+  Model.orderMembers(["b", "", "a"], ["a", "b"]), ["a", "b", ""])
+// A widget the host allows more than once appears twice in the layout, and the
+// members ordered against it have to rank on the FIRST of them -- the last
+// would put the run's near end at its far end.
+check("a repeated layout id ranks on its first position",
+  Model.orderMembers(["b", "a"], ["a", "b", "a"]), ["a", "b"])
+check("and a member of that repeated id ranks there too",
+  Model.orderMembers(["c", "a"], ["a", "b", "a", "c"]), ["a", "c"])
 
 check("an empty layout leaves everything where it was",
   Model.orderMembers(["b", "a"], []), ["b", "a"])

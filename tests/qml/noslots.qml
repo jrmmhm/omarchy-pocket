@@ -50,11 +50,12 @@ QtObject {
     harness.check(label, value, expected)
   }
 
-  // A bar with everything the pocket reads except `moduleSlots` and `urgent`.
-  // Both are absent rather than null, which is what a rename looks like from
-  // in here.
+  // A bar with everything the pocket reads except the three it guards on the
+  // property: `moduleSlots`, `urgent` and `barDragSource`. Absent rather than
+  // null, which is what a rename looks like from in here — and the distinction
+  // matters: an earlier version of this file declared `barDragSource: null` and
+  // was therefore blind to the one defect that latched the pocket open.
   property QtObject blindBar: QtObject {
-    property var barDragSource: null
     property var barDragTarget: null
     property var barDragTargetGeometry: null
     property bool barDragAfter: false
@@ -84,7 +85,11 @@ QtObject {
     property Pk.BarWidget pocketItem: Pk.BarWidget {
       parent: win.contentItem
       bar: harness.blindBar
-      settings: ({ members: "omarchy.audio, omarchy.network" })
+      // An array, and one entry of it deliberately unreadable, so this harness
+      // also pins the half of that fix the node suite cannot reach: the widget
+      // handing `unreadableAt` to the tooltip. Removing that one line left the
+      // whole suite green.
+      settings: ({ members: ["omarchy.audio", "omarchy.network", 42] })
     }
   }
 
@@ -128,11 +133,32 @@ QtObject {
           function () { return p.children[0].tooltipText.indexOf("omarchy.audio, omarchy.network") !== -1 },
           true)
 
+    // The unreadable entry, end to end: the widget has to hand its positions to
+    // the tooltip, which is a line of QML the node suite cannot see.
+    probe("the widget counts the entry it cannot read",
+          function () { return JSON.stringify(p.unreadableAt) }, "[3]")
+    probe("and the tooltip says so",
+          function () { return p.children[0].tooltipText.indexOf("Not a member entry: 3") !== -1 },
+          true)
+
     // The other unguarded read. With `urgent` absent the button must fall back
     // to the theme's own colour rather than be handed an undefined.
     probe("the mark keeps a real colour",
           function () { return p.children[0].activeColor.toString() },
           Color.urgent.toString())
+
+    // The third, and the one that did not throw but latched. `dragHoldsOpen`
+    // asks `dragSource !== null`, and an undefined is not null: a host that
+    // renamed `barDragSource` made that true the first time the pocket opened,
+    // `holdOpen` stuck, and the fold timer returned early for the rest of the
+    // session. Asserted after opening it, because that is the state the defect
+    // needs and a closed pocket cannot show it.
+    p.expanded = true
+    probe("a missing drag source does not hold the pocket open",
+          function () { return p.dragHoldsOpen }, false)
+    probe("so nothing is holding it open at all",
+          function () { return p.holdOpen }, false)
+    p.expanded = false
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)

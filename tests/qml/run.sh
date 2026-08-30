@@ -86,9 +86,16 @@ for name in $CASES; do
   # exactly the shape the noslots case exists to catch. Scoped to this plugin's
   # own file, because the harness deliberately hands the host objects that are
   # not bars and the host may complain about them without anything being wrong.
-  if printf '%s\n' "$output" | grep -q "@plugin/.*: TypeError"; then
+  # Every error class, not TypeError alone: a binding that throws a
+  # ReferenceError leaves the same stale value behind and used to pass. Matched
+  # on "Error" rather than on the whole line, because Qt's wording is not ours
+  # to depend on. It does not catch a warning -- "Unable to assign [undefined]
+  # to QColor" carries no Error -- and that is deliberate: the fake bars here
+  # omit host properties on purpose, so warnings are expected and only the
+  # assertions may judge them.
+  if printf '%s\n' "$output" | grep -qE "@plugin/.*Error"; then
     echo "QML FAILED ($name: the plugin threw)"
-    printf '%s\n' "$output" | grep "@plugin/.*: TypeError" | head -5
+    printf '%s\n' "$output" | grep -E "@plugin/.*Error" | head -5
     status=1
     continue
   fi
