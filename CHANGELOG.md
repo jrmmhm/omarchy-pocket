@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **The releases this file names are now tagged.** `0.3.1` and `0.3.2` went
+  out without a git ref, so three of the six version references here
+  answered 404 while the versions themselves were on every install and on
+  the marketplace. Nothing in the plugin changed, and no installed pocket
+  receives a tag — Omarchy's plugin commands read `origin HEAD` and nothing
+  else. What was measured, why the two were tagged rather than retracted
+  into this section, and what the marketplace listing still says are in
+  [decision 0013](docs/decisions/0013-the-releases-that-were-written-but-not-tagged.md).
+
 ## [0.3.2] — 2026-08-30
 
 A full audit of the published plugin against the shell it runs in, and of every
