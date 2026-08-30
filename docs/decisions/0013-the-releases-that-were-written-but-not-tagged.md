@@ -131,9 +131,13 @@ submission inspection and never published on a card.
 
 **The one open action, named so it is not rediscovered.** The marketplace's
 `verify-plugin.yml` issue form, option *Verify and publish a newer
-upstream commit*, with the plugin id, the repository root URL and the full
-commit `f6a9405d0dc30ee08c7eac1c05574393d8450342`. It is also the only
-thing that triggers the incremental build the release field needs.
+upstream commit*, with the plugin id, the repository root URL and the
+forty-character SHA of `main` as it stands at the moment of filing. That
+SHA is read then and never copied from here: the form binds to the exact
+commit it names, this file names none, and nothing may be pushed between
+reading it and submitting — a commit landing in that gap re-creates the
+mismatch the submission exists to close. Filing is also the only thing
+that triggers the incremental build the release field needs.
 
 ## Consequences
 
