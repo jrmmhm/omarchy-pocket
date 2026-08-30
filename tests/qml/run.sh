@@ -51,10 +51,10 @@ ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
 # shell that costs us the neighbourhood sweep must not silently cost us this one
 # too. A case that quietly stops running is the kind of green tests/run.sh warns
 # about in its own header.
-CASES="model steer steer-readonly neighbourhood"
+CASES="model steer steer-readonly noslots neighbourhood"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="model steer steer-readonly"
+  CASES="model steer steer-readonly noslots"
 fi
 
 status=0
@@ -67,7 +67,7 @@ for name in $CASES; do
   # none and keep the platform they were written for.
   #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
-  if [ "$name" = "neighbourhood" ]; then
+  if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ]; then
     output="$(QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
     output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
@@ -76,6 +76,19 @@ for name in $CASES; do
   if printf '%s\n' "$output" | grep -q "Binding loop"; then
     echo "QML FAILED ($name: the engine reported a binding loop)"
     printf '%s\n' "$output" | grep "Binding loop" | head -3
+    status=1
+    continue
+  fi
+
+  # A thrown binding is not a failed assertion. Qt leaves the property at its
+  # last value and prints the TypeError to stderr, so a case can assert a stale
+  # but plausible value and pass while the widget is in fact broken -- which is
+  # exactly the shape the noslots case exists to catch. Scoped to this plugin's
+  # own file, because the harness deliberately hands the host objects that are
+  # not bars and the host may complain about them without anything being wrong.
+  if printf '%s\n' "$output" | grep -q "@plugin/.*: TypeError"; then
+    echo "QML FAILED ($name: the plugin threw)"
+    printf '%s\n' "$output" | grep "@plugin/.*: TypeError" | head -5
     status=1
     continue
   fi
