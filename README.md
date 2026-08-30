@@ -128,10 +128,11 @@ The `members` list is kept in the order the widgets physically sit in, and
 rewritten when the two disagree — that order is what the fan-out follows, so a
 list that disagrees with the bar animates in a direction that is not there. If
 you write `members` by hand in a different order, expect it back in layout
-order. Ids Pocket could not parse are left exactly where you wrote them, and
-while one of those is present it never rewrites the order *on its own* — a drag
-still does, because a drag is a change you asked for and it has to record where
-the widget went.
+order. An id Pocket could not parse is kept rather than deleted, and while one
+is present Pocket never rewrites the order *on its own*. A drag still does,
+because a drag is a change you asked for and it has to record where the widget
+went — and an unparsed id has no place on the bar to be sorted against, so it
+collects at the end of the list when that happens.
 
 ## Settings
 
@@ -231,9 +232,9 @@ Three things change your first hour with it:
   *drawn* and anything without a panel of its own. So tucking away the tray, the
   workspaces, the indicators or the keyboard layout changes the numbering by
   nothing at all, while tucking away the audio, network or Tailscale widget
-  shifts everything after it. Measured on this bar: with the pocket closed
-  `SUPER+CTRL+1` opened `omarchy.agents`, and with it open the same key opened
-  the first member instead.
+  shifts everything after it. Which widgets fall on which side of that is
+  measured in
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 
 <details>
 <summary><b>On more than one monitor</b></summary>
@@ -261,9 +262,9 @@ Three things change your first hour with it:
   unmapped, so what is left is at most a single frame as it comes back.
 - **`SUPER+CTRL+1…9` counts a widget that any one screen is still drawing.** So
   a member only leaves the numbering once every screen's pocket is closed, and
-  one pocket standing open anywhere puts it back — measured. Counting only what
-  is drawn is deliberate and documented upstream; counting it across screens is
-  not. See
+  one pocket standing open anywhere puts it back. Counting across screens is
+  documented upstream — but its stated reason is that every monitor draws the
+  same widgets, and a pocket is what makes that untrue. See
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 
 </details>
@@ -347,7 +348,10 @@ does not smooth over:
 </details>
 
 The tooltip is where all of this surfaces at runtime — it names every member it
-could not read, could not find, could not use, or would not touch.
+could not find, could not use, or would not touch. An entry it could not read at
+all has no id to name, so it is reported by its position in the list instead:
+`Not a member entry: 1, 3` means the first and third things in `members` are not
+a widget id and not `{ "id": … }` either.
 
 ## Remove
 
@@ -372,13 +376,18 @@ qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
 `Model.js` holds everything decidable without a running shell and is unit-tested
-with `node`; `BarWidget.qml` keeps only what needs live objects. Most of that
-second half needs a real bar and is covered by using it, but two pieces of it
-are not: `tests/qml/` loads `BarWidget.qml` in Quickshell against an object that
-is not a bar, and pins the drop steering — which fails silently in both
-directions it can fail — and the membership a drag is decided against. It runs
-as part of `tests/run.sh` and skips itself where Quickshell or an Omarchy shell
-is absent, which is every CI runner.
+with `node` — and, because Qt's own JavaScript engine answers differently where
+it matters, in that engine too. A green `node` run is half the answer here, not
+the whole one: two assertions in this suite pass in `node` against code the bar
+would break on.
+
+`BarWidget.qml` keeps only what needs live objects. Most of that needs a real
+bar and is covered by using it, but three pieces are not: `tests/qml/` loads
+`BarWidget.qml` in Quickshell against objects that are not bars, and pins the
+drop steering — which fails silently in both directions it can fail — the
+membership a drag is decided against, and how the widget degrades when the host
+stops publishing a symbol it reads. It runs as part of `tests/run.sh` and skips
+itself where Quickshell or an Omarchy shell is absent, which is every CI runner.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

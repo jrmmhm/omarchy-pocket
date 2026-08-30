@@ -34,20 +34,23 @@ owns the measurements.
 - **A `members` entry Pocket could not read at all vanished before anything
   could name it.** A list of four such entries left the tooltip reporting an
   empty pocket. They are now named by their position, which is what finds them
-  again in the file.
-- **A renamed `bar.moduleSlots` broke the widget instead of stopping it.** That
-  was the one property of the fifteen it reads that was guarded against a
-  missing bar and not against a missing property, and the tooltip — the surface
-  that exists to explain a pocket that cannot work — was among the things that
-  stopped working. `bar.urgent` had the same gap and is guarded too, so the
-  README's promise now holds for all fifteen.
+  again in the file — and the first line no longer tells a user who configured
+  four widgets to go and configure some.
+- **Three of the fifteen host properties Pocket reads were guarded against a
+  missing bar and not against a renamed symbol.** `bar.moduleSlots` was the
+  worst: the widget threw on every evaluation instead of standing down, and the
+  tooltip — the surface that exists to explain a pocket that cannot work — was
+  among what stopped working. `bar.barDragSource` was the subtlest: nothing
+  threw, but the pocket would have stayed fanned out for the rest of the
+  session with no way to close it. `bar.urgent` was the mildest. All three are
+  guarded now, and the README's promise holds for the whole set.
 
 ### Performance
 
 - **The tooltip no longer escapes what it is about to throw away.** The line has
-  always been capped; the work behind it was not, and one oversized entry in
-  `members` cost 111 ms every time the pointer arrived. It now stops at the cap
-  and produces the identical string.
+  always been capped; the work behind it was not, so one oversized entry in
+  `members` cost real time every time the pointer arrived. It now stops at the
+  cap and produces the identical string.
 
 ### Documentation
 
@@ -56,11 +59,11 @@ owns the measurements.
   layout — and keeping their own slots is the entire argument for this plugin
   over the alternatives.
 - **`SUPER+CTRL+1…9` does not renumber for every member.** The count skips
-  anything without a panel of its own, so tucking away the tray, the workspaces,
-  the indicators or the keyboard layout changes it by nothing. Both the README
-  and decision 0007 claimed otherwise, and 0007 also carried a mechanism for the
-  multi-monitor half that measurement disproves: a widget counts while *any*
-  screen still draws it.
+  anything without a panel of its own, which is most of the simple bar widgets.
+  Both the README and decision 0007 claimed otherwise, and 0007 also carried a
+  mechanism for the multi-monitor half that measurement disproves: a widget
+  counts while *any* screen still draws it. Which widgets those are is measured
+  in decision 0007.
 - Two further sentences the code contradicted: the mark is lit while the pocket
   is pinned as well as during a drag, and a drag reorders `members` even while
   an unparseable id is present.
@@ -291,7 +294,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.2.0

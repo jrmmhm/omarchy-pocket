@@ -15,10 +15,11 @@ plugin against the host it runs in — security, edge cases, compatibility — a
 of every claim the README and `manifest.json` make against what the code does.
 
 Everything below was measured on this machine: Omarchy 4.0.1 as installed,
-Quickshell 0.3.1, Qt 6.11.2, node 26.2, two outputs (eDP-1 at x=0, scale 1.667;
-HDMI-A-1 at x=1152, scale 2.4). Where a number appears it was taken here and it
-lives here; the README and the CHANGELOG name this file rather than restating
-it.
+Quickshell 0.3.1, Qt 6.11.2, node 26.2, and **two** outputs — eDP-1 at x=0,
+scale 1.667, and HDMI-A-1 at x=1152, scale 2.4. Two, where 0007's own `e2`–`e9`
+had three; a claim carried over from that file must not inherit its output
+count. Where a number appears it was taken here and it lives here; the README
+and the CHANGELOG name this file rather than restating it.
 
 ### What was checked and found sound
 
@@ -31,6 +32,21 @@ still correct: `Bar.qml`'s tooltip `Text` sets neither `textFormat` nor
 only this plugin's own `members` key, and move only one member entry. That this
 is not a privilege boundary — anyone who can write `members` can write `exec`
 on the same entry — is stated correctly in the CHANGELOG and needs no revision.
+
+Read in full and producing no finding, named rather than waved at, so that
+"complete" is a claim someone can check: `entryIdOf`, `isPlainObject`,
+`withoutMember`, `nextMembers`, `membersValue`, `ownsSlot`, `dropDecision`,
+`gapTouchesMember`, `steerDropAfter`, `sameMarkerRect`, `rawSection`,
+`setMembersOnEntry`, `firstMisplacedMember`, `placeMemberBesideSelf`,
+`countEntries`, `mayWrite`, `revealFraction`, `tooltipUnsafe`, `tooltipEscape`
+and `tooltipList`. Two of them were re-derived rather than assumed:
+`placeMemberBesideSelf`'s splice arithmetic is correct on both sides of the
+pocket, including the index shift a removal causes; and `rawSection`'s use of
+`Array.isArray` — which this file warns against elsewhere for QML sequence
+types — is safe because `mutateShellConfig()` hands the mutator a
+`JSON.parse(JSON.stringify(...))` copy, so those paths only ever see real
+arrays, while `countEntries` and `layoutIds` correctly duck-type `.length` for
+the live `layoutConfig` that has not been through that round trip.
 
 Fifteen host reads, counted: `bar.layout` and `bar.moduleWidgets` appear only in
 comments, so the README's number is right. `bar.urgent` really is the only one
@@ -82,9 +98,10 @@ neither a string nor an object with a string `id`, and it runs upstream of
 Measured: `members: [{"id": 5}, 42, null, {"name": "omaplug"}]` produced
 `Pocket is empty — drag a widget onto it` for a user who had configured four.
 
-### `bar.moduleSlots` was the one host read taken on trust
+### Three host reads were taken on trust, and each failed differently
 
-`bar ? bar.moduleSlots : []` guards a null bar, not a renamed property. Measured
+`bar ? bar.moduleSlots : []` guards a null bar, not a renamed property, and it
+is the one everything else hangs from. Measured
 against a bar publishing all fourteen other symbols and not this one: five
 TypeErrors per evaluation — `resolution` and `ownSlot` directly, then
 `memberHovered`, `apply()` and `tooltipText` through them — and the tooltip left
@@ -94,8 +111,27 @@ was the one that went dark. `slotBeforeSelf` never threw, because `ownRegion` is
 
 `bar.urgent` was the second, and degrades quietly instead: an undefined assigned
 to a `color` leaves the button painting what it painted last and warns once per
-evaluation. The README's promise — "a renamed one makes a feature stop applying
-rather than misbehave" — was true for thirteen of fifteen.
+evaluation.
+
+`bar.barDragSource` was the third, and the reason this section says three where
+an earlier draft of it said two. It throws nothing at all, which is why reading
+the drop path — where an undefined falls out harmlessly — declared it safe. The
+term that matters is elsewhere: `dragHoldsOpen` asks `dragSource !== null`, and
+an undefined is not null. Measured against a bar publishing everything else, the
+first time the pocket opened `dragHoldsOpen` and `holdOpen` both read true with
+no drag in existence, and the fold timer returns early on every tick while
+`holdOpen` is set — the pocket would have stayed fanned out for the rest of the
+session with no way to close it. Found by the final review of this change, after
+this file had already claimed the promise was kept.
+
+The README's promise — "a renamed one makes a feature stop applying rather than
+misbehave" — was therefore true for twelve of fifteen, not thirteen. The
+remaining twelve need no guard and that is checkable rather than assumed:
+`slotWindow`, `sameWindow`, `canonicalWidgetId` and `dropMarkerRect` are
+`typeof`-guarded; `centerAnchor`, `layoutConfig`, `barDragAfter` and
+`barDragTargetGeometry` are `in`-guarded; and `activePopout`, `barHovered`,
+`shell` and `barDragTarget` are each read only through a falsiness test or an
+identity comparison, which an undefined cannot survive.
 
 ### Four sentences the code contradicted
 
@@ -146,6 +182,14 @@ The precondition is the whole argument and nothing asserted it, so
 ordinary characters. A future edit that maps a character to `""` instead of
 escaping it would otherwise take the precondition away in silence.
 
+One thing this change was described as and is not: untestable. The difference
+between the correct pre-slice and no pre-slice at all is unobservable by
+construction — that is what "output-identical" means. The difference between the
+correct bound and a *wrong* one is not: cutting the input at `MAX_LABEL` rather
+than `MAX_LABEL + 1` turns three existing assertions red, because a value of
+exactly 161 characters then comes back uncut and unmarked. The output tests do
+carry this change; they simply cannot carry the reason for it.
+
 **Guard the property, not the object.** `barSlots` is read through one property
 rather than three copies of a condition, which is the shape this file already
 uses for `layoutConfig`, and it stays reactive for the same reason.
@@ -179,11 +223,14 @@ correctly under the bar, and both folded back afterwards. The plugin already
 answered this; the layer surfaces and the bar geometry were recorded on both
 outputs before, during and after, and `shell.json` came back byte-identical.
 
-**`revealFraction()` can return NaN.** Only with an explicit `NaN` as its fourth
-argument. `applyReveal()` is the only caller and passes three, so the default
-`0.15` applies — measured, `revealFraction(0.5, 0, 4)` is `0.909`. Guarding an
-input no caller can produce is the error handling the project's own rules
-forbid.
+**`revealFraction()` can return NaN.** True, and the first account of why was
+too narrow: an explicit `NaN` fourth argument does it, and so does a `count` of
+`Infinity` with only three. Unreachable either way, which is the point.
+`applyReveal()` is the only caller; it passes three arguments and takes `count`
+from `list.length`, so the fourth is always the default `0.15` and the third is
+always a finite array length — measured, `revealFraction(0.5, 0, 4)` is `0.909`,
+and nothing in the caller's domain is non-finite. Guarding an input no caller
+can produce is the error handling the project's own rules forbid.
 
 **`rejectedMembers()` does not deduplicate.** Deliberate, and left alone.
 `parseMembers()` deduplicates because two identical ids are one member;
@@ -205,7 +252,9 @@ told to and said nothing.
 for every input measured, which it did not before.
 
 **The README's guard promise is true for all fifteen host reads** rather than
-for thirteen of them.
+for twelve of them — three guarded outright, and twelve whose safety is a
+property of how they are read rather than of who wrote them, spelled out above
+so the next audit can check it instead of repeating it.
 
 **The renumbering caveat lost a mechanism and gained a condition,** in the
 README and in 0007 alike. The number of members that change the numbering at all

@@ -133,6 +133,15 @@ manifest against reserved keys for that reason. An image fetch is strictly less
 than what the same file already grants. What is fixed here is robustness against
 a configuration mistake, and that is the word the CHANGELOG uses.
 
+> **Amended 2026-08-30 by [0012](0012-the-audit-of-the-published-plugin.md).**
+> The bound this file establishes holds and is unchanged. What it did not bound
+> is the *walk*: escaping runs over the whole value before the cut discards all
+> but 160 characters of it, which cost 111 ms per call for one megabyte in a
+> single entry — on a binding the tooltip re-evaluates whenever the pointer
+> arrives. The escape loop now stops at `MAX_LABEL + 1` units and produces the
+> identical string. 0012 owns the equivalence evidence and the precondition the
+> shortcut rests on.
+
 ## Consequences
 
 - The tooltip may now show a `\uXXXX` escape where the user wrote the character
