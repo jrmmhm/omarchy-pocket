@@ -658,7 +658,6 @@ function tooltipEscape(code) {
 // host may resolve, and occupies exactly one line.
 function tooltipSafe(value) {
   if (value === null || value === undefined) return ""
-  var text = String(value)
 
   // Escape first, cut afterwards. The other order is the obvious one and it
   // does not bound anything: one escape turns one character into six, so a
@@ -666,6 +665,20 @@ function tooltipSafe(value) {
   // to keep the line short only ever held for values that had nothing to
   // escape. The whole point is a bound that holds for hostile input, and
   // hostile input is exactly the input that escapes.
+  //
+  // That bounds the RESULT and not the walk, and the walk is over whatever
+  // shell.json holds: one megabyte in a single entry cost 111 ms per call in
+  // node, on a binding the tooltip re-evaluates every time the pointer arrives.
+  // Only the first MAX_LABEL + 1 units can reach the kept output, because every
+  // input unit produces at least one output unit -- an escape produces six, an
+  // ordinary character one, and nothing produces none. So the loop stops there
+  // and the result is the same string. Measured against the unsliced function
+  // over 20735 differential cases, surrogate pairs laid on every index around
+  // the cut included: no difference, and 111 ms became 0.03. The "at least one
+  // unit" precondition is asserted in tests/model-test.js, because it is the
+  // only thing holding this up and a future edit could take it away silently.
+  var text = String(value).slice(0, MAX_LABEL + 1)
+
   var out = ""
   for (var i = 0; i < text.length; i++) {
     var code = text.charCodeAt(i)
