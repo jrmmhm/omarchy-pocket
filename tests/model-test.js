@@ -98,6 +98,55 @@ check("nothing rejected when all are valid",
 check("the pocket's own id is not a rejection",
   Model.rejectedMembers(SELF, SELF), [])
 
+// A widget id is a name, and on a bare JavaScript object some names are taken
+// before anything has been put in it: `"toString" in {}` is true. The
+// membership table used to be such an object, so an id the allowlist ACCEPTS
+// was skipped as a duplicate it had never seen -- and skipped inside
+// parseMembers, which is upstream of rejectedMembers, so the tooltip named
+// nothing either. A member the user configured simply was not there.
+//
+// One assertion per name rather than one per class: a guard over a set is only
+// tested where it has been watched failing for each member of the set.
+const PROTOTYPE_NAMES = ["toString", "constructor", "valueOf", "hasOwnProperty",
+                         "isPrototypeOf", "propertyIsEnumerable", "toLocaleString"]
+for (const name of PROTOTYPE_NAMES) {
+  check(`the allowlist accepts ${name}`, Model.isWidgetId(name), true)
+  check(`a member named ${name} is held`,
+    Model.parseMembers([name, "omaplug"], SELF), [name, "omaplug"])
+  // The pair is the point. A fix that merely moved the id into `rejected`
+  // would satisfy the line above and still leave the user without the widget,
+  // so the tooltip must have nothing to say about it.
+  check(`a member named ${name} is not a rejection either`,
+    Model.rejectedMembers([name, "omaplug"], SELF), [])
+}
+check("a real duplicate still collapses, prototype name or not",
+  Model.parseMembers(["toString", "toString", "omaplug"], SELF), ["toString", "omaplug"])
+
+// Entries toList() cannot read at all -- neither a string nor an object with a
+// string `id`. They are dropped before rejectedMembers() runs, so a config made
+// entirely of them reported "Pocket is empty" to a user who had written four.
+check("an entry with a non-string id is named",
+  Model.unreadableEntries([{ id: 5 }, "omaplug"]), [1])
+check("a bare number entry is named", Model.unreadableEntries([42, "omaplug"]), [1])
+check("a null entry is named", Model.unreadableEntries(["omaplug", null]), [2])
+check("an object without an id is named",
+  Model.unreadableEntries([{ name: "omaplug" }]), [1])
+check("a nested list is named", Model.unreadableEntries([["omaplug"]]), [1])
+check("every unreadable position is named, not just the first",
+  Model.unreadableEntries([{ id: 5 }, 42, null, { name: "omaplug" }]), [1, 2, 3, 4])
+check("readable entries are not named",
+  Model.unreadableEntries(["omaplug", { id: "omarchy.audio" }]), [])
+check("a comma string has no entries to be unreadable",
+  Model.unreadableEntries("omaplug, ../evil"), [])
+check("an empty list has none either", Model.unreadableEntries([]), [])
+check("nothing configured is not a mistake", Model.unreadableEntries(undefined), [])
+check("null is not a mistake either", Model.unreadableEntries(null), [])
+// A `members` value that is not a list at all is the same mistake with one
+// entry, and answers as that one entry -- which is where the user has to look.
+check("a value that is not a list at all answers as its own first entry",
+  Model.unreadableEntries({ id: "omaplug" }), [1])
+check("a number is not a list either", Model.unreadableEntries(7), [1])
+
 // --------------------------------------------------------- own surface
 
 check("a slot on our own surface is ours",
@@ -374,6 +423,55 @@ const SURROGATE = "x".repeat(159) + "😀"
 check("the cut does not split a surrogate pair",
   /[\uD800-\uDBFF]$/.test(Model.tooltipSafe(SURROGATE).slice(0, -1)), false)
 
+// The escape loop walks the value; the line it feeds keeps 160 characters of
+// it. Every input unit costs at least one output unit, so nothing past the
+// first MAX_LABEL + 1 units can reach the kept output -- which is what lets the
+// loop stop there instead of escaping a megabyte to throw all but 160 of it
+// away. These pin the result the shortcut has to reproduce, on both shapes:
+// the one where an input character is an output character, and the one where it
+// is six of them.
+//
+// The cap lives in Model.js as MAX_LABEL and is not exported. It is read back
+// off the boundary rather than restated here, so this file cannot drift from
+// the value it is testing; the absolute number is pinned once, above, by "an
+// oversized value is cut".
+const MAX_LABEL_CHARS = Model.tooltipSafe("a".repeat(500)).length - 1
+
+check("an oversized plain value keeps its first 160 characters",
+  Model.tooltipSafe("a".repeat(500)).slice(0, MAX_LABEL_CHARS), "a".repeat(MAX_LABEL_CHARS))
+check("an oversized escaping value keeps its first 160 too",
+  Model.tooltipSafe("<".repeat(500)).slice(0, 156), "\\u003c".repeat(26))
+check("both still say that they were cut",
+  [Model.tooltipSafe("a".repeat(500)).length, Model.tooltipSafe("<".repeat(500)).length],
+  [MAX_LABEL_CHARS + 1, MAX_LABEL_CHARS + 1])
+check("a surrogate pair sitting exactly on the cut is dropped, not halved",
+  /[\uD800-\uDBFF]/.test(Model.tooltipSafe("a".repeat(160) + "😀" + "b".repeat(400))), false)
+
+// The shortcut is sound only while every unit costs at least one unit. Mapping
+// a character to "" instead of an escape -- a plausible future edit to the
+// ranges table -- would break it, and not one fixture above would notice,
+// because they all describe today's escapes rather than the property under
+// them. So assert the property. One assertion per range, plus ordinary
+// characters, because that is one guard per place.
+const COST_SAMPLE = [0x26, 0x3c, 0x3e, 0x5c, 0x00, 0x1f, 0x7f, 0x9f, 0xad, 0x61c,
+                     0x200b, 0x200f, 0x2028, 0x202e, 0x2060, 0x206f, 0xfeff, 0xfff9, 0xfffb,
+                     0x41, 0x20, 0xe9, 0x4e2d]
+for (const code of COST_SAMPLE) {
+  check(`u+${code.toString(16)} costs at least one character`,
+    Model.tooltipSafe(FROM(code)).length >= 1, true)
+}
+
+// The new line, and the reason it exists: four entries configured, none of them
+// readable, and the tooltip used to say the pocket was empty and stop there.
+check("unreadable entries get their own line",
+  Model.describe({ members: [], unreadable: [1, 2, 3, 4] }).split("\n")[1],
+  "Not a member entry: 1, 2, 3, 4")
+check("and nothing says it when there are none",
+  Model.describe({ members: ["a"] }).indexOf("Not a member entry"), -1)
+check("the line goes through the boundary like every other",
+  Model.describe({ members: [], unreadable: ["a<b"] }).split("\n")[1],
+  "Not a member entry: a\\u003cb")
+
 // The boundary belongs to the tooltip and to nothing else. Every write path
 // reads the raw setting through toList(), so a value that was escaped for
 // display must never be what gets written back to shell.json.
@@ -419,6 +517,45 @@ check("many unknowns still land behind every known id, in their own order",
                       "omaplug", "z4", "mehiel.darky", "z5", "jerome.focus", "z6"], LAYOUT_RIGHT),
   ["omarchy.tray", "mehiel.darky", "omaplug", "omarchy.tailscale", "jerome.focus",
    "z1", "z2", "z3", "z4", "z5", "z6"])
+// The rank table was the second bare object, and it failed the other way. The
+// guard that keeps the FIRST index of a repeated layout id, `!(key in rank)`,
+// answers true for a name nothing put there, so such an id never got a rank at
+// all and the comparator subtracted a function. What that produces is the
+// engine's business -- V8 leaves the order alone, Qt's V4 does not -- which is
+// why tests/qml/model.qml carries this same block. A fixture asserted only
+// here would have been green on the broken code.
+const NAMED_LAYOUT = ["b", "toString", "a"]
+check("a layout id that is a prototype name still gets its rank",
+  Model.orderMembers(["a", "toString", "b"], NAMED_LAYOUT), NAMED_LAYOUT)
+check("and the check agrees the result is in layout order",
+  Model.membersInLayoutOrder(Model.orderMembers(["a", "toString", "b"], NAMED_LAYOUT),
+                             NAMED_LAYOUT), true)
+
+// Five elements, because a short array can come out right by luck under an
+// inconsistent comparator. This one did not merely come out wrong: it had no
+// fixpoint. Ordering alternated between two wrong orders for ever, while
+// membersInLayoutOrder() kept answering false and repairMemberOrder() kept
+// writing each of them to the user's shell.json. The last two assertions are
+// the ones that say that write terminates.
+const CYCLE_LAYOUT = ["c", "b", "valueOf", "toString", "a"]
+const CYCLE_LIST = ["a", "toString", "valueOf", "b", "c"]
+check("the fixture that used to cycle lands in layout order",
+  Model.orderMembers(CYCLE_LIST, CYCLE_LAYOUT), CYCLE_LAYOUT)
+check("ordering the result again changes nothing",
+  Model.orderMembers(Model.orderMembers(CYCLE_LIST, CYCLE_LAYOUT), CYCLE_LAYOUT), CYCLE_LAYOUT)
+check("so the repair has a fixpoint to stop at",
+  Model.membersInLayoutOrder(Model.orderMembers(CYCLE_LIST, CYCLE_LAYOUT), CYCLE_LAYOUT), true)
+
+// `__proto__` cannot reach parseMembers -- the allowlist wants an alphanumeric
+// first character -- but orderMembers runs on the RAW list, which every write
+// path builds with toList() and nothing filters. It is an unknown id like any
+// other, and the contract for those is that they collect at the end.
+check("__proto__ is not a widget id", Model.isWidgetId("__proto__"), false)
+check("and it is still reported as a rejection",
+  Model.rejectedMembers(["__proto__"], SELF), ["__proto__"])
+check("as an unknown id it collects at the end like any other",
+  Model.orderMembers(["__proto__", "a", "b"], ["b", "a"]), ["b", "a", "__proto__"])
+
 check("an empty layout leaves everything where it was",
   Model.orderMembers(["b", "a"], []), ["b", "a"])
 check("ordering nothing yields nothing", Model.orderMembers([], LAYOUT_RIGHT), [])
