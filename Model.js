@@ -42,18 +42,56 @@ function toList(value) {
 // Order is the user's; duplicates and the pocket's own id are dropped. Naming
 // itself would make the pocket hide the slot it lives in, and there would then
 // be nothing left to hover.
+//
+// The list it is building is also what it asks about duplicates. A lookup
+// object was the obvious tool and the wrong one: an id is a name, and on a bare
+// object some names answer before anything has been put there -- `"toString" in
+// {}` is true, and so are `constructor`, `valueOf` and four more, every one of
+// which ID_PATTERN accepts. Each was refused as a duplicate it had never seen,
+// and refused HERE, upstream of rejectedMembers(), so the tooltip named nothing
+// and the member simply was not on the bar. Asking the output list costs a
+// linear scan over a run that is four widgets long in every real config, and
+// there is no second structure left to disagree with it.
 function parseMembers(value, selfId) {
   var raw = toList(value)
   var self = typeof selfId === "string" ? selfId : ""
-  var seen = {}
   var out = []
   for (var i = 0; i < raw.length; i++) {
     var id = String(raw[i]).trim()
     if (id === "" || id === self) continue
     if (!isWidgetId(id)) continue
-    if (seen[id]) continue
-    seen[id] = true
+    if (out.indexOf(id) !== -1) continue
     out.push(id)
+  }
+  return out
+}
+
+// The entries toList() could not read at all -- neither a string nor an object
+// carrying a string `id` -- named by their position in the list, 1-based
+// because that is how a person counts a JSON array.
+//
+// A position rather than a value, because the whole reason such an entry was
+// dropped is that it carries nothing quotable: `{"name": "omaplug"}` and `42`
+// have no id to print back at the user. The position is what finds it again in
+// shell.json, which is the same job rejectedMembers() does for a value it can
+// still show.
+//
+// It exists because toList() runs BEFORE rejectedMembers(), so these entries
+// were gone before anything could name them: a `members` list made entirely of
+// them left the tooltip saying "Pocket is empty" to a user who had written
+// four. A `members` value that is not a list at all is the same mistake with
+// one entry, and answers as that entry -- which is the place to look.
+function unreadableEntries(value) {
+  if (value === null || value === undefined) return []
+  if (typeof value === "string") return []
+  if (typeof value.length !== "number") return [1]
+
+  var out = []
+  for (var i = 0; i < value.length; i++) {
+    var entry = value[i]
+    if (typeof entry === "string") continue
+    if (entry && typeof entry.id === "string") continue
+    out.push(i + 1)
   }
   return out
 }
@@ -127,24 +165,39 @@ function isPlainObject(value) {
 // Ids the layout does not know — a typo the user has not fixed yet — keep
 // their relative order and collect at the end rather than being dropped.
 function orderMembers(list, layoutIds) {
-  var rank = {}
+  // The layout's own ids, normalised once. A rank is a position in this list,
+  // and indexOf() answers with the FIRST one, which is the rule a repeated
+  // layout id needs.
+  //
+  // This used to be a lookup object, and it failed the way parseMembers() did,
+  // one step further along. The guard that kept the first index of a repeated
+  // id, `!(key in rank)`, answers true for a name nothing put there, so an id
+  // called `toString` or `valueOf` never got a rank and the comparator
+  // subtracted a function: NaN. What NaN does to a sort is the engine's
+  // business, and the two engines this file runs in disagree -- V8 leaves the
+  // order alone, Qt's V4 does not, and in V4 the result had no fixpoint at all.
+  // membersInLayoutOrder() then answered false for ever and repairMemberOrder()
+  // wrote a different wrong order into the user's shell.json on every bar
+  // rebuild. tests/qml/model.qml runs the fixtures in the engine that showed it.
   var ids = layoutIds || []
-  for (var i = 0; i < ids.length; i++) {
-    var key = String(ids[i]).trim()
-    if (key !== "" && !(key in rank)) rank[key] = i
-  }
+  var known = []
+  for (var i = 0; i < ids.length; i++) known.push(String(ids[i]).trim())
 
   // One rank past the last known position, so every unknown id shares a rank
   // and falls through to its original index. A sentinel that had to be
   // special-cased in the comparator instead produced a comparator that could
   // report a < b and b < a at once; a four-element array still came out right
   // by luck, which is exactly the kind of green that means nothing.
-  var unknown = ids.length
+  var unknown = known.length
   var decorated = []
   var source = list || []
   for (var j = 0; j < source.length; j++) {
     var id = String(source[j]).trim()
-    decorated.push({ value: source[j], rank: id in rank ? rank[id] : unknown, at: j })
+    // An empty id is unknown rather than looked up: the layout can hold an
+    // empty entry too, and matching those to each other would rank a member on
+    // a slot that names nothing.
+    var at = id === "" ? -1 : known.indexOf(id)
+    decorated.push({ value: source[j], rank: at === -1 ? unknown : at, at: j })
   }
 
   // The `at` tiebreak is not redundant even though ES2019 requires a stable
@@ -670,6 +723,7 @@ function describe(state) {
   var s = state || {}
   var members = s.members || []
   var rejected = s.rejected || []
+  var unreadable = s.unreadable || []
   var missing = s.missing || []
   var anchored = s.anchored || []
   var foreign = s.foreign || []
@@ -709,6 +763,11 @@ function describe(state) {
   }
 
   if (s.pinned) lines.push("Pinned — click to release")
+  // Ahead of the rejected line, because it is the earlier failure: these
+  // entries never became an id at all, so nothing downstream had anything to
+  // refuse. Positions rather than values, for the reason unreadableEntries()
+  // gives.
+  if (unreadable.length > 0) lines.push("Not a member entry: " + tooltipList(unreadable))
   if (rejected.length > 0) lines.push("Not a widget id: " + tooltipList(rejected))
   if (!unknown && missing.length > 0) lines.push("Not on this bar: " + tooltipList(missing))
   if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + tooltipList(anchored))
@@ -720,7 +779,8 @@ function describe(state) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
-                     rejectedMembers: rejectedMembers, revealFraction: revealFraction,
+                     rejectedMembers: rejectedMembers, unreadableEntries: unreadableEntries,
+                     revealFraction: revealFraction,
                      tooltipSafe: tooltipSafe, tooltipList: tooltipList,
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,

@@ -35,6 +35,12 @@ BarWidget {
   readonly property var memberIds: Model.parseMembers(setting("members", ""), root.moduleName)
   readonly property var rejectedIds: Model.rejectedMembers(setting("members", ""), root.moduleName)
 
+  // Positions of entries the parser could not read at all. They are dropped
+  // inside toList(), which runs before rejectedIds can see anything, so without
+  // this a `members` list made only of them left the tooltip reporting an empty
+  // pocket to someone who had configured four widgets.
+  readonly property var unreadableAt: Model.unreadableEntries(setting("members", ""))
+
   // ------------------------------------------------------------- identity
 
   // The bar exists once per monitor and every surface's slots land in the same
@@ -797,7 +803,8 @@ BarWidget {
     // markup. Nothing assigned here may depend on that decision.
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
-      rejected: root.rejectedIds, missing: root.resolution.missing,
+      rejected: root.rejectedIds, unreadable: root.unreadableAt,
+      missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
       duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown
     })
