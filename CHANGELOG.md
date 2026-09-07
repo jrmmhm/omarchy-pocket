@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-09-08
+
+The plugin did not change. Its listing did: nine days on the marketplace,
+verified and current, and unfindable by anyone who did not already know its
+name. [decision 0014](docs/decisions/0014-the-listing-is-the-only-text-the-store-reads.md)
+owns the measurements.
+
+### Changed
+
+- **The description now leads with what the plugin does, in the words people
+  search for.** The marketplace publishes the top-level `description` and no
+  other prose from this repository: the browse card clips it to a single line,
+  and no page renders the README. How much of the catalogue that reaches, before
+  and after, is measured in decision 0014. The README tagline is now that
+  sentence, verbatim.
+- **The README opens on the problem rather than on what a bar is.** Nothing was
+  dropped and `Requirements` keeps its place ahead of `Install`; the sentence
+  that decides whether a reader wants this moved from fourth to first.
+
+### Fixed
+
+- **The README claimed something about every other grouping widget that is not
+  true of all of them.** One listed plugin flips `visible` on the bar's own
+  slots exactly as Pocket does, and another deletes entries from the layout
+  rather than moving them into `plugins[]` — so the consequences this section
+  lists belong to that array rather than to grouping as such. The figure carries
+  the same correction. Which plugins were read, and at which commits, is in
+  decision 0014.
+- **Two sentences promised more than the code holds.** "Every Omarchy tool keeps
+  reporting them correctly" in the description, and "Nothing else on your
+  desktop can tell that they are hidden" in the README, are both contradicted by
+  this project's own `SUPER+CTRL+1…9` finding, which decision 0007 measures.
+  Both now name the exception and link to it.
+
+### Added
+
+- Two assertions over `manifest.json`: the description has to fit GitHub's About
+  field, and the README tagline has to be its first sentence. Nothing checked
+  this field before, which is how the *into one slot* sentence
+  [0012](docs/decisions/0012-the-audit-of-the-published-plugin.md) records
+  reached the marketplace. Which bound binds, and why it is not the
+  marketplace's own, is in decision 0014.
+
 ### Documentation
 
 - **The releases this file names are now tagged.** `0.3.1` and `0.3.2` went
@@ -305,7 +348,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.0

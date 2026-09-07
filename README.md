@@ -2,7 +2,7 @@
 
 # Pocket
 
-**Tuck a run of Omarchy bar widgets behind one mark. Point at it, they come back.**
+**Hide the bar widgets you rarely use behind one mark and reveal them on hover — a drawer that declutters a crowded bar.**
 
 [![tests](https://img.shields.io/github/actions/workflow/status/jrmmhm/omarchy-pocket/ci.yml?branch=main&style=flat&label=tests&logo=github&logoColor=white)](https://github.com/jrmmhm/omarchy-pocket/actions/workflows/ci.yml)
 [![Omarchy 4.x](https://img.shields.io/badge/Omarchy-4.x-1f6feb?style=flat)](https://omarchy.org)
@@ -15,10 +15,10 @@
 
 ## What this is
 
-Across the top of an Omarchy desktop runs a thin strip with small icons on it —
-the clock, the volume, the battery, the network. It is called the bar, and it
-fills up. Every tool you install puts another icon there, and somewhere past a
-dozen you stop reading it and start hunting through it.
+Your bar fills up. Every tool you install puts another icon on that thin strip
+across the top of an Omarchy desktop — where the clock, the volume, the battery
+and the network already sit — and somewhere past a dozen you stop reading it
+and start hunting through it.
 
 Pocket takes the icons you rarely need and hides them behind a single mark.
 Point at the mark and they slide back out. Move away and they tuck themselves
@@ -26,8 +26,9 @@ back in.
 
 They are not stand-ins. They are the same icons, still fully working while they
 are out — and, the part that turns out to matter most, they never leave the bar
-as far as the rest of the system is concerned. Nothing else on your desktop can
-tell that they are hidden.
+as far as the rest of the system is concerned. Almost nothing else on your
+desktop can tell that they are hidden; the one thing that can is
+`SUPER+CTRL+1…9`, and [Good to know](#good-to-know) says when.
 
 ![The same bar twice: collapsed behind one mark, and fanned back out with the pointer on it](docs/bar-states.png)
 
@@ -163,14 +164,15 @@ place is read from the file rather than from what is running.
 
 ## Why this one keeps your setup honest
 
-![Other grouping widgets move the entry into plugins[], which keeps it reported as enabled while taking it off the bar. Pocket leaves it in bar.layout.](docs/pocket-layout.svg)
+![The common kind of grouping widget moves the entry into plugins[], which keeps it reported as enabled while taking it off the bar. Pocket leaves it in bar.layout.](docs/pocket-layout.svg)
 
-Every other way of grouping bar widgets moves them out of `bar.layout` — into
-the top-level `plugins[]` array — and mounts them again somewhere else. Omarchy
-decides a plugin is *enabled* by whether its id appears anywhere in
-`shell.json`, a bar entry **or** a `plugins[]` entry, so the widget keeps
-reporting as enabled. What it no longer is, is *on the bar*, and that split is
-where things come apart:
+The common way of grouping bar widgets moves them out of `bar.layout` and
+mounts them again somewhere else. Where they land decides what breaks. One
+landing place is the top-level `plugins[]` array, and the four consequences
+below are that landing place's rather than grouping's: Omarchy decides a plugin
+is *enabled* by whether its id appears anywhere in `shell.json`, a bar entry
+**or** a `plugins[]` entry, so the widget keeps reporting as enabled. What it
+no longer is, is *on the bar*, and that split is where things come apart:
 
 - `omarchy-shell shell toggle <id>` and its keybinding stop working. The shell
   checks "is it enabled", passes, then asks the bar for the widget's slot — and
@@ -185,8 +187,21 @@ where things come apart:
 
 **Pocket moves nothing out.** The widgets stay in `bar.layout`, in their own
 module slots, built by the bar itself. Pocket flips `visible` on those slots,
-and a Qt `Row` does not lay out an invisible child — so the space closes up and
-nothing else in the shell notices. Every tool keeps telling the truth.
+and a Qt `Row` does not lay out an invisible child — so the space closes up
+while the entry never moves: `inBar` still finds it, `findPanelWidget` still
+finds it, and its settings still live on its own entry.
+
+Not every grouping widget moves them, and this section is a comparison with the
+common kind rather than with all of them. Three were read: two move the entries
+— one into `plugins[]`, one by deleting them from the layout outright — and one
+flips `visible` on the bar's own slots exactly as Pocket does. Which plugins
+those were, and at which commit, is in
+[decision 0014](docs/decisions/0014-the-listing-is-the-only-text-the-store-reads.md);
+naming them here would be a fact with two owners.
+
+The one place a hidden widget is not equivalent to a shown one is
+`SUPER+CTRL+1…9`, which counts what is drawn — see
+[Good to know](#good-to-know).
 
 ## The mark
 

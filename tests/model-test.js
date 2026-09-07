@@ -1148,6 +1148,38 @@ for (const word of RESERVED) {
     reservedKeysIn({ barWidget: { schema: [{ key: word }] } }), [word])
 }
 
+// ------------------------------------------------------- the listing text
+
+// `description` is the marketplace listing, and this repository's own About
+// text on GitHub is meant to be a second copy of the same sentence. GitHub
+// refuses an About longer than 350 characters, which is tighter than the
+// marketplace's own 500 and is therefore the bound that decides whether one
+// sentence can serve both places. Why that is the binding number, and what was
+// measured, is decision 0014's; this constant is only its enforcement, so that
+// a description outgrowing the limit turns a run red rather than surfacing as
+// a rejected paste.
+const ABOUT_LIMIT = 350
+
+check("the description fits GitHub's About field",
+  manifest.description.length <= ABOUT_LIMIT, true)
+
+// The README's tagline is the third copy, and 0013's rule is that a fact lives
+// in as many places as publish it while none of them update together. This is
+// the one pair a test can hold: the tagline is the description's first
+// sentence, verbatim. The tagline is the first line of the file that is bold
+// from end to end.
+function firstSentence(text) {
+  const value = String(text || "")
+  const end = value.indexOf(". ")
+  return end === -1 ? value : value.slice(0, end + 1)
+}
+
+const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8")
+const tagline = (readme.match(/^\*\*(.+)\*\*$/m) || [])[1] || ""
+
+check("the README tagline is the description's first sentence",
+  tagline, firstSentence(manifest.description))
+
 // ----------------------------------------------------------------- done
 
 if (failures === 0) {
