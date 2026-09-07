@@ -93,6 +93,31 @@ characters, roughly 217 were never seen while browsing, and the visible part —
 *"Tuck a run of bar widgets behind one mark and fan the"* — named no benefit and
 contained no searchable verb.
 
+### Simplicity is decided in one line and one image
+
+The question this file was opened to answer had three parts, and the third is
+how quickly a stranger can tell whether they want this. The store gives them
+exactly two surfaces to decide on: the clipped card line above, and the card
+image. Nothing else — the detail page adds the full description and the preview
+at 1600 px, and that is the end of it.
+
+The image was rendered at the real card size, 340×175, and read. It is legible
+and its 2:1 source is very nearly the card's `object-fit: cover` box, so almost
+nothing is cropped where the 16:9 screenshots around it lose their top and
+bottom. What it spends is space: roughly 45 % of its area is the plugin name and
+a tagline that the card prints again as text ten pixels below, and the
+difference between its two bar rows — the whole point — is an icon-counting
+exercise at that size.
+
+Past the card the decision moves to GitHub, and there the README is the surface.
+At 21 KB it is the longest in the comparison set by a factor of two against the
+next (9.3 KB) and five against the median (4.3 KB), which is a feature of this
+project rather than a defect — but the sentence that decides whether a reader
+wants the plugin was the fourth of the opening paragraph, behind an explanation
+of what a bar is. It is now the first, and `Requirements` keeps its place ahead
+of `Install`, because a bar without a Nerd Font draws an empty box where the
+mark should be.
+
 ### 350, not 500, is the binding length
 
 `build-catalog.mjs` caps `description` at 500. GitHub's About field, which
@@ -198,14 +223,32 @@ commit the scheduled refresh sets the card to *Update unverified* —
 one, and 1698 of 2563 community listings carry the verified badge, so its
 absence is conspicuous.
 
-**The open action, named so it is not rediscovered.** The marketplace's
-`verify-plugin.yml` issue form, option *Verify and publish a newer upstream
-commit*, with the plugin id, the repository root URL and the forty-character SHA
-of `main` at the moment of filing. 0013 already established that the SHA is read
-then and never copied from a file, and that nothing may be pushed between
-reading it and submitting. What 0013 did not say, and this file does: the filing
-belongs immediately after the push, because the interval between them is exactly
-the interval in which the listing is both unverified and out of date.
+**Three open actions, named so none is rediscovered.** All three live outside
+this repository and none of them is a commit.
+
+1. **Cut `v0.3.3` on the merge commit.** `CHANGELOG.md` names the version and
+   links it, and until the tag exists both `releases/tag/v0.3.3` and
+   `compare/v0.3.3...HEAD` answer 404 — the exact defect 0013 closed and whose
+   closing sentence was *all six version references resolve*. 0013's practice is
+   the one to follow: annotated, unsigned, on the first-parent commit of `main`
+   that carried the tree, which is the merge commit rather than this branch's
+   tip, and verified with `git show <sha>:manifest.json` before the push because
+   a tag cannot be corrected outward.
+2. **Set the repository's About text to the new description.** 0013 established
+   About as one of the places this sentence lives, and it currently still reads
+   *"…so every Omarchy tool keeps reporting them correctly"* — the sentence this
+   file records as disproved. The 350-character bound exists precisely so one
+   sentence can stand in both places; until About is updated it does not.
+   `tests/model-test.js` cannot see this copy, which is why it is written down
+   here instead.
+3. **File the marketplace update.** The `verify-plugin.yml` issue form, option
+   *Verify and publish a newer upstream commit*, with the plugin id, the
+   repository root URL and the forty-character SHA of `main` at the moment of
+   filing. 0013 established that the SHA is read then and never copied from a
+   file, and that nothing may be pushed between reading it and submitting. What
+   0013 did not say, and this file does: the filing belongs immediately after
+   the push, because the interval between them is exactly the interval in which
+   the listing is both unverified and out of date.
 
 ## Consequences
 
@@ -213,8 +256,11 @@ the interval in which the listing is both unverified and out of date.
 one of them reaches nothing else in the catalogue.
 
 **The README no longer makes a claim about software nobody measured.** What it
-says about the moving kind of grouping widget is unchanged and still holds for
-the two that were read; what it no longer says is that there is no other kind.
+says is unchanged for the landing place it describes — `plugins[]`, which of the
+four plugins read here and in 0010 is `ianswope.stack` alone. `plugin.hider`
+moves entries without ever touching `plugins[]`, so the four consequences listed
+under that paragraph are the array's and not moving's, and the README now says
+so. What it no longer claims is that there is no other kind.
 
 **The plugins that were read are named here and only here.** The README points
 at this file rather than repeating them, because a competitor's mechanism is a

@@ -18,34 +18,37 @@ owns the measurements.
 
 - **The description now leads with what the plugin does, in the words people
   search for.** The marketplace publishes the top-level `description` and no
-  other prose from this repository — the browse card clips it to a single line
-  of about 53 characters, and no page renders the README. Measured against the
-  live catalogue, the old sentence answered 1 of 26 queries a user with a
-  crowded bar would type; the new one answers 17, and is the only result in the
-  whole catalogue for `declutter`. The README tagline is now that sentence,
-  verbatim.
+  other prose from this repository: the browse card clips it to a single line,
+  and no page renders the README. How much of the catalogue that reaches, before
+  and after, is measured in decision 0014. The README tagline is now that
+  sentence, verbatim.
+- **The README opens on the problem rather than on what a bar is.** Nothing was
+  dropped and `Requirements` keeps its place ahead of `Install`; the sentence
+  that decides whether a reader wants this moved from fourth to first.
 
 ### Fixed
 
 - **The README claimed something about every other grouping widget that is not
-  true of all of them.** A listed plugin flips `visible` on the bar's own slots
-  exactly as Pocket does, and another deletes entries from the layout rather
-  than moving them into `plugins[]`. The section is now a comparison with the
-  common kind, the figure carries the same correction, and the plugins that were
-  read are named in decision 0014 rather than in the README.
+  true of all of them.** One listed plugin flips `visible` on the bar's own
+  slots exactly as Pocket does, and another deletes entries from the layout
+  rather than moving them into `plugins[]` — so the consequences this section
+  lists belong to that array rather than to grouping as such. The figure carries
+  the same correction. Which plugins were read, and at which commits, is in
+  decision 0014.
 - **Two sentences promised more than the code holds.** "Every Omarchy tool keeps
   reporting them correctly" in the description, and "Nothing else on your
   desktop can tell that they are hidden" in the README, are both contradicted by
-  this project's own `SUPER+CTRL+1…9` finding. Both now name the exception.
+  this project's own `SUPER+CTRL+1…9` finding, which decision 0007 measures.
+  Both now name the exception and link to it.
 
 ### Added
 
-- Two assertions over `manifest.json`: the description has to fit GitHub's
-  350-character About field — a tighter bound than the marketplace's own 500,
-  and the one that lets a single sentence serve both — and the README tagline
-  has to be its first sentence. Nothing checked this field before, which is how
-  the *into one slot* sentence [0012](docs/decisions/0012-the-audit-of-the-published-plugin.md)
-  records reached the marketplace.
+- Two assertions over `manifest.json`: the description has to fit GitHub's About
+  field, and the README tagline has to be its first sentence. Nothing checked
+  this field before, which is how the *into one slot* sentence
+  [0012](docs/decisions/0012-the-audit-of-the-published-plugin.md) records
+  reached the marketplace. Which bound binds, and why it is not the
+  marketplace's own, is in decision 0014.
 
 ### Documentation
 
