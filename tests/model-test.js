@@ -1150,14 +1150,14 @@ for (const word of RESERVED) {
 
 // ------------------------------------------------------- the listing text
 
-// `description` is the marketplace listing. plugins.omarchy.org publishes the
-// top-level field verbatim from the commit it has pinned, and this repository's
-// own About text is a second copy of the same sentence. GitHub refuses an About
-// longer than 350 characters — a tighter bound than the marketplace's own 500,
-// and therefore the one that decides whether a single sentence can serve both
-// places at all. No other file in this repository states it, so a description
-// that outgrows the limit is caught here rather than at the moment someone
-// tries to paste it.
+// `description` is the marketplace listing, and this repository's own About
+// text on GitHub is meant to be a second copy of the same sentence. GitHub
+// refuses an About longer than 350 characters, which is tighter than the
+// marketplace's own 500 and is therefore the bound that decides whether one
+// sentence can serve both places. Why that is the binding number, and what was
+// measured, is decision 0014's; this constant is only its enforcement, so that
+// a description outgrowing the limit turns a run red rather than surfacing as
+// a rejected paste.
 const ABOUT_LIMIT = 350
 
 check("the description fits GitHub's About field",
