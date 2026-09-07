@@ -163,12 +163,13 @@ place is read from the file rather than from what is running.
 
 ## Why this one keeps your setup honest
 
-![Other grouping widgets move the entry into plugins[], which keeps it reported as enabled while taking it off the bar. Pocket leaves it in bar.layout.](docs/pocket-layout.svg)
+![The common kind of grouping widget moves the entry into plugins[], which keeps it reported as enabled while taking it off the bar. Pocket leaves it in bar.layout.](docs/pocket-layout.svg)
 
-Every other way of grouping bar widgets moves them out of `bar.layout` — into
-the top-level `plugins[]` array — and mounts them again somewhere else. Omarchy
-decides a plugin is *enabled* by whether its id appears anywhere in
-`shell.json`, a bar entry **or** a `plugins[]` entry, so the widget keeps
+The common way of grouping bar widgets moves them out of `bar.layout` and
+mounts them again somewhere else. Where they land decides what breaks, and the
+usual landing place is the top-level `plugins[]` array, which is the worst of
+them. Omarchy decides a plugin is *enabled* by whether its id appears anywhere
+in `shell.json`, a bar entry **or** a `plugins[]` entry, so the widget keeps
 reporting as enabled. What it no longer is, is *on the bar*, and that split is
 where things come apart:
 
@@ -185,8 +186,21 @@ where things come apart:
 
 **Pocket moves nothing out.** The widgets stay in `bar.layout`, in their own
 module slots, built by the bar itself. Pocket flips `visible` on those slots,
-and a Qt `Row` does not lay out an invisible child — so the space closes up and
-nothing else in the shell notices. Every tool keeps telling the truth.
+and a Qt `Row` does not lay out an invisible child — so the space closes up
+while the entry never moves: `inBar` still finds it, `findPanelWidget` still
+finds it, and its settings still live on its own entry.
+
+Not every grouping widget moves them, and this section is a comparison with the
+common kind rather than with all of them. Three were read: two move the entries
+— one into `plugins[]`, one by deleting them from the layout outright — and one
+flips `visible` on the bar's own slots exactly as Pocket does. Which plugins
+those were, and at which commit, is in
+[decision 0014](docs/decisions/0014-the-listing-is-the-only-text-the-store-reads.md);
+naming them here would be a fact with two owners.
+
+The one place a hidden widget is not equivalent to a shown one is
+`SUPER+CTRL+1…9`, which counts what is drawn — see
+[Good to know](#good-to-know).
 
 ## The mark
 

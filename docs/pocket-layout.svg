@@ -39,7 +39,7 @@
   <rect class="paper" width="880" height="296" rx="12"/>
 
   <!-- Left: the entry is moved out -->
-  <text x="40" y="46" class="eyebrow mute">EVERY OTHER WAY OF GROUPING</text>
+  <text x="40" y="46" class="eyebrow mute">THE COMMON WAY OF GROUPING</text>
 
   <rect x="40" y="64" width="360" height="56" rx="8" class="panel"/>
   <rect x="40" y="64" width="360" height="56" rx="8" class="line"/>
