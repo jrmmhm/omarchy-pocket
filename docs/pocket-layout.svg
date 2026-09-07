@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 296" width="880"
      role="img" aria-labelledby="t d">
   <title id="t">Where a grouped widget's entry lives</title>
-  <desc id="d">Other grouping widgets move the entry into the top-level plugins array, which
-    keeps it reported as enabled while taking it off the bar. Pocket leaves the entry in
-    bar.layout and only flips the slot's visibility.</desc>
+  <desc id="d">The common kind of grouping widget moves the entry into the top-level plugins
+    array, which keeps it reported as enabled while taking it off the bar. Pocket leaves the
+    entry in bar.layout and only flips the slot's visibility.</desc>
 
   <!-- Palette. Two accents, and depth from opacity rather than more colours.
        The media query is the common case; the opaque paper underneath is what
@@ -80,5 +80,5 @@
   <text x="500" y="200" class="aside mute">the only thing Pocket changes</text>
 
   <text x="480" y="252" class="verdict good">One entry, where every tool already looks</text>
-  <text x="480" y="272" class="aside mute">nothing is moved, so nothing else in the shell notices</text>
+  <text x="480" y="272" class="aside mute">nothing is moved, so the entry stays where every tool looks</text>
 </svg>
