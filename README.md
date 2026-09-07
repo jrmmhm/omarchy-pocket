@@ -15,10 +15,10 @@
 
 ## What this is
 
-Across the top of an Omarchy desktop runs a thin strip with small icons on it —
-the clock, the volume, the battery, the network. It is called the bar, and it
-fills up. Every tool you install puts another icon there, and somewhere past a
-dozen you stop reading it and start hunting through it.
+Your bar fills up. Every tool you install puts another icon on that thin strip
+across the top of an Omarchy desktop — where the clock, the volume, the battery
+and the network already sit — and somewhere past a dozen you stop reading it
+and start hunting through it.
 
 Pocket takes the icons you rarely need and hides them behind a single mark.
 Point at the mark and they slide back out. Move away and they tuck themselves
@@ -26,8 +26,9 @@ back in.
 
 They are not stand-ins. They are the same icons, still fully working while they
 are out — and, the part that turns out to matter most, they never leave the bar
-as far as the rest of the system is concerned. Nothing else on your desktop can
-tell that they are hidden.
+as far as the rest of the system is concerned. Almost nothing else on your
+desktop can tell that they are hidden; the one thing that can is
+`SUPER+CTRL+1…9`, and [Good to know](#good-to-know) says when.
 
 ![The same bar twice: collapsed behind one mark, and fanned back out with the pointer on it](docs/bar-states.png)
 
