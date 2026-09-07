@@ -2,7 +2,7 @@
 
 # Pocket
 
-**Tuck a run of Omarchy bar widgets behind one mark. Point at it, they come back.**
+**Hide the bar widgets you rarely use behind one mark and reveal them on hover — a drawer that declutters a crowded bar.**
 
 [![tests](https://img.shields.io/github/actions/workflow/status/jrmmhm/omarchy-pocket/ci.yml?branch=main&style=flat&label=tests&logo=github&logoColor=white)](https://github.com/jrmmhm/omarchy-pocket/actions/workflows/ci.yml)
 [![Omarchy 4.x](https://img.shields.io/badge/Omarchy-4.x-1f6feb?style=flat)](https://omarchy.org)
