@@ -152,6 +152,37 @@ QtObject {
                            unreadable: Model.unreadableEntries(harness.unreadableSetting) })
             .indexOf("Not a member entry: 1, 2, 3") !== -1, true)
 
+    // ------------------------------------------------------------- the run
+    //
+    // The narrowing that lets a member on the wrong side of the mark be dragged
+    // out lives on a layout the HOST hands over, and that is a sequence type
+    // rather than an array — the same difference toList() duck-types around.
+    // gapTouchesMember() now indexes that value at `at` and `at - 1`, and one
+    // of those two is deliberately out of range whenever the gap is at either
+    // end of the section. node answers `undefined` there and falls through
+    // harmlessly; a sequence type is not obliged to, and this is the engine
+    // where that shows. See docs/decisions/0016.
+    var runLayout = harness.splitLayout
+    var runMembers = harness.splitMembers
+    check("V4 keeps the run against the group",
+          Model.gapTouchesMember(runLayout, runMembers, "jrmmhm.pocket", false,
+                                 "jrmmhm.pocket", true), true)
+    check("V4 lets the far-side member leave",
+          Model.gapTouchesMember(runLayout, runMembers, "omarchy.bluetooth", false,
+                                 "jrmmhm.pocket", true), false)
+    // The gap past the last entry in the section: `at` equals the layout's
+    // length, so the second edge read is out of range by construction.
+    check("V4 survives the gap past the last entry",
+          Model.gapTouchesMember(runLayout, runMembers, "omarchy.network", true,
+                                 "jrmmhm.pocket", true), false)
+    // And the gap before the first, where `at - 1` is out of range.
+    check("V4 survives the gap before the first entry",
+          Model.gapTouchesMember(runLayout, runMembers, "omarchy.tray", false,
+                                 "jrmmhm.pocket", true), false)
+    check("V4 ejects nothing from a layout without the pocket",
+          Model.gapTouchesMember(harness.pocketlessLayout, runMembers, "omaplug", true,
+                                 "jrmmhm.pocket", true), true)
+
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
   }
@@ -170,4 +201,14 @@ QtObject {
   // to arrive as the sequence type a hand-written `members` array becomes, not
   // as a literal the function builds for itself.
   property var unreadableSetting: [{ id: 5 }, 42, { name: "omaplug" }, "omaplug"]
+
+  // Declared, not built in the function, for the third time and the same
+  // reason: layoutIds() hands gapTouchesMember() a value that came from the
+  // host, and the out-of-range reads it makes are only interesting on the type
+  // the host actually delivers. `omarchy.bluetooth` is a member sitting past
+  // the pocket — the arrangement the author's own bar had.
+  property var splitLayout: ["omarchy.tray", "omaplug", "agx.screen-time", "jrmmhm.pocket",
+                             "omarchy.agents", "omarchy.bluetooth", "omarchy.network"]
+  property var splitMembers: ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
+  property var pocketlessLayout: ["omaplug", "agx.screen-time", "omarchy.network"]
 }

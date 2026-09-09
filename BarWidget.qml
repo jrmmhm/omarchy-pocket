@@ -772,8 +772,15 @@ BarWidget {
   // this instance's own resolved slots. `resolution` is filtered to one window,
   // and the bar is built once per monitor — reading it here made the instance
   // the drag was NOT on see every member as a stranger and eject it.
+  //
+  // The last two arguments are what narrows "a member" to "a member of the
+  // run": without them the rule cannot tell which side of the mark the group
+  // is on, and a member the user has put on the far side reads as the group on
+  // both of its own sides — which is the way out of the pocket closing behind
+  // it. See docs/decisions/0016.
   readonly property bool dropGapTouchesMember: Model.gapTouchesMember(
-    root.layoutIds(root.ownRegion), root.gestureMembers, root.dragTargetId, root.dragAfter)
+    root.layoutIds(root.ownRegion), root.gestureMembers, root.dragTargetId, root.dragAfter,
+    root.moduleName, root.membersLeadFromEnd)
 
   // The slot the bar names when it draws its line against the mark's NEAR edge.
   //

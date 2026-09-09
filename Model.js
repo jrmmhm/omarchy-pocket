@@ -301,7 +301,24 @@ function membersValue(list, previousRaw) {
 // Ids out of the layout have neither problem. They are the same on every
 // screen, and they describe both sides of the gap rather than one of them.
 // See docs/decisions/0004.
-function gapTouchesMember(layoutIds, memberIds, targetId, after) {
+//
+// "One of this pocket's members" is narrower than "any id in `members`", and
+// the difference is a member the user has put on the wrong side of the mark.
+// The run is what fans out, and it lies on the side firstMisplacedMember()
+// already names — which is why both ask onPocketSide() and neither owns the
+// answer. Counting a member outside the run made the gaps on both of ITS sides
+// read as inside the group, so such a member could not be taken out by any
+// drop near itself: measured twice on a real bar, an 89px drag of a far-side
+// member back into the gap beside it wrote nothing at all. See
+// docs/decisions/0016.
+//
+// A layout this pocket cannot find itself in answers `true`, which is the safe
+// direction: nothing is ejected on the strength of a layout whose sides cannot
+// be told apart. It is reachable — `layoutConfig` is a snapshot refreshed on
+// registry events and can lag a hand edit, and a surface that has not resolved
+// its own slot yet has no region to read. The old rule needed no such guard
+// because it never asked where the pocket was.
+function gapTouchesMember(layoutIds, memberIds, targetId, after, pocketId, nearestAtEnd) {
   var ids = layoutIds || []
   var want = String(targetId || "").trim()
   if (want === "") return false
@@ -313,20 +330,51 @@ function gapTouchesMember(layoutIds, memberIds, targetId, after) {
   if (at === -1) return false
   if (after) at += 1
 
-  // The two range guards are on the engine's terms, not the test suite's. In
-  // node an out-of-range index is undefined and falls out harmlessly; the
-  // layout reaching this from QML is a sequence type, which is not obliged to
-  // be so forgiving. node cannot show the difference, so no test can either —
-  // the same reason the tiebreak in orderMembers() carries a comment instead
-  // of a fixture.
-  var before = at > 0 ? String(ids[at - 1]).trim() : ""
-  var behind = at < ids.length ? String(ids[at]).trim() : ""
+  var self = String(pocketId || "").trim()
+  var selfAt = -1
+  if (self !== "") {
+    for (var s = 0; s < ids.length; s++) {
+      if (String(ids[s]).trim() === self) { selfAt = s; break }
+    }
+  }
+  if (selfAt === -1) return true
+
+  // Both edges are answered by POSITION rather than by id. A hand-written
+  // layout may carry the same id twice, and the side test needs the index the
+  // gap actually touches — resolving the member's id to its first occurrence
+  // would answer for the other copy.
+  //
+  // The range guards inside memberOfRunAt() are on the engine's terms, not the
+  // test suite's. In node an out-of-range index is undefined and falls out
+  // harmlessly; the layout reaching this from QML is a sequence type, which is
+  // not obliged to be so forgiving. node cannot show the difference, so no test
+  // can either — the same reason the tiebreak in orderMembers() carries a
+  // comment instead of a fixture.
+  return memberOfRunAt(ids, at - 1, selfAt, memberIds, nearestAtEnd)
+    || memberOfRunAt(ids, at, selfAt, memberIds, nearestAtEnd)
+}
+
+// Which side of the mark the run lies on, as one sentence both callers ask.
+// With `nearestAtEnd` the members precede the pocket, so the run is at the
+// lower indices; in the `left` section it is the other way round. 0004 warns
+// that two copies of a membership rule drift apart, and this is the rule
+// firstMisplacedMember() was already applying by hand.
+function onPocketSide(index, selfAt, nearestAtEnd) {
+  return nearestAtEnd ? index < selfAt : index > selfAt
+}
+
+// Whether the layout entry at `index` is a member of the run: a member id, on
+// the pocket's own side of the mark.
+function memberOfRunAt(ids, index, selfAt, memberIds, nearestAtEnd) {
+  if (index < 0 || index >= ids.length) return false
+  if (!onPocketSide(index, selfAt, nearestAtEnd)) return false
+
+  var id = String(ids[index]).trim()
+  if (id === "") return false
 
   var members = memberIds || []
   for (var m = 0; m < members.length; m++) {
-    var id = String(members[m]).trim()
-    if (id === "") continue
-    if (id === before || id === behind) return true
+    if (String(members[m]).trim() === id) return true
   }
   return false
 }
@@ -604,7 +652,10 @@ function firstMisplacedMember(layoutIds, selfId, memberIds, nearestAtEnd) {
     if (want === "" || want === self) continue
     for (var j = 0; j < ids.length; j++) {
       if (String(ids[j]).trim() !== want) continue
-      if (nearestAtEnd ? j > selfAt : j < selfAt) return want
+      // The same sentence gapTouchesMember() asks, and deliberately the same
+      // function: "on the wrong side of the mark" and "not part of the run"
+      // must not be able to disagree. See docs/decisions/0016.
+      if (!onPocketSide(j, selfAt, nearestAtEnd)) return want
       break
     }
   }

@@ -756,7 +756,7 @@ const RUN_MEMBERS = ["mehiel.darky", "ianswope.snapshots", "omaplug",
                      "omarchy.tailscale", "omarchy.bluetooth"]
 
 function gap(target, after) {
-  return Model.gapTouchesMember(RUN, RUN_MEMBERS, target, after)
+  return Model.gapTouchesMember(RUN, RUN_MEMBERS, target, after, SELF, true)
 }
 
 // The defect this replaces: these two are the same gap, at the outer end of
@@ -787,25 +787,33 @@ check("an empty target id touches nothing", gap("", false), false)
 // empty or unknown target still comes out false by accident — through indexOf
 // and an out-of-range read — rather than because the rule refused it. Each was
 // watched failing with its guard removed.
+// Every layout here carries SELF, and it has to: without the pocket in it the
+// rule answers `true` by its own fail-safe, and all six of these would then be
+// green for that reason instead of for the guard each one exists to hold.
 check("an empty target id does not resolve to a malformed entry",
-  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], ["mehiel.darky"], "", false), false)
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug", SELF], ["mehiel.darky"], "", false,
+                         SELF, true), false)
 check("an empty member id does not match a malformed entry",
-  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], [""], "mehiel.darky", true), false)
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug", SELF], [""], "mehiel.darky", true,
+                         SELF, true), false)
 check("an unknown target does not fall through to the first gap",
-  Model.gapTouchesMember(["mehiel.darky", "omaplug"], ["mehiel.darky"], "nope", true), false)
+  Model.gapTouchesMember(["mehiel.darky", "omaplug", SELF], ["mehiel.darky"], "nope", true,
+                         SELF, true), false)
 check("no layout at all touches nothing",
-  Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false), false)
+  Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false, SELF, true), false)
 check("no members at all touches nothing",
-  Model.gapTouchesMember(RUN, [], "mehiel.darky", false), false)
+  Model.gapTouchesMember(RUN, [], "mehiel.darky", false, SELF, true), false)
 check("an empty member id is not matched against a gap edge",
-  Model.gapTouchesMember(["a", "b"], [""], "a", true), false)
+  Model.gapTouchesMember(["a", "b", SELF], [""], "a", true, SELF, true), false)
 
 // A single member is touched from both of its sides, so neither of the two
 // gaps around it can read as leaving.
 check("the only member, from its outer side",
-  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], "omarchy.tray", true), true)
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], "omarchy.tray", true,
+                         SELF, true), true)
 check("the only member, from its inner side",
-  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], SELF, false), true)
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], SELF, false,
+                         SELF, true), true)
 
 // bar.layoutConfig is normalised and pins omarchy.tray to its section's inner
 // edge, while the bar's own move works on the raw shell.json section. When a
@@ -813,11 +821,79 @@ check("the only member, from its inner side",
 // entry — the membership verdicts must not.
 const TRAY_LAST = ["mehiel.darky", "omaplug", SELF, "jerome.focus", "omarchy.tray"]
 check("the run's outer gap still reads the same with the tray displaced",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "mehiel.darky", false), true)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "mehiel.darky", false,
+                         SELF, true), true)
 check("and the gap past the pocket still reads the same",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], SELF, true), false)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], SELF, true, SELF, true), false)
 check("a displaced tray at the far end is not against the group",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "omarchy.tray", false), false)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "omarchy.tray", false,
+                         SELF, true), false)
+
+// ------------------------------------------------- the run, not the members
+
+// The defect this narrowing fixes, measured twice on a live bar: a member the
+// user has put on the FAR side of the mark could not be taken out by any drop
+// near itself, because the old rule counted it as the group it is not part of.
+// SPLIT is that arrangement -- omarchy.bluetooth is a member, sitting past the
+// pocket, exactly as the author's own bar had it.
+const SPLIT = ["omarchy.tray", "omaplug", "agx.screen-time", SELF,
+               "omarchy.agents", "jerome.focus", "omarchy.bluetooth", "omarchy.network"]
+const SPLIT_MEMBERS = ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
+
+function split(target, after) {
+  return Model.gapTouchesMember(SPLIT, SPLIT_MEMBERS, target, after, SELF, true)
+}
+
+// The two gaps either side of the far-side member. Both answered "against the
+// group" before, which is what made it unreachable; both have to answer
+// "outside" now, from either of the two targets that name them.
+check("the gap on the far-side member's inner side lets it leave",
+  split("jerome.focus", true), false)
+check("the same gap, named from the member itself", split("omarchy.bluetooth", false), false)
+check("the gap on its outer side lets it leave too",
+  split("omarchy.bluetooth", true), false)
+check("and the same gap named from the widget beyond it",
+  split("omarchy.network", false), false)
+
+// What must NOT change: the run on the pocket's own side is still the group,
+// including its outermost edge, so a member dropped inside it is reordered.
+check("the run's inner gap is still against the group", split(SELF, false), true)
+check("the run's outer gap is still against the group", split("omarchy.tray", true), true)
+check("a gap between two members of the run is still against it",
+  split("omaplug", true), true)
+check("the gap past the pocket is still outside", split(SELF, true), false)
+
+// The fail-safe. A layout this pocket cannot find itself in has no sides, so
+// every gap reads as inside the group and no drop can eject anything. Without
+// it, the same call ejects on every drop -- which is why the check is here and
+// not left to the argument.
+check("a layout without the pocket ejects nothing",
+  Model.gapTouchesMember(["omaplug", "omarchy.bluetooth"], ["omaplug"], "omaplug", true,
+                         SELF, true), true)
+check("nor does one with an empty pocket id",
+  Model.gapTouchesMember(SPLIT, SPLIT_MEMBERS, "jerome.focus", true, "", true), true)
+
+// The `left` section is the same rule mirrored: the pocket comes first and the
+// run follows it, so `nearestAtEnd` is false and the sides swap. The far-side
+// member is the one BEFORE the mark there.
+const LEFT_SPLIT = ["omarchy.bluetooth", SELF, "omaplug", "agx.screen-time", "omarchy.network"]
+const LEFT_MEMBERS = ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
+check("mirrored: the run after the mark is still the group",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, SELF, true, SELF, false), true)
+check("mirrored: the far-side member before the mark can leave",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, "omarchy.bluetooth", false, SELF, false), false)
+check("mirrored: the gap before the mark is outside the group",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, SELF, false, SELF, false), false)
+
+// A layout that names the same widget twice is legal by hand, and the side test
+// has to answer for the copy the gap actually touches rather than for the first
+// one it can find. Here the first copy is inside the run and the second is not:
+// the gap beside the second must still let it leave.
+const TWICE = ["omaplug", SELF, "omarchy.agents", "omaplug", "omarchy.network"]
+check("the copy inside the run is against the group",
+  Model.gapTouchesMember(TWICE, ["omaplug"], SELF, false, SELF, true), true)
+check("the copy outside it is not",
+  Model.gapTouchesMember(TWICE, ["omaplug"], "omarchy.agents", true, SELF, true), false)
 
 // ------------------------------------------------------ member order
 
