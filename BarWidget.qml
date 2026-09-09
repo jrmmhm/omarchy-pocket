@@ -91,11 +91,15 @@ BarWidget {
   // `visible` holds a binding of the host's own, so writing it would destroy
   // that binding for the rest of the session with nothing to report it.
   //
-  // Asked only where the host does not publish `centerAnchor`. On a host that
-  // does, the id comparison alone decided this before and still does, so this
-  // adds no refusal that the old path did not already make.
+  // Asked only where the host is present and does not publish `centerAnchor`.
+  // Both halves are needed: `bar` is null until the host injects it, on every
+  // version, so testing the property alone would arm this against a bar that
+  // does publish an anchor and would refuse a centre member the previous
+  // behaviour hid. That is the one place this could have changed behaviour on
+  // an older Omarchy, and the hard requirement is that it does not.
   function anchoredByStructure(slot) {
-    if (bar && ("centerAnchor" in bar)) return false
+    if (!bar) return false
+    if ("centerAnchor" in bar) return false
     if (!slot || String(slot.region || "") !== "center") return false
     var holder = slot.parent
     return !holder || holder.spacing === undefined
@@ -534,6 +538,22 @@ BarWidget {
         glass.hovered = false
         surfaceHover.enabled = true
       }
+
+      // The handler is declared here but reparented onto the surface root, and
+      // that moves its ownership with it: destroying this item does NOT destroy
+      // the handler. Measured — it is still there afterwards, and `destroy()`
+      // does not take it either, because `destroy()` only works on objects that
+      // were created dynamically. So it is switched off instead, which is the
+      // one thing that reliably stops a handler being given events.
+      //
+      // What this defends against is a handler outliving the overlay and
+      // running its body against a destroyed `glass`, once the last pocket on a
+      // surface goes while the surface stays — removed from the bar, plugin
+      // disabled, or the host handing the drag API back. A review reported that
+      // as an error per pointer event; measured here it fired nothing at all
+      // after the item was gone, so the disable is a guard against a failure
+      // that was argued rather than one that was seen. It costs one assignment.
+      Component.onDestruction: surfaceHover.enabled = false
 
       PointHandler {
         // target: null keeps it a pure observer — it moves nothing and takes no
@@ -1067,9 +1087,12 @@ BarWidget {
     }
 
     if (typeof bar.shell.updateEntryInline !== "function") return false
+    // Both copies of the entry, because each is wrong differently: the host's
+    // snapshot is detached but goes stale on an inline-only config change, and
+    // the injected `settings` is current but writable from the shared scene.
     var entry = Model.layoutEntryFor(root.barLayout, region, selfId)
     return bar.shell.updateEntryInline(selfId,
-      Model.mergedEntrySettings(entry, "members", value)) === true
+      Model.mergedEntrySettings(entry, root.settings, "members", value)) === true
   }
 
   // Written synchronously, before the bar persists its own move. Deferring it

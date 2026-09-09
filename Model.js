@@ -521,6 +521,18 @@ function layoutEntryFor(layout, region, id) {
   return null
 }
 
+// Settings keys that disarm a bar entry. `exec` means a command module,
+// `source` means a bare qml file, and `type` is taken literally; any of them on
+// an entry makes the bar skip registry resolution, and the slot renders as an
+// empty item with no warning anywhere. This list is the one owner of that fact:
+// tests/model-test.js holds the manifest to it, and mergedEntrySettings()
+// refuses to carry one into a write.
+var RESERVED_ENTRY_KEYS = ["type", "exec", "source"]
+
+function isReservedEntryKey(key) {
+  return RESERVED_ENTRY_KEYS.indexOf(String(key || "")) !== -1
+}
+
 // The settings an inline write has to carry.
 //
 // The host's own inline writer rebuilds the entry as `{id}` plus exactly what
@@ -529,22 +541,40 @@ function layoutEntryFor(layout, region, id) {
 // the entry, and without this merge that promise would be false the first time
 // anyone put a second key there — which the author's own bar does.
 //
-// The base is the host's layout snapshot and never the injected `settings`
-// property: that one is a writable `var` in a scene every plugin shares, and
-// the facades are documented as not being a QML sandbox. A key another plugin
-// dropped into it would otherwise be laundered into the config through this
-// plugin's own write, which is the one write it is trusted with. `id` is
-// dropped because the host sets it from the entry it found.
-function mergedEntrySettings(entry, key, value) {
+// It reads BOTH copies of the entry the host offers, because each is wrong in a
+// different way and only together are they right.
+//
+// `entry` is the host's layout snapshot. It is detached and cannot be written
+// from the scene, but it can be STALE: a shell.json write that changed only
+// inline settings takes the bar's delta path, which patches its layout in place
+// without reassigning it, so the snapshot handed to plugins is never refreshed
+// for it. Writing from the snapshot alone therefore resurrects the value a
+// neighbouring key had before the user edited it.
+//
+// `live` is the widget's own injected `settings`, which that same delta path
+// assigns directly — so it is always current. It is also a writable `var` in a
+// scene every plugin shares, and the facades are documented as not being a QML
+// sandbox, so a key another plugin dropped into it would be laundered into the
+// config through the one write this plugin is trusted with.
+//
+// So: the snapshot is the base, the live copy wins where they disagree, and a
+// key that disarms the entry is refused from either. `id` is dropped because
+// the host sets it from the entry it matched.
+function mergedEntrySettings(entry, live, key, value) {
   var out = {}
-  if (isPlainObject(entry)) {
-    for (var k in entry) {
-      if (k === "id") continue
-      out[k] = entry[k]
+  var source
+
+  for (var pass = 0; pass < 2; pass++) {
+    source = pass === 0 ? entry : live
+    if (!isPlainObject(source)) continue
+    for (var k in source) {
+      if (k === "id" || isReservedEntryKey(k)) continue
+      out[k] = source[k]
     }
   }
+
   var name = String(key || "")
-  if (name !== "" && name !== "id") out[name] = value
+  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = value
   return out
 }
 
@@ -914,5 +944,6 @@ if (typeof module !== "undefined" && module.exports) {
                      membersInLayoutOrder: membersInLayoutOrder,
                      layoutEntryFor: layoutEntryFor,
                      mergedEntrySettings: mergedEntrySettings,
+                     reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }
 }

@@ -409,7 +409,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.0
 [0.3.3]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.1

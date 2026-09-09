@@ -148,10 +148,11 @@ there directly; and a member that ends up on the wrong side anyway is put back
 against the pocket. A widget already on the correct side is never moved.
 
 **On Omarchy 4.0.3 and later it cannot do either**, because that host grants a
-plugin no write to another widget's entry. Instead it declines the drops that
-would create the problem, and if you hand-edit `members` into a split
-arrangement it names the misplaced widget in its tooltip rather than quietly
-fixing it.
+plugin no write to another widget's entry. Instead it declines to take a widget
+in when the drop would land it on the far side — the bar still moves the widget
+there, it simply does not join the pocket — and if you hand-edit `members` into
+a split arrangement it names the misplaced widget in its tooltip rather than
+quietly fixing it.
 
 The `members` list is kept in the order the widgets physically sit in, and
 rewritten when the two disagree — that order is what the fan-out follows, so a

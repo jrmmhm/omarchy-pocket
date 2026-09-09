@@ -1152,7 +1152,7 @@ check("an empty id is null", Model.layoutEntryFor(ENTRY_LAYOUT, "right", ""), nu
 
 // The whole point: every other key survives the write.
 const KEPT = Model.mergedEntrySettings(
-  { id: SELF, members: "old", showCount: true, note: "hand written" },
+  { id: SELF, members: "old", showCount: true, note: "hand written" }, null,
   "members", "new")
 check("the new value wins", KEPT.members, "new")
 check("a foreign key on the entry survives", KEPT.showCount, true)
@@ -1162,20 +1162,55 @@ check("and so does a second one", KEPT.note, "hand written")
 check("id is never carried", "id" in KEPT, false)
 
 check("a bare string entry contributes no keys",
-  Model.mergedEntrySettings(SELF, "members", "a, b"), { members: "a, b" })
+  Model.mergedEntrySettings(SELF, null, "members", "a, b"), { members: "a, b" })
 check("no entry at all still writes the value",
-  Model.mergedEntrySettings(null, "members", "a, b"), { members: "a, b" })
+  Model.mergedEntrySettings(null, null, "members", "a, b"), { members: "a, b" })
 check("an array is not an entry",
-  Model.mergedEntrySettings(["a"], "members", "x"), { members: "x" })
+  Model.mergedEntrySettings(["a"], null, "members", "x"), { members: "x" })
 // An array-valued members is the shape a hand-edited config uses, and
 // membersValue() preserves it -- so the merge has to carry it unchanged.
 check("an array value passes through",
-  Model.mergedEntrySettings({ id: SELF }, "members", ["a", "b"]),
+  Model.mergedEntrySettings({ id: SELF }, null, "members", ["a", "b"]),
   { members: ["a", "b"] })
 check("an empty key writes nothing",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, "", "x"), { showCount: true })
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "", "x"),
+  { showCount: true })
 check("writing id is refused",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, "id", "evil"), { showCount: true })
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "id", "evil"),
+  { showCount: true })
+
+// The second source, and why it exists. The host's layout snapshot goes stale
+// on a shell.json write that changed only inline settings -- the bar patches its
+// layout in place and never reassigns it, so the copy handed to plugins keeps
+// the old value -- while the widget's own injected `settings` is assigned
+// directly by that same path. Writing from the snapshot alone would resurrect
+// what the user had just edited away.
+const FRESH = Model.mergedEntrySettings(
+  { id: SELF, members: "old", showCount: true },
+  { members: "old", showCount: false, note: "added by hand" },
+  "members", "new")
+check("the live copy wins over a stale snapshot", FRESH.showCount, false)
+check("a key only the live copy has is still carried", FRESH.note, "added by hand")
+check("and the value being written still wins over both", FRESH.members, "new")
+check("a key only the snapshot has is not dropped",
+  Model.mergedEntrySettings({ id: SELF, older: 1 }, { members: "x" }, "members", "y").older, 1)
+
+// And the reason the live copy cannot simply BE the base: it is a writable
+// property in a scene every plugin shares. A key that disarms the entry is
+// refused from either source, so this plugin's own write cannot become the way
+// one arrives in the user's config.
+Model.reservedEntryKeys.forEach(word => {
+  const entry = { id: SELF }
+  entry[word] = "payload"
+  check(`a reserved key on the snapshot is refused: ${word}`,
+    word in Model.mergedEntrySettings(entry, null, "members", "a"), false)
+  const live = {}
+  live[word] = "payload"
+  check(`a reserved key injected into settings is refused: ${word}`,
+    word in Model.mergedEntrySettings({ id: SELF }, live, "members", "a"), false)
+  check(`and it cannot be written as the value's own key: ${word}`,
+    word in Model.mergedEntrySettings({ id: SELF }, null, word, "a"), false)
+})
 
 // --------------------------------------------------- manifest integrity
 
@@ -1187,7 +1222,10 @@ check("writing id is refused",
 // reserved key in `defaults` or `schema` reaches the entry and disarms the
 // plugin. One assertion per reserved word, and one negative fixture per word so
 // the guard is seen failing rather than assumed to work.
-const RESERVED = ["type", "exec", "source"]
+// Taken from Model.js rather than restated here: mergedEntrySettings() refuses
+// the same words when it writes, and two copies of that list would be two
+// places to update and one place to forget.
+const RESERVED = Model.reservedEntryKeys
 
 function settingKeys(manifest) {
   const meta = (manifest && manifest.barWidget) || {}
