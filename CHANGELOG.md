@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-09
+
+Omarchy 4.0.3 stopped injecting the bar into installed plugins, and Pocket
+stopped working — silently, with every guard it promised intact and its whole
+test suite green. This release makes it work again on that host without giving
+up anything on the ones before it.
+[Decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md) owns
+the account.
+
+### Fixed
+
+- **Pocket hides widgets again on Omarchy 4.0.3.** A third-party bar widget
+  there receives a capability-scoped facade instead of the bar, and none of the
+  fifteen properties and functions this plugin reads are on it. Nothing threw
+  and nothing warned; the pocket simply held nothing, on a bar that looked
+  unchanged. Every host reading now has a preferred source and a fallback,
+  chosen at runtime from what the host actually offers and never from a version
+  number — so an older Omarchy keeps exactly the behaviour it has today, and a
+  future one that hands the API back is used again without another release.
+- **Membership is written again.** The host's config mutator is refused for any
+  plugin that does not declare `kind: "bar"`, so every write had become a silent
+  no-op. Where it is refused, Pocket writes its own entry through the one door
+  left open, carrying the whole entry across — without that, a second key on the
+  entry would have been deleted by the first drag.
+- **The drag gesture works again**, including the mark lighting up before you
+  let go. Pocket now works out the bar's insertion line itself, from the pointer
+  and the geometry of the slots it can see. Every rule that decides what a drop
+  means is unchanged.
+
+### Changed
+
+- **On Omarchy 4.0.3 and later, only the half of the mark facing the members
+  takes a widget in.** That host grants no write to another widget's entry, so a
+  widget arriving from the far side could not be moved back and would split the
+  group — and break the way out of it. The mark says so: the far half does not
+  light. Both halves still work on earlier versions.
+  ([0002](docs/decisions/0002-members-belong-on-one-side.md) amended.)
+- **A misplaced member is named rather than moved**, where the host refuses the
+  move. The standing invariant is unchanged wherever it can still run.
+- **A member in `center` hides like any other on 4.0.3.** The bar no longer
+  builds every centre widget twice with `centerAnchor` set, so the note that
+  said otherwise is gone. Measured: six centre entries, six slots, per surface.
+
+### Added
+
+- **The tooltip names a member that has hidden itself.** Some widgets disappear
+  when they have nothing to report, and the bar only lets you grab a widget it
+  is drawing — so such a member cannot be dragged back out, on any Omarchy
+  version. It looks exactly like a widget the pocket is holding, so nothing else
+  could tell you. Reported on a real bar.
+- **`tests/qml/facade.qml`** loads the host's own `Ui/PluginBarApi.qml` instead
+  of a stand-in. A mock would have repeated the assumption that let this break
+  through a green suite.
+- **`tests/live.sh`** asks the running shell whether the bar is drawing what the
+  setting says it should. Against a pocket that hides nothing it answers "21 of
+  21 member slots disagree" — the original break, named. It is the only check
+  here that needs a machine rather than a checkout, and the only one that would
+  have caught this on the day it landed.
+- The neighbourhood sweep now also holds Pocket's copy of the bar's drop rule to
+  the installed shell's own, pixel by pixel. A one-character drift fails it.
+
 ## [0.3.3] — 2026-09-08
 
 The plugin did not change. Its listing did: nine days on the marketplace,
