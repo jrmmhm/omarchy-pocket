@@ -113,7 +113,7 @@ BarWidget {
     var anchor = root.anchorId
     var mine = root.ownWindow
 
-    var found = [], missing = [], anchored = [], foreign = []
+    var found = [], missing = [], anchored = [], foreign = [], selfHidden = []
 
     for (var i = 0; i < ids.length; i++) {
       var want = root.canonical(ids[i])
@@ -145,10 +145,25 @@ BarWidget {
       }
 
       if (hit.region !== root.ownRegion && root.ownRegion !== "") foreign.push(ids[i])
+
+      // A member whose own widget has hidden itself. The pocket never writes
+      // `activeItem.visible`, so this is the widget's own decision — the
+      // battery with no battery, the bluetooth icon with the adapter off, a
+      // widget that only appears when it has something to say.
+      //
+      // It is worth its own line because it is a one-way door: the bar only
+      // starts a drag on a slot that is drawn, so a member in this state cannot
+      // be taken out by the gesture that put it in, on any host, and the only
+      // way back is to edit `members`. Nothing else in the plugin can tell the
+      // user that, because from the outside it looks exactly like a widget the
+      // pocket is holding.
+      if (hit.activeItem && hit.activeItem.visible === false) selfHidden.push(ids[i])
+
       found.push(hit)
     }
 
-    return { slots: found, missing: missing, anchored: anchored, foreign: foreign }
+    return { slots: found, missing: missing, anchored: anchored, foreign: foreign,
+             selfHidden: selfHidden }
   }
 
   // This pocket's own module slot. `activeItem === root` is already exact per
@@ -251,14 +266,34 @@ BarWidget {
   // rest of the current build, the timer catches a build that outlives it, and
   // the layout signal catches every later change. A drag adds one more, in the
   // overlay below, because that is the moment the answer has to be right.
-  onBarLayoutChanged: { refreshWalk(); Qt.callLater(refreshWalk) }
+  onBarLayoutChanged: {
+    refreshWalk()
+    Qt.callLater(refreshWalk)
+    root.attachOverlay()
+    root.rearmOverlayHover()
+    settle.restart()
+  }
+
+  function rearmOverlayHover() {
+    var glass = root.overlay
+    if (glass && typeof glass.rearmHover === "function") glass.rearmHover()
+  }
   onSettingsChanged: refreshWalk()
 
+  // The settling pass after any change that rebuilds the bar. It redoes both
+  // things a rebuild can leave behind — a walk taken before the later slots
+  // existed, and an overlay claim that lost its race with the teardown — and it
+  // is bounded rather than repeating, so a bar that is already correct costs
+  // one comparison and nothing else. Both calls are idempotent.
   Timer {
-    id: walkSettle
+    id: settle
     interval: 250
     repeat: false
-    onTriggered: root.refreshWalk()
+    onTriggered: {
+      root.refreshWalk()
+      root.attachOverlay()
+      root.rearmOverlayHover()
+    }
   }
 
   // Every module slot this pocket may look at. On a host that publishes its
@@ -419,9 +454,29 @@ BarWidget {
       property real sceneX: 0
       property real sceneY: 0
 
+      // Parented to the surface root and NOT to this item, which is the whole
+      // difference between a bar that still hovers and one that does not.
+      //
+      // Qt walks a hover down the children in reverse paint order, and
+      // `deliverHoverEventRecursive` breaks out of that loop as soon as any
+      // HoverHandler reports itself hovered — `blocking` only decides whether
+      // the walk stops entirely, not whether it skips the remaining SIBLINGS.
+      // This item sits above the whole bar by construction, so a handler here
+      // was visited first every time and the bar underneath never saw a hover
+      // at all: the mark stopped fanning out on pointer, and nothing in the
+      // plugin could tell, because from the inside it simply never happened.
+      // Measured on the live bar, and the reason the earlier build appeared to
+      // work is that its overlay was never built.
+      //
+      // The same function says where a handler may sit without doing that:
+      // "Don't propagate to siblings, only to ancestors". An ancestor is
+      // served after its children, so this sees every pointer on the surface
+      // and takes none of them away. It is also where the host puts its own —
+      // `barHovered` comes from a HoverHandler on the bar's window-filling
+      // loader.
       HoverHandler {
-        // Never blocking: this item exists to watch, and taking hover away from
-        // the widgets underneath would break every tooltip on the bar.
+        id: surfaceHover
+        parent: glass.parent
         blocking: false
         onHoveredChanged: glass.hovered = hovered
         onPointChanged: {
@@ -429,6 +484,30 @@ BarWidget {
           glass.sceneX = point.scenePosition.x
           glass.sceneY = point.scenePosition.y
         }
+      }
+
+      // A bar rebuild destroys and recreates every item on this surface while a
+      // hover is in flight, and Qt's hover bookkeeping does not always survive
+      // it: measured on the live bar as `hovered` stuck true at a frozen
+      // position on the one surface the drop happened on, with no leave event
+      // ever arriving. `pointerOnBar` then answered true for the rest of the
+      // session and the fold timer returned early every single tick — the
+      // pocket fanned out and never closed again.
+      //
+      // Re-arming is the reset: a disabled handler drops its hover, and an
+      // enabled one takes it again from the next pointer event. The cost is one
+      // stale `false` for a pointer that is resting on the bar and not moving,
+      // and it is a cost worth paying — while the pointer is on the pocket or on
+      // one of its members, `holdOpen` holds it open through their own hover and
+      // never consults this at all.
+      //
+      // The host guards the neighbouring case, a surface destroyed without a
+      // leave, in Bar.qml's own HoverHandler. This is the case where the surface
+      // lives and its contents do not.
+      function rearmHover() {
+        surfaceHover.enabled = false
+        glass.hovered = false
+        surfaceHover.enabled = true
       }
 
       PointHandler {
@@ -478,7 +557,24 @@ BarWidget {
     root.overlay = null
     if (!glass) return
     glass.users -= 1
-    if (glass.users <= 0) glass.destroy()
+    if (glass.users > 0) return
+
+    // Deferred, and this is the whole reason the overlay was going missing.
+    //
+    // A layout rebuild completes the new instances before it destroys the old
+    // ones — but the host injects `bar` from a callLater of its own, so the new
+    // instance's claim lands AFTER the old instance's release. Destroying inline
+    // meant the count reached zero in that gap, the object was scheduled for
+    // deletion, and the new instance then adopted a corpse: `overlay` came back
+    // null one frame later and stayed null for the life of the bar. Hiding went
+    // on working, because it needs no overlay, and the gesture was silently
+    // dead. Measured on the live bar: one `omarchy bar move` was enough.
+    //
+    // Deferring lets the claim raise the count again before this runs, in which
+    // case there is nothing to destroy.
+    Qt.callLater(function () {
+      if (glass && glass.users <= 0) glass.destroy()
+    })
   }
 
   // A monitor move unmaps the surface and hands back a new root item. The
@@ -488,6 +584,21 @@ BarWidget {
     root.detachOverlay()
     root.attachOverlay()
     root.refreshWalk()
+  }
+
+  // The host injects `bar` from a callLater after the loader completes, so at
+  // Component.onCompleted it is still null and every question asked of it
+  // answers as if there were no host at all. Attaching only from there left the
+  // overlay unbuilt for the life of the instance: hiding still worked, because
+  // the walk needs no host, and the gesture was silently dead — the mark never
+  // lit and no drop ever landed, which is exactly the shape of failure this
+  // whole change exists to stop shipping.
+  //
+  // Hung on the capability rather than on `bar` itself, so it also answers the
+  // case of a host that hands the drag back later.
+  onOverlayWantedChanged: {
+    if (root.overlayWanted) root.attachOverlay()
+    else root.detachOverlay()
   }
 
   // ----------------------------------------------------------------- drag
@@ -517,9 +628,73 @@ BarWidget {
   // `!!` or an identity test against a slot, and `barDragAfter` through
   // `=== true`, so an undefined cannot survive either; `barDragTargetGeometry`
   // is read only inside steerDrop(), behind an `in` check.
-  readonly property var dragSource: bar && ("barDragSource" in bar) ? bar.barDragSource : null
-  readonly property var dragTarget: bar ? bar.barDragTarget : null
-  readonly property bool dragAfter: bar ? bar.barDragAfter === true : false
+  readonly property bool hostPublishesDrag: !!bar && ("barDragSource" in bar)
+
+  // The dragged slot, read off the slots themselves. Every ModuleSlot mirrors
+  // the host's answer as its own `dragSource`, so the surface still carries it
+  // even when the facade does not — and only the surface the drag is ON carries
+  // it, which is why exactly one pocket ever acts on a gesture. That is a
+  // per-instance input into a rule 0004 asked to keep free of them; it is safe
+  // for the reason 0004 gives for `targetIsSelf`, because the instance that is
+  // not being aimed at falls through to doing nothing rather than to acting on
+  // a conclusion the others did not reach. See docs/decisions/0015.
+  readonly property var walkedDragSource: {
+    var slots = root.barSlots
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i] && slots[i].dragSource === true) return slots[i]
+    }
+    return null
+  }
+
+  // Where the bar would draw its insertion line, computed here because the
+  // facade no longer says. The pointer comes from the overlay — hover is dead
+  // under the host's grab, a passive grab is not — and the geometry from the
+  // slots, which this surface can still see. Everything else about the gesture,
+  // including every rule in 0004, 0008 and 0009, is unchanged and reads these
+  // two values exactly as it read the host's.
+  //
+  // Walked in `barSlots` order and not sorted: the host breaks a tie by keeping
+  // the first candidate it walked, and adjacent slots sit flush, so the order is
+  // part of the answer.
+  readonly property var localDrop: {
+    if (root.hostPublishesDrag) return null
+    var glass = root.overlay
+    if (!glass || glass.pressed !== true) return null
+
+    var source = root.walkedDragSource
+    if (!source) return null
+
+    var top = root.surfaceRoot
+    if (!top) return null
+
+    // Off this bar entirely is no target at all, which is what a release
+    // outside the bar has to mean — the same bounds test the host makes.
+    var here = top.mapFromItem(null, glass.sceneX, glass.sceneY)
+    if (here.x < 0 || here.x > top.width || here.y < 0 || here.y > top.height) return null
+
+    var slots = root.barSlots
+    var rows = []
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i]
+      if (!slot || slot === source) continue
+      // What is not drawn is not a candidate, and a collapsed pocket's own
+      // members are exactly that.
+      if (slot.visible !== true || slot.width <= 0 || slot.height <= 0) continue
+      var at = { x: slot.x, y: slot.y }
+      try { at = slot.mapToItem(null, 0, 0) } catch (e) { }
+      rows.push({ slot: slot, x: at.x, y: at.y, width: slot.width, height: slot.height })
+    }
+
+    return Model.nearestDropTarget(rows, { x: glass.sceneX, y: glass.sceneY },
+                                   root.vertical === true)
+  }
+
+  readonly property var dragSource: root.hostPublishesDrag ? bar.barDragSource
+    : root.walkedDragSource
+  readonly property var dragTarget: root.hostPublishesDrag ? (bar ? bar.barDragTarget : null)
+    : (root.localDrop ? root.localDrop.slot : null)
+  readonly property bool dragAfter: root.hostPublishesDrag ? (bar ? bar.barDragAfter === true : false)
+    : (root.localDrop ? root.localDrop.after === true : false)
   readonly property string dragSourceId: dragSource ? canonical(dragSource.moduleName) : ""
   readonly property string dragTargetId: dragTarget ? canonical(dragTarget.moduleName) : ""
 
@@ -628,6 +803,31 @@ BarWidget {
     && (root.dragTarget === root.ownSlot
         || (root.dragAfter && root.dragTarget === root.slotBeforeSelf))
 
+  // Aiming at the gap the members occupy, which on a host that cannot be
+  // steered is the only gap a widget may join from.
+  //
+  // With steering, "from either side" is honest: a far-side arrival is placed
+  // against the pocket, and where the override does not apply the standing
+  // invariant pulls it back. Neither is available once the host refuses a write
+  // to another widget's entry — so a far-side release would leave the widget on
+  // the far side for good, splitting the run around the mark and, worse, making
+  // "drag a member past the mark to take it out" stop working there, because the
+  // gap past the mark would then have a member against it.
+  //
+  // Refusing that release is the smaller loss, and it is not a silent one: this
+  // is the same predicate that lights the mark, so the far half simply does not
+  // light and the answer is visible before the button comes up. See
+  // docs/decisions/0015; docs/decisions/0002 gains the amendment.
+  readonly property bool aimsAtNearSide: {
+    if (!root.dragTarget) return false
+    var atSelf = root.dragTarget === root.ownSlot
+    if (root.membersLeadFromEnd) {
+      return (atSelf && !root.dragAfter)
+        || (root.dragAfter && root.dragTarget === root.slotBeforeSelf)
+    }
+    return atSelf && root.dragAfter
+  }
+
   readonly property string dropIntent: {
     if (!root.dragSource) return "none"
     return Model.dropDecision({
@@ -635,7 +835,7 @@ BarWidget {
       selfId: root.moduleName,
       anchorId: root.anchorId,
       members: root.gestureMembers,
-      targetIsSelf: root.aimsAtSelf,
+      targetIsSelf: root.hostPublishesDrag ? root.aimsAtSelf : root.aimsAtNearSide,
       hasTarget: !!root.dragTarget,
       gapTouchesMember: root.dropGapTouchesMember
     })
@@ -1079,7 +1279,7 @@ BarWidget {
     // neighbours that do not exist yet. callLater catches the rest of this
     // build; the timer catches a build that outlives it.
     Qt.callLater(root.refreshWalk)
-    walkSettle.restart()
+    settle.restart()
 
     if (holdOpen) expanded = true
     apply()
@@ -1171,6 +1371,7 @@ BarWidget {
       rejected: root.rejectedIds, unreadable: root.unreadableAt,
       missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
+      selfHidden: root.resolution.selfHidden,
       duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown,
       // Only once the repair has been observed to be refused. Reporting it
       // before that would name a state the very next callLater is about to fix.

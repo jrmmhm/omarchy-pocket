@@ -417,6 +417,52 @@ function steerDropAfter(state) {
   return { after: false }
 }
 
+// Which gap the bar would draw its insertion line in, given the pointer and the
+// slots that are actually drawn. This is the host's own `nearestDropTarget`
+// rule, reimplemented rather than imported.
+//
+// Reimplemented, because importing `plugins/bar/BarModel.js` by absolute path
+// would make a renamed host file a hard load failure — the one degradation the
+// README says this plugin does not have. Copied rather than invented, because
+// the answer has to be the bar's: what the pocket decides and the line the user
+// is looking at must not disagree, and the bar places the widget from its own
+// answer whatever this one says.
+//
+// The copy is held to the original by tests/qml/neighbourhood.qml, which sweeps
+// both over the same neighbourhoods and fails on the first disagreement. That
+// is the guard; this comment is only the reason.
+//
+// The rule itself: every drawn slot offers two edges, the line goes in whichever
+// edge is nearest the pointer, and ties keep the first candidate walked — which
+// is why the caller must walk slots in the host's order and not, say, sorted by
+// position. `after` says the line sits on the far edge of the slot it names.
+function nearestDropTarget(candidates, point, vertical) {
+  var rows = candidates || []
+  var axis = vertical ? Number(point && point.y) : Number(point && point.x)
+  if (!isFinite(axis)) return null
+
+  var best = null
+  var bestDistance = Infinity
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i]
+    if (!row || !row.slot) continue
+
+    var start = Number(vertical ? row.y : row.x)
+    var size = Number(vertical ? row.height : row.width)
+    if (!isFinite(start) || !isFinite(size) || size <= 0) continue
+
+    var beforeDistance = Math.abs(axis - start)
+    var afterDistance = Math.abs(axis - (start + size))
+    var after = afterDistance < beforeDistance
+    var distance = after ? afterDistance : beforeDistance
+    if (distance < bestDistance) {
+      best = { slot: row.slot, after: after }
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
 // The bar's drop marker as Bar.qml computes it: a plain {x, y, width, height}.
 // Compared field by field because dropMarkerRect() returns a fresh object on
 // every call, so reference equality is always false and the pocket would
@@ -781,6 +827,7 @@ function describe(state) {
   var missing = s.missing || []
   var anchored = s.anchored || []
   var foreign = s.foreign || []
+  var selfHidden = s.selfHidden || []
 
   // An instance that does not know which bar surface it is on resolved nothing,
   // and every member came back unfound — but it never looked, so saying "not on
@@ -832,6 +879,13 @@ function describe(state) {
   if (!unknown && missing.length > 0) lines.push("Not on this bar: " + tooltipList(missing))
   if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + tooltipList(anchored))
   if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + tooltipList(foreign))
+  // A one-way door, and the only line here that tells the user the gesture will
+  // not get them back out. The bar starts a drag only on a slot it is drawing,
+  // so a member whose own widget has hidden itself cannot be dragged anywhere —
+  // and from the outside it is indistinguishable from one the pocket is holding.
+  if (!unknown && selfHidden.length > 0)
+    lines.push("Hiding itself, so it cannot be dragged out — edit `members` to release it: "
+      + tooltipList(selfHidden))
   // Named rather than repaired. Moving another widget's entry needs a write
   // this shell no longer grants an installed plugin, so the standing invariant
   // that used to put it back silently has nothing to act with — and a rule that
@@ -859,5 +913,6 @@ if (typeof module !== "undefined" && module.exports) {
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
                      layoutEntryFor: layoutEntryFor,
-                     mergedEntrySettings: mergedEntrySettings }
+                     mergedEntrySettings: mergedEntrySettings,
+                     nearestDropTarget: nearestDropTarget }
 }

@@ -264,6 +264,23 @@ contains("rejected ids are named",
 contains("a second pocket is called out",
   Model.describe({ members: ["a"], duplicateInstances: true }), "second Pocket entry")
 
+// The one-way door. A member whose own widget has hidden itself has no drawn
+// slot, the bar starts a drag only on a drawn slot, and so the gesture that put
+// it in cannot take it out again -- on any host, old or new. Reported on the
+// user's own bar: the bluetooth widget went into the pocket while the adapter
+// was showing and could not be dragged back out once it stopped.
+contains("a member that hides itself is named",
+  Model.describe({ members: ["a"], selfHidden: ["a"] }), "Hiding itself")
+contains("and the way out is spelled out",
+  Model.describe({ members: ["a"], selfHidden: ["a"] }), "edit `members`")
+contains("and the id is escaped like every other",
+  Model.describe({ members: ["a"], selfHidden: ["a<b"] }), "a\\u003cb")
+// It is a line about the resolution, so an instance that never looked must not
+// print it, exactly as with the three lines beside it.
+check("a pocket that does not know its screen does not claim it either",
+  Model.describe({ members: ["a"], selfHidden: ["a"], surfaceUnknown: true })
+    .indexOf("Hiding itself") === -1, true)
+
 // An instance without a window resolves nothing, so every member comes back
 // unfound. Reporting that as "not on this bar" would be a claim about widgets
 // that are in fact sitting right there -- it never looked. Verbatim, because
