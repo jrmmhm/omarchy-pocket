@@ -113,7 +113,7 @@ BarWidget {
     var anchor = root.anchorId
     var mine = root.ownWindow
 
-    var found = [], missing = [], anchored = [], foreign = [], selfHidden = []
+    var found = [], missing = [], anchored = [], foreign = []
 
     for (var i = 0; i < ids.length; i++) {
       var want = root.canonical(ids[i])
@@ -146,24 +146,49 @@ BarWidget {
 
       if (hit.region !== root.ownRegion && root.ownRegion !== "") foreign.push(ids[i])
 
-      // A member whose own widget has hidden itself. The pocket never writes
-      // `activeItem.visible`, so this is the widget's own decision — the
-      // battery with no battery, the bluetooth icon with the adapter off, a
-      // widget that only appears when it has something to say.
-      //
-      // It is worth its own line because it is a one-way door: the bar only
-      // starts a drag on a slot that is drawn, so a member in this state cannot
-      // be taken out by the gesture that put it in, on any host, and the only
-      // way back is to edit `members`. Nothing else in the plugin can tell the
-      // user that, because from the outside it looks exactly like a widget the
-      // pocket is holding.
-      if (hit.activeItem && hit.activeItem.visible === false) selfHidden.push(ids[i])
-
       found.push(hit)
     }
 
-    return { slots: found, missing: missing, anchored: anchored, foreign: foreign,
-             selfHidden: selfHidden }
+    return { slots: found, missing: missing, anchored: anchored, foreign: foreign }
+  }
+
+  // Members whose own widget has hidden itself — the battery with no battery,
+  // the bluetooth icon with the adapter off, a widget that only appears when it
+  // has something to say.
+  //
+  // It earns a tooltip line because it is a one-way door: the bar starts a drag
+  // only on a slot it is drawing, so a member in this state cannot be taken out
+  // by the gesture that put it in, on any host, and the only way back is to edit
+  // `members`. From the outside it looks exactly like a widget the pocket is
+  // holding, so nothing else can tell the user.
+  //
+  // Two things decide where this may live, and both are load-bearing.
+  //
+  // It asks `slot.visible` and therefore may NOT sit inside `resolution`:
+  // `resolution` feeds apply(), apply() writes `visible` on these very slots,
+  // and that is the loop 0002 refused — a cycle through a binding's own writes,
+  // whether or not the value ever changes. It sits here, where nothing
+  // downstream writes anything. The suite caught it the first time it was put
+  // in the wrong place.
+  //
+  // And it is asked only while the slot IS shown, because `Item.visible` is
+  // EFFECTIVE visibility: it reads false whenever an ancestor is invisible, and
+  // a collapsed pocket makes the slot invisible — so without that guard every
+  // member would report as hiding itself the moment the pocket closed.
+  // tests/live.sh caught that one, on the first run against a real bar.
+  //
+  // The cost is that the line arrives on the second hover rather than the
+  // first, which is the snapshot behaviour the README already describes for
+  // every line that reports a state the pointer has just caused.
+  readonly property var selfHiddenMembers: {
+    var list = root.resolution.slots
+    var out = []
+    for (var i = 0; i < list.length; i++) {
+      var slot = list[i]
+      if (!slot || slot.visible !== true) continue
+      if (slot.activeItem && slot.activeItem.visible === false) out.push(slot.moduleName)
+    }
+    return out
   }
 
   // This pocket's own module slot. `activeItem === root` is already exact per
@@ -1371,7 +1396,7 @@ BarWidget {
       rejected: root.rejectedIds, unreadable: root.unreadableAt,
       missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
-      selfHidden: root.resolution.selfHidden,
+      selfHidden: root.selfHiddenMembers,
       duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown,
       // Only once the repair has been observed to be refused. Reporting it
       // before that would name a state the very next callLater is about to fix.
