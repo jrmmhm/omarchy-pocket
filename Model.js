@@ -461,6 +461,47 @@ function setMembersOnEntry(config, region, id, value) {
   return false
 }
 
+// This plugin's own entry as the host holds it, or null. Read from the layout
+// snapshot rather than from the injected `settings`, for the reason
+// mergedEntrySettings() gives.
+function layoutEntryFor(layout, region, id) {
+  var entries = layout ? layout[region] : null
+  if (!entries || typeof entries.length !== "number") return null
+  var want = String(id || "").trim()
+  if (want === "") return null
+  for (var i = 0; i < entries.length; i++) {
+    if (entryIdOf(entries[i]) === want) return entries[i]
+  }
+  return null
+}
+
+// The settings an inline write has to carry.
+//
+// The host's own inline writer rebuilds the entry as `{id}` plus exactly what
+// it is handed, so every key omitted here is DELETED from the user's
+// shell.json. The README promises this plugin never touches anything else on
+// the entry, and without this merge that promise would be false the first time
+// anyone put a second key there — which the author's own bar does.
+//
+// The base is the host's layout snapshot and never the injected `settings`
+// property: that one is a writable `var` in a scene every plugin shares, and
+// the facades are documented as not being a QML sandbox. A key another plugin
+// dropped into it would otherwise be laundered into the config through this
+// plugin's own write, which is the one write it is trusted with. `id` is
+// dropped because the host sets it from the entry it found.
+function mergedEntrySettings(entry, key, value) {
+  var out = {}
+  if (isPlainObject(entry)) {
+    for (var k in entry) {
+      if (k === "id") continue
+      out[k] = entry[k]
+    }
+  }
+  var name = String(key || "")
+  if (name !== "" && name !== "id") out[name] = value
+  return out
+}
+
 // The first member sitting on the wrong side of the pocket, or "" if the run
 // is intact. Members belong on one side — the side the pocket fans them out
 // towards — and a member that is not there fans out alone on the wrong side of
@@ -791,6 +832,13 @@ function describe(state) {
   if (!unknown && missing.length > 0) lines.push("Not on this bar: " + tooltipList(missing))
   if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + tooltipList(anchored))
   if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + tooltipList(foreign))
+  // Named rather than repaired. Moving another widget's entry needs a write
+  // this shell no longer grants an installed plugin, so the standing invariant
+  // that used to put it back silently has nothing to act with — and a rule that
+  // stops working must say so rather than simply stop.
+  if (!unknown && typeof s.misplaced === "string" && s.misplaced !== "")
+    lines.push("On the wrong side of the mark, and this shell will not let Pocket move it: "
+      + tooltipSafe(s.misplaced))
   if (s.duplicateInstances) lines.push("A second Pocket entry exists — they will fight over shared members")
 
   return lines.join("\n")
@@ -809,5 +857,7 @@ if (typeof module !== "undefined" && module.exports) {
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
-                     membersInLayoutOrder: membersInLayoutOrder }
+                     membersInLayoutOrder: membersInLayoutOrder,
+                     layoutEntryFor: layoutEntryFor,
+                     mergedEntrySettings: mergedEntrySettings }
 }

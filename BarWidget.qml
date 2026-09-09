@@ -804,6 +804,49 @@ BarWidget {
     root.apply()
   }
 
+  // Whether the host's own config mutator has ever been observed to run. It is
+  // the only honest test available: the trusted bar's mutator returns
+  // `undefined`, the facade's returns `false` without calling the mutator at
+  // all, and the inline writer returns `false` for "nothing to change" as well
+  // — so no return value separates "refused" from "did nothing". Whether OUR
+  // function body ran does.
+  //
+  // It gates the placement repair, which is the one write that reaches another
+  // widget's entry and therefore the one the fallback cannot carry.
+  property bool hostMutatorRuns: true
+
+  // The one place `members` is written, whichever way the host allows.
+  //
+  // Preferred is the host's own mutator over the whole config, which is what
+  // this plugin has always used and what keeps a hand-written entry — a bare id
+  // string — working, because setMembersOnEntry() converts it in place.
+  //
+  // The fallback is the single write an installed plugin still has in Omarchy
+  // 4.0.3: an inline update of its OWN entry. It rebuilds the entry from what it
+  // is handed, so it is handed the whole entry (see Model.mergedEntrySettings).
+  // It cannot match a bare id string, so a hand-written entry of that shape has
+  // no write path left there at all — the tooltip is what says so.
+  function writeMembers(value) {
+    if (!root.mayWriteMembers) return false
+    if (!bar || !bar.shell) return false
+
+    var region = root.ownRegion
+    var selfId = root.moduleName
+
+    if (typeof bar.shell.mutateShellConfig === "function") {
+      var written = false
+      bar.shell.mutateShellConfig(function (config) {
+        written = Model.setMembersOnEntry(config, region, selfId, value)
+      })
+      if (written) return true
+    }
+
+    if (typeof bar.shell.updateEntryInline !== "function") return false
+    var entry = Model.layoutEntryFor(root.barLayout, region, selfId)
+    return bar.shell.updateEntryInline(selfId,
+      Model.mergedEntrySettings(entry, "members", value)) === true
+  }
+
   // Written synchronously, before the bar persists its own move. Deferring it
   // is not an option: the bar's move reassigns the layout, which destroys and
   // rebuilds every widget on every monitor, and a deferred callback would be
@@ -813,23 +856,16 @@ BarWidget {
   // move that follows reads the config this call already updated.
   function commitDrop(intent, id) {
     if (!root.mayWriteMembers) return
-    if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
     var region = root.ownRegion
     var raw = root.setting("members", "")
     var next = Model.nextMembers(Model.toList(raw), root.layoutIds(region), id, intent,
                                  root.membersLeadFromEnd)
     var value = Model.membersValue(next, raw)
-    var selfId = root.moduleName
 
     root.heldVisibleId = intent === "add" ? String(id) : ""
 
-    var written = false
-    bar.shell.mutateShellConfig(function (config) {
-      written = Model.setMembersOnEntry(config, region, selfId, value)
-    })
-
-    if (written) Qt.callLater(root.releaseVisibleHold)
+    if (root.writeMembers(value)) Qt.callLater(root.releaseVisibleHold)
     else root.releaseVisibleHold()
   }
 
@@ -865,6 +901,13 @@ BarWidget {
     Qt.callLater(root.repairPlacement)
   }
 
+  // The one write that reaches an entry this plugin does not own, and therefore
+  // the one the inline fallback cannot carry: it edits only its own entry. Where
+  // the host's mutator is refused this simply does nothing, and the tooltip
+  // names the misplacement instead of a rule silently ceasing to hold.
+  //
+  // It cannot loop when it is refused: nothing changes, so `misplacedMember`
+  // does not change, so its handler does not fire again.
   function repairPlacement() {
     if (root.misplacedMember === "") return
     if (!root.mayWriteMembers) return
@@ -875,9 +918,12 @@ BarWidget {
     var selfId = root.moduleName
     var nearestAtEnd = root.membersLeadFromEnd
 
+    var ran = false
     bar.shell.mutateShellConfig(function (config) {
+      ran = true
       Model.placeMemberBesideSelf(config, region, id, selfId, nearestAtEnd)
     })
+    root.hostMutatorRuns = ran
   }
 
   onMisplacedMemberChanged: scheduleRepair()
@@ -915,17 +961,12 @@ BarWidget {
   function repairMemberOrder() {
     if (!root.membersMisordered) return
     if (!root.mayWriteMembers) return
-    if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
 
-    var region = root.ownRegion
     var raw = root.setting("members", "")
     var value = Model.membersValue(
-      Model.orderMembers(Model.toList(raw), root.layoutIds(region)), raw)
-    var selfId = root.moduleName
+      Model.orderMembers(Model.toList(raw), root.layoutIds(root.ownRegion)), raw)
 
-    bar.shell.mutateShellConfig(function (config) {
-      Model.setMembersOnEntry(config, region, selfId, value)
-    })
+    root.writeMembers(value)
   }
 
   onMembersMisorderedChanged: scheduleReorder()
@@ -1130,7 +1171,10 @@ BarWidget {
       rejected: root.rejectedIds, unreadable: root.unreadableAt,
       missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
-      duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown
+      duplicateInstances: root.duplicateInstances, surfaceUnknown: root.surfaceUnknown,
+      // Only once the repair has been observed to be refused. Reporting it
+      // before that would name a state the very next callLater is about to fix.
+      misplaced: root.hostMutatorRuns ? "" : root.misplacedMember
     })
 
     // The pointer is the primary gesture; the click is the way out of the cases

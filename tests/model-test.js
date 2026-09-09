@@ -1103,6 +1103,63 @@ check("a pocket the layout does not hold yet may write",
   Model.mayWrite(LAYOUT, "nope"), true)
 check("no layout at all may write", Model.mayWrite(null, SELF), true)
 
+// ------------------------------------------------------- the inline write
+
+// Omarchy 4.0.3 leaves an installed plugin one write: an inline update of its
+// own entry. That writer REBUILDS the entry as `{id}` plus exactly what it is
+// handed, so anything these two functions drop is deleted from the user's
+// shell.json. The README promises the opposite -- nothing else on the entry is
+// touched -- which is why the merge is a tested function and not a line inside
+// a handler.
+
+const ENTRY_LAYOUT = {
+  left: [{ id: "omarchy.menu" }],
+  center: [{ id: "omarchy.clock" }],
+  right: [{ id: "omarchy.tray" },
+          { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true }]
+}
+
+check("the plugin's own entry is found in its region",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "right", SELF),
+  { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true })
+check("an entry in another region is not this region's",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "left", SELF), null)
+check("a bare string entry answers as itself",
+  Model.layoutEntryFor({ right: [SELF] }, "right", SELF), SELF)
+check("a missing region is null, not a crash",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "nope", SELF), null)
+check("a region that is not a list is null",
+  Model.layoutEntryFor({ right: "nope" }, "right", SELF), null)
+check("no layout is null", Model.layoutEntryFor(null, "right", SELF), null)
+check("an empty id is null", Model.layoutEntryFor(ENTRY_LAYOUT, "right", ""), null)
+
+// The whole point: every other key survives the write.
+const KEPT = Model.mergedEntrySettings(
+  { id: SELF, members: "old", showCount: true, note: "hand written" },
+  "members", "new")
+check("the new value wins", KEPT.members, "new")
+check("a foreign key on the entry survives", KEPT.showCount, true)
+check("and so does a second one", KEPT.note, "hand written")
+// `id` is the host's to set, from the entry it matched. Carrying it would let a
+// mistyped copy of it reach the writer.
+check("id is never carried", "id" in KEPT, false)
+
+check("a bare string entry contributes no keys",
+  Model.mergedEntrySettings(SELF, "members", "a, b"), { members: "a, b" })
+check("no entry at all still writes the value",
+  Model.mergedEntrySettings(null, "members", "a, b"), { members: "a, b" })
+check("an array is not an entry",
+  Model.mergedEntrySettings(["a"], "members", "x"), { members: "x" })
+// An array-valued members is the shape a hand-edited config uses, and
+// membersValue() preserves it -- so the merge has to carry it unchanged.
+check("an array value passes through",
+  Model.mergedEntrySettings({ id: SELF }, "members", ["a", "b"]),
+  { members: ["a", "b"] })
+check("an empty key writes nothing",
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, "", "x"), { showCount: true })
+check("writing id is refused",
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, "id", "evil"), { showCount: true })
+
 // --------------------------------------------------- manifest integrity
 
 // BarModel.customModuleType() infers a custom module from the entry's own keys:
