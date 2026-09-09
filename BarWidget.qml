@@ -72,7 +72,34 @@ BarWidget {
   }
 
   // A custom bar may not carry centerAnchor at all; treat that as "no anchor".
-  readonly property string anchorId: bar && ("centerAnchor" in bar) ? canonical(bar.centerAnchor) : ""
+  //
+  // The facade does not carry it either, but the shell it hands over publishes
+  // the whole bar config as a detached copy, and the anchor is in there. It is
+  // refreshed on registry events rather than on every config change, so it can
+  // lag a hand-edited `centerAnchor` — which is why it is not the only guard;
+  // anchoredByStructure() below answers from the scene, which cannot lag.
+  readonly property string anchorId: {
+    if (bar && ("centerAnchor" in bar)) return canonical(bar.centerAnchor)
+    var config = bar && bar.shell ? bar.shell.barConfig : null
+    return config && typeof config.centerAnchor === "string" ? canonical(config.centerAnchor) : ""
+  }
+
+  // Whether a slot is the centre anchor, decided by where it hangs rather than
+  // by its id. The anchored slot is mounted directly beside the section loaders,
+  // while every ordinary slot is laid out by a `Row` or a `Column` — and those
+  // carry `spacing`. That one slot is the only place in Bar.qml where a slot's
+  // `visible` holds a binding of the host's own, so writing it would destroy
+  // that binding for the rest of the session with nothing to report it.
+  //
+  // Asked only where the host does not publish `centerAnchor`. On a host that
+  // does, the id comparison alone decided this before and still does, so this
+  // adds no refusal that the old path did not already make.
+  function anchoredByStructure(slot) {
+    if (bar && ("centerAnchor" in bar)) return false
+    if (!slot || String(slot.region || "") !== "center") return false
+    var holder = slot.parent
+    return !holder || holder.spacing === undefined
+  }
 
   // ----------------------------------------------------------- resolution
 
@@ -111,7 +138,8 @@ BarWidget {
       // slot's `visible` carries a binding of the host's own. Writing it would
       // destroy that binding for the rest of the session, and nothing would
       // report it. Refuse instead, and say so in the tooltip.
-      if (anchor !== "" && hit.region === "center" && want === anchor) {
+      if ((anchor !== "" && hit.region === "center" && want === anchor)
+          || root.anchoredByStructure(hit)) {
         anchored.push(ids[i])
         continue
       }
@@ -143,23 +171,106 @@ BarWidget {
   // many pockets are there". Guarded because a custom bar need not have it.
   readonly property var barLayout: bar && ("layoutConfig" in bar) ? bar.layoutConfig : null
 
-  // Every module slot the bar has registered, on every one of its surfaces.
+  // Whether the host hands out its slot registry at all. Omarchy 4.0.3 stopped
+  // doing so for installed plugins: a third-party bar widget is given the
+  // capability-scoped `Ui/PluginBarApi` facade instead of the bar, and that
+  // facade publishes none of the fifteen symbols this file used to read. Asked
+  // as "is the property there", never as a version number, so a host that gives
+  // it back is used again without changing a line here.
+  readonly property bool hostPublishesSlots: !!bar && bar.moduleSlots !== undefined
+    && bar.moduleSlots !== null
+
+  // This bar surface's own root item, and the anchor for everything the fallback
+  // does. Quickshell's content item rather than Qt's `Window.contentItem`: both
+  // deliver pointer events — measured on the live bar, one at a time, because
+  // measured together only the upper one reports — but the Qt window is
+  // destroyed and rebuilt when a monitor moves, while this one is reparented and
+  // survives. See docs/decisions/0015.
+  readonly property var surfaceRoot: root.QsWindow ? root.QsWindow.contentItem : null
+
+  // A module slot, recognised by what it carries rather than by its type, which
+  // is a `component` inside Bar.qml and not nameable from here. All three are
+  // required together: the section loader carries `region` alone, and a custom
+  // command module carries `moduleName` alone, so either one on its own would
+  // collect something that must never be driven.
+  function isModuleSlot(item) {
+    if (!item) return false
+    return item.moduleName !== undefined && item.region !== undefined
+      && item.activeItem !== undefined
+  }
+
+  function collectSlots(item, out) {
+    if (!item) return out
+    if (root.isModuleSlot(item)) out.push(item)
+    var kids = item.children
+    if (kids) {
+      for (var i = 0; i < kids.length; i++) root.collectSlots(kids[i], out)
+    }
+    return out
+  }
+
+  // The slots found by walking this surface. Deliberately the WHOLE surface and
+  // not this pocket's own row: a member in another section is hidden today, and
+  // the centre anchor is mounted beside the section loaders rather than inside
+  // one, so a walk over the row alone would silently stop hiding the first and
+  // stop refusing the second. Measured on the live bar: 26 slots across all
+  // three sections, per surface.
   //
-  // Guarded like `barLayout` above, and read through one property rather than
-  // at each of the three places that want it, because it was the one host
-  // property this file took on trust. `bar ? bar.moduleSlots : []` guards a
-  // null bar and not a renamed property, so a host without it handed `slots.length`
-  // an undefined: measured against a bar publishing all fourteen other symbols,
-  // five TypeErrors per evaluation — `resolution` and `ownSlot` directly, then
-  // `memberHovered`, `apply()` and the tooltip through them. The tooltip is the
-  // one surface that exists to explain a pocket that cannot work, and it was the
-  // one that went dark. The README promises a renamed property stops a feature
-  // rather than breaking one; for this property it did not.
+  // Everything it finds is on this surface by construction — `children` is the
+  // visual tree of one window — which is why the fallback needs no window
+  // filter at all.
+  property var walkedSlots: []
+
+  function sameSlotSet(a, b) {
+    if (a.length !== b.length) return false
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+    return true
+  }
+
+  // The walk is a snapshot where `bar.moduleSlots` was a live array, and that
+  // difference is the whole of this function's reason to exist. The host
+  // replaced its array on every register and unregister, so every binding that
+  // read it re-ran; nothing re-runs a walk. Slots are created in layout order,
+  // so a pocket early in its section — every `left` pocket — completes before
+  // the slots after it exist and would find nothing at all.
   //
-  // Still reactive: the array is replaced on every register and unregister, so
-  // a binding that reads this property re-runs exactly as one reading
-  // `bar.moduleSlots` did.
-  readonly property var barSlots: bar && bar.moduleSlots ? bar.moduleSlots : []
+  // It also has to replace the array only when the set actually changed, which
+  // is the other half of matching the host. Assigning a fresh array on every
+  // call notifies every downstream binding whether or not anything moved, and
+  // `resolution` feeds `apply()`, which re-asserts state that feeds back here:
+  // measured as a binding loop on the tooltip — the one surface that exists to
+  // explain a pocket that cannot work, dark again, and for the second time.
+  function refreshWalk() {
+    if (root.hostPublishesSlots) return
+    var next = root.collectSlots(root.surfaceRoot, [])
+    if (root.sameSlotSet(root.walkedSlots, next)) return
+    root.walkedSlots = next
+  }
+
+  // Every point where the set of slots can have changed. `callLater` catches the
+  // rest of the current build, the timer catches a build that outlives it, and
+  // the layout signal catches every later change. A drag adds one more, in the
+  // overlay below, because that is the moment the answer has to be right.
+  onBarLayoutChanged: { refreshWalk(); Qt.callLater(refreshWalk) }
+  onSettingsChanged: refreshWalk()
+
+  Timer {
+    id: walkSettle
+    interval: 250
+    repeat: false
+    onTriggered: root.refreshWalk()
+  }
+
+  // Every module slot this pocket may look at. On a host that publishes its
+  // registry this is exactly what it always was; on one that does not, it is the
+  // walk above.
+  //
+  // Guarded on the property and not on the bar, which is the lesson this
+  // property was already carrying: `bar ? bar.moduleSlots : []` guards a null
+  // bar and not a renamed one, and a host without it handed `slots.length` an
+  // undefined — five TypeErrors per evaluation, and the tooltip that exists to
+  // explain a broken pocket was itself the thing that went dark.
+  readonly property var barSlots: root.hostPublishesSlots ? bar.moduleSlots : root.walkedSlots
 
   function layoutIds(region) {
     var entries = root.barLayout ? root.barLayout[region] : null
@@ -199,13 +310,47 @@ BarWidget {
     return false
   }
 
+  // The same question the property above answers, for a host that will not say
+  // WHOSE panel is open. The facade replaces a popout this plugin does not own
+  // with an anonymous marker, so "is it one of my members" has no answer there.
+  //
+  // Holding on it is right: a panel opened from the pocket must not fold the
+  // pocket away underneath itself. Opening on it is not — `activePopout` is
+  // shell-wide, so every pocket on every monitor would fan out the moment
+  // anything anywhere opened a panel, and the README promises nothing opens by
+  // itself. Hence `expanded &&`, the same shape and the same reason as
+  // dragHoldsOpen below.
+  //
+  // Only ever true where the exact answer is unavailable, so a host that hands
+  // over the object keeps opening the pocket for a member summoned by keybind,
+  // exactly as before.
+  readonly property bool foreignPanelHold: {
+    if (!root.expanded) return false
+    var active = bar ? bar.activePopout : null
+    return !!active && active.foreign === true
+  }
+
   // Requiring `expanded` means this can only ever keep the pocket open, never
   // open it. It is needed because hover is not something to fall back on
   // during a drag: Qt delivers no hover events at all while another item holds
   // the mouse grab, so every hover flag is frozen at whatever it last was.
   readonly property bool dragHoldsOpen: expanded && dragSource !== null
 
-  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen || dragHoldsOpen
+  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen
+    || foreignPanelHold || dragHoldsOpen
+
+  // Whether the pointer is still somewhere on this bar, which is what the fold
+  // timer waits for. The host's own `barHovered` counts across every surface —
+  // it is why a pocket on another screen folds up late — so the overlay's
+  // answer, which is per window, is the more precise one wherever it applies.
+  //
+  // `pressed` is part of it because hover is dead under a foreign mouse grab:
+  // without it the pocket would fold in the middle of a drag across the bar.
+  readonly property bool pointerOnBar: {
+    if (bar && ("barHovered" in bar)) return bar.barHovered === true
+    var glass = root.overlay
+    return !!glass && (glass.hovered === true || glass.pressed === true)
+  }
 
   // Counted off the layout rather than off live instances. `bar.moduleWidgets`
   // counts what is mounted, and the bar is built once per monitor — plus a
@@ -220,6 +365,130 @@ BarWidget {
   // widget the user did not aim there and then not record it as a member.
   readonly property bool mayWriteMembers: Model.mayWrite(root.barLayout, root.moduleName)
     && root.ownRegion !== ""
+
+  // ------------------------------------------------------- pointer overlay
+
+  // An invisible, non-painting item spanning this bar surface, carrying the two
+  // pointer handlers that answer what the host stopped answering: where the
+  // pointer is while it is NOT pressed (the fold guard the host called
+  // `barHovered`), and where it is WHILE another item holds the mouse grab (the
+  // drag the host described with `barDragTarget`).
+  //
+  // Both halves are needed and neither substitutes for the other. Qt delivers
+  // hover only while no exclusive grabber exists — the same line sits in every
+  // release from 6.5 to 6.11, so it is a design and not a bug — and a
+  // PointHandler answers only while a point is pressed, resetting its position
+  // to (0,0) on release, which is inside the bar and would mean the pocket never
+  // folded again. A PointHandler that takes a PASSIVE grab keeps receiving every
+  // move and the release regardless of the foreign exclusive grab, which is what
+  // makes the drag readable at all.
+  //
+  // It has to hang here rather than on this widget: the passive grab is only
+  // available to an item hit at press time, before the slot's own MouseArea
+  // grabs, and in reverse paint order that means an item above the whole bar.
+  // Measured on the live bar: continuous positions throughout a drag, correct
+  // drag source, and no effect on the host's own gesture.
+  //
+  // Created only where the host has stopped publishing the drag, so a bar that
+  // still does gets no overlay at all and behaves exactly as before.
+  property var overlay: null
+
+  readonly property bool overlayWanted: !!bar && !("barDragSource" in bar)
+
+  readonly property string overlayName: "jrmmhm.pocket.overlay"
+
+  Component {
+    id: overlayComponent
+
+    Item {
+      id: glass
+      objectName: root.overlayName
+      z: 99999
+
+      // Shared between the pocket instances of this surface and destroyed by
+      // the last one out. Never destroyed from a dying instance's own
+      // onDestruction: a layout rebuild completes the NEW instances before it
+      // destroys the old ones, so the old one would tear down the overlay the
+      // new one had just adopted, and the drag would be dead from the first
+      // drop onwards. Measured, along with what happens when nobody cleans up
+      // at all: seventeen orphans on one surface across one session.
+      property int users: 0
+
+      property bool hovered: false
+      property bool pressed: false
+      property real sceneX: 0
+      property real sceneY: 0
+
+      HoverHandler {
+        // Never blocking: this item exists to watch, and taking hover away from
+        // the widgets underneath would break every tooltip on the bar.
+        blocking: false
+        onHoveredChanged: glass.hovered = hovered
+        onPointChanged: {
+          if (glass.pressed) return
+          glass.sceneX = point.scenePosition.x
+          glass.sceneY = point.scenePosition.y
+        }
+      }
+
+      PointHandler {
+        // target: null keeps it a pure observer — it moves nothing and takes no
+        // exclusive grab, so the bar's own drag is untouched.
+        target: null
+        onActiveChanged: {
+          glass.pressed = active
+          if (active) {
+            glass.sceneX = point.scenePosition.x
+            glass.sceneY = point.scenePosition.y
+          }
+        }
+        onPointChanged: {
+          if (!active) return
+          glass.sceneX = point.scenePosition.x
+          glass.sceneY = point.scenePosition.y
+        }
+      }
+    }
+  }
+
+  function attachOverlay() {
+    if (!root.overlayWanted || root.overlay !== null) return
+    var host = root.surfaceRoot
+    if (!host || !host.children) return
+
+    var found = null
+    for (var i = 0; i < host.children.length; i++) {
+      var kid = host.children[i]
+      if (kid && kid.objectName === root.overlayName) { found = kid; break }
+    }
+
+    if (!found) {
+      found = overlayComponent.createObject(host)
+      if (!found) return
+      found.width = Qt.binding(function () { return host.width })
+      found.height = Qt.binding(function () { return host.height })
+    }
+
+    found.users += 1
+    root.overlay = found
+  }
+
+  function detachOverlay() {
+    var glass = root.overlay
+    root.overlay = null
+    if (!glass) return
+    glass.users -= 1
+    if (glass.users <= 0) glass.destroy()
+  }
+
+  // A monitor move unmaps the surface and hands back a new root item. The
+  // overlay belongs to the old one and has to be found or built again on the
+  // new one, and the walk was over the old tree, so both are redone here.
+  onSurfaceRootChanged: {
+    root.detachOverlay()
+    root.attachOverlay()
+    root.refreshWalk()
+  }
 
   // ----------------------------------------------------------------- drag
 
@@ -761,6 +1030,16 @@ BarWidget {
   // and holdOpen would then never *change* — it was already true when this
   // instance was born.
   Component.onCompleted: {
+    // Before anything reads `barSlots`: on a host that does not publish its
+    // registry the walk IS the registry, and an empty one resolves nothing.
+    root.attachOverlay()
+    root.refreshWalk()
+    // Slots are built in layout order, so a pocket early in its section has
+    // neighbours that do not exist yet. callLater catches the rest of this
+    // build; the timer catches a build that outlives it.
+    Qt.callLater(root.refreshWalk)
+    walkSettle.restart()
+
     if (holdOpen) expanded = true
     apply()
     // The instance that could see the misplacement is the one the drop's own
@@ -772,7 +1051,10 @@ BarWidget {
 
   // Without this, disabling or hot-reloading the plugin leaves someone else's
   // widgets invisible with no way back short of restarting the shell.
-  Component.onDestruction: releaseAll()
+  Component.onDestruction: {
+    releaseAll()
+    root.detachOverlay()
+  }
 
   onHoldOpenChanged: if (holdOpen) expanded = true
 
@@ -792,7 +1074,7 @@ BarWidget {
       // would fold it, moving it back, and so on. Hold until the pointer has
       // left the bar entirely, which is the same rule Bar.qml applies to its
       // own hover reveal.
-      if (root.bar && root.bar.barHovered) return
+      if (root.pointerOnBar) return
       root.expanded = false
     }
   }
