@@ -116,6 +116,14 @@ group and it just gets reordered. That boundary runs through the middle of the
 mark: its two halves are the last gap inside the run and the first gap outside
 it.
 
+The group is the run on the pocket's own side of the mark, and only that. A
+member that is somewhere else — the far side of the mark, or cut off from the
+run by a widget that is not a member — is outside the group wherever it sits,
+so any drop beside it takes it out. Without that it could not be taken out at
+all: both gaps around such a member had the member itself against them, which
+read as "still inside the group", and a short drag anywhere near it did
+nothing.
+
 To reach a member you have to open the pocket first — a hidden widget is not on
 the bar to be grabbed. Point at the mark, then drag.
 
@@ -152,7 +160,8 @@ plugin no write to another widget's entry. Instead it declines to take a widget
 in when the drop would land it on the far side — the bar still moves the widget
 there, it simply does not join the pocket — and if you hand-edit `members` into
 a split arrangement it names the misplaced widget in its tooltip rather than
-quietly fixing it.
+quietly fixing it. Such a widget can be dragged out from where it is, without
+being moved back first — see [Putting things in, taking them out](#putting-things-in-taking-them-out).
 
 The `members` list is kept in the order the widgets physically sit in, and
 rewritten when the two disagree — that order is what the fan-out follows, so a

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A member on the wrong side of the mark can be taken out again.** The rule
+  that decides whether a drop leaves the group counted every id in `members`,
+  including the widget being dragged — so a member sitting away from the run had
+  itself against both of its own gaps, every short drag near it read as
+  "reordering inside the group", and nothing was written. Measured twice on a
+  live bar with a member past the mark: an 89px drag back into the gap beside it
+  did nothing at all. The rule now asks whether the gap touches a member of the
+  run on the pocket's own side of the mark, which is the same side
+  `firstMisplacedMember()` already named. Everything inside the run, including
+  its outermost edge, is still a reorder.
+  [Decision 0016](docs/decisions/0016-the-group-is-the-run-not-the-member-list.md)
+  owns the account.
+
+### Changed
+
+- A drop beside a member that is **not** part of the run now takes it out, where
+  before it did nothing. That is the fix, and it is a behaviour change for one
+  arrangement: a hand-edited `members` with widgets on both sides of the mark.
+  Members inside the run are unaffected.
+
 ## [0.4.0] — 2026-09-09
 
 Omarchy 4.0.3 stopped injecting the bar into installed plugins, and Pocket
