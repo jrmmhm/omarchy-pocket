@@ -42,15 +42,17 @@ patches the running widget's `settings`, but the slot keeps the entry its
 Repeater gave it, and a deferred `injectProps()` queued when the slot loaded then
 restores the old settings from it. From then on `shell.json` holds the new order
 and the running pocket the old one, until the next full rebuild. Its
-`membersMisordered` stays true, and every repair finds nothing to write, because
-the file is already right.
+`membersMisordered` stays true, and the repair finds nothing to write, because
+the file is already right: in every measured run the poller saw exactly one
+`members` write per reorder over a window of 30 to 45 s.
 
 What stays current is the layout. An order change is never a delta:
 `BarModel.inlineSettingsDelta()` returns null as soon as an entry id differs at
 an index, so the host reassigns `layoutConfig`, and `onLayoutConfigChanged`
-re-syncs every facade's copy. In each measured run the order computed from
-`layoutIds(ownRegion)` was the bar's physical order from the first sample on,
-while `settings` was stale.
+re-syncs every facade's copy. The probe evaluated
+`Model.orderMembers(memberIds, layoutIds(ownRegion))` on the running pocket at
+every sample, and in each measured run it was the bar's physical order from the
+first sample on, while `settings` was stale.
 
 Two screen recordings of the fan-out after a reorder match the stale list
 exactly, member by member.
@@ -100,9 +102,16 @@ exactly the cascade this plugin has always drawn.
 The fan-out runs from the mark outwards whatever the list a pocket holds says.
 `tests/qml/cascade.qml` samples every member's opacity while a pocket fans out
 under a list rotated against the layout, and again after the layout moves under
-the same list. Against the unfixed widget both halves failed, with the member
-furthest from the mark ahead of the one against it. Five mutants of the new code
-were each killed by the suite. On the live bar after the fix, with the pocket's
+the same list — once against a bar that publishes `moduleSlots`, once against the
+host's own facade with the slots found by walking. Against the unfixed widget
+every half failed, with the member furthest from the mark ahead of the one
+against it.
+
+Five mutants of the new code were each killed by the suite: unknown ids not
+reversed, the layout direction ignored, unknown ids leading, the last
+occurrence of a repeated id instead of the first, and `applyReveal()` put back
+on the list-counted formula — the first four by `tests/model-test.js`, the last
+by `tests/qml/cascade.qml`. On the live bar after the fix, with the pocket's
 `settings` still stale, the recording shows the member against the mark leading.
 
 The stale list itself is not fixed here. It is the host's race, and it has no

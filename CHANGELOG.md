@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It now counts along the bar, which the host keeps current, and runs from the
   widget against the mark outwards whatever the list says
   ([decision 0018](docs/decisions/0018-the-fan-out-follows-the-bar-not-the-list.md)).
+  One more change comes with it, on every Omarchy version: a member that sits in
+  another section now fans out last, where in the `right` and `center` sections
+  it used to lead the cascade.
 
 ### Documentation
 

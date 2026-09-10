@@ -1236,11 +1236,10 @@ BarWidget {
   onRevealProgressChanged: applyReveal()
 
   // Each driven slot's place in the cascade, counted along the bar rather than
-  // along `members`. The list this instance holds can lag the bar — on Omarchy
-  // 4.0.3 a reorder inside the run leaves it with the order from before — and
-  // counting along it made the moved widget fan out alone, at the place it had
-  // left. Model.cascadeRanks() owns the rule; docs/decisions/0018 the
-  // measurement.
+  // along `members`. The list this instance holds can lag the bar after a
+  // reorder, and counting along it made the moved widget fan out alone, at the
+  // place it had left. Model.cascadeRanks() owns the rule; docs/decisions/0018
+  // the measurement.
   //
   // Reads `driven`, the slots' own names and the layout, and nothing that
   // applyReveal() writes, so it cannot feed back into the reveal it steers.

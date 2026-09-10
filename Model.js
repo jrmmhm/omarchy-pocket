@@ -220,10 +220,10 @@ function orderMembers(list, layoutIds) {
 //
 // It has to be checked on sight rather than folded into a gesture: reordering
 // a member inside the run moves widgets without this pocket writing anything
-// at all. On Omarchy 4.0.3 the host then hands the running pocket the old list
-// back after the repair has written the new one, so in that instance this
-// keeps answering false and the repair keeps finding nothing to write — which
-// is harmless, and is why the cascade asks the layout instead (0018).
+// at all. The host can hand a running pocket the old list back after the
+// repair has written the new one; this then keeps answering false and the
+// repair finds nothing to write, which is harmless, and is why the cascade
+// asks the layout instead. docs/decisions/0018 has when and why.
 function membersInLayoutOrder(rawList, layoutIds) {
   var source = rawList || []
   var ordered = orderMembers(source, layoutIds)
@@ -745,13 +745,11 @@ function revealFraction(progress, index, count, maxStagger) {
 // Each member's place in the cascade, 0 leading, for the members in the order
 // they are handed over. revealFraction() takes this as its `index`.
 //
-// Counted along the LAYOUT, not along the list. The list a running pocket
-// holds can lag the bar: on Omarchy 4.0.3 a member reordered inside the run
-// leaves the pocket with the list from before the reorder until the next full
-// rebuild, and a cascade counted along that list ran in a direction that was
-// not on screen — the moved widget fanned out on its own. An order change is
-// always a layout reassignment in the host, so the layout does not lag in the
-// same way. See docs/decisions/0018.
+// Counted along the LAYOUT, not along the list: the list a running pocket
+// holds can lag the bar after a reorder, and a cascade counted along it ran in
+// a direction that was not on screen — the moved widget fanned out on its own.
+// docs/decisions/0018 has the measurement, and why the layout does not lag in
+// the same way.
 //
 // Nearest the pocket leads: the highest layout position where the members
 // precede it (`nearestAtEnd`), the lowest where they follow it. An id the
