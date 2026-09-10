@@ -190,9 +190,13 @@ it by hand:
 
 `members` also accepts a JSON array, which is the nicer shape by hand. Pocket
 writes back whichever shape it finds, and never touches anything else on the
-entry. The manifest declares the setting as a string because Omarchy's settings
-form can only produce one; both shapes work when you edit the file yourself. The
-file hot-reloads, so there is no restart after an edit.
+entry. On Omarchy 4.0.3 that holds with one gap after a hand edit to that
+entry, tracked in [#16](https://github.com/jrmmhm/omarchy-pocket/issues/16),
+and on the assumption that no other plugin writes into Pocket's `settings` —
+`mergedEntrySettings()` in `Model.js` explains why. The manifest declares the
+setting as a string because Omarchy's settings form can only produce one; both
+shapes work when you edit the file yourself. The file hot-reloads, so there is
+no restart after an edit.
 
 The order you drag survives more than a restart. The run's physical order lives
 in `bar.layout` and `members` mirrors it, both in that one file, written by the
