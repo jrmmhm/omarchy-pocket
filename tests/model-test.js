@@ -1435,8 +1435,8 @@ function entrySettingsOf(entry) {
 }
 
 // writeMembers() as it runs on 4.0.3. `snapshot` is the facade's layout, a JSON
-// copy the host refreshes only when it reassigns the layout; `live` is the
-// injected `settings`.
+// copy the host refreshes whenever it re-syncs its plugins -- which the delta
+// path for an inline-only edit does not do; `live` is the injected `settings`.
 function inlineWrite(config, region, value, snapshot, live) {
   const entry = Model.layoutEntryFor(snapshot, region, SELF)
   return hostInlineWrite(config, SELF, Model.mergedEntrySettings(entry, live, "members", value))
@@ -1465,7 +1465,7 @@ onlyChange("an array-valued inline write reports it changed the entry", shellFix
 // window comes back, because the merge takes the snapshot as its base; and a
 // key the user inserts in the MIDDLE of the entry moves to its end, because the
 // snapshot's keys are laid down first. Both are gaps in mergedEntrySettings(),
-// not properties this suite can assert today.
+// not properties this suite can assert today. Tracked in #16.
 {
   const config = shellFixture()
   const snapshot = clone(config.bar.layout)
