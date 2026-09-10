@@ -7,45 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **The drag gesture works for more than one drop per session.** On Omarchy
-  4.0.3 the first drag after a shell start was recorded and every one after it
-  was not: the bar moved the widget, Pocket did not take it in or let it go.
-  Every drop rebuilds the bar, and the overlay Pocket follows the pointer with
-  was shared between the widget's old and new instance — its handlers belonged
-  to the old one and stopped running when that was destroyed. Every instance
-  now builds its own.
-  [Decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)
-  owns the account.
-- **A member on the wrong side of the mark can be taken out again.** The rule
-  that decides whether a drop leaves the group counted every id in `members`,
-  including the widget being dragged — so a member sitting away from the run had
-  itself against both of its own gaps, every short drag near it read as
-  "reordering inside the group", and nothing was written. Measured on a live bar
-  with a member past the mark: a short drag back into the gap beside it did
-  nothing at all. The rule now asks whether the gap touches a member of the
-  run on the pocket's own side of the mark, which is the same side
-  `firstMisplacedMember()` already named. Everything inside the run, including
-  its outermost edge, is still a reorder.
-  [Decision 0016](docs/decisions/0016-the-group-is-the-run-not-the-member-list.md)
-  owns the account.
-
-### Changed
-
-- A drop beside a member that is **not** part of the run now takes it out, where
-  before it did nothing. That is the fix, and it is a behaviour change for one
-  arrangement: a hand-edited `members` with widgets on both sides of the mark.
-  Members inside the run are unaffected.
-
-### Added
-
-- **`tests/live.sh --gesture`** drives a real drag on the running bar with a
-  virtual pointer — one member out past the mark and back in — and fails when
-  either drop goes unrecorded. It snapshots `shell.json` first and restores it
-  from a trap. It is the only check here that could see the defect above.
-
-## [0.4.0] — 2026-09-09
+## [0.4.0] — 2026-09-10
 
 Omarchy 4.0.3 stopped injecting the bar into installed plugins, and Pocket
 stopped working — silently, with every guard it promised intact and its whole
@@ -70,9 +32,24 @@ the account.
   left open, carrying the whole entry across — without that, a second key on the
   entry would have been deleted by the first drag.
 - **The drag gesture works again**, including the mark lighting up before you
-  let go. Pocket now works out the bar's insertion line itself, from the pointer
-  and the geometry of the slots it can see. Every rule that decides what a drop
-  means is unchanged.
+  let go, and for every drop rather than only the first after a shell start.
+  Pocket now works out the bar's insertion line itself, from the pointer and
+  the geometry of the slots it can see, with an overlay each widget instance
+  builds and removes for itself
+  ([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
+  The rules that decide what a drop means are unchanged but for the one below.
+- **A member on the wrong side of the mark can be taken out again.** The rule
+  that decides whether a drop leaves the group counted every id in `members`,
+  including the widget being dragged — so a member sitting away from the run had
+  itself against both of its own gaps, every short drag near it read as
+  "reordering inside the group", and nothing was written. Measured on a live bar
+  with a member past the mark: a short drag back into the gap beside it did
+  nothing at all. The rule now asks whether the gap touches a member of the
+  run on the pocket's own side of the mark, which is the same side
+  `firstMisplacedMember()` already named. Everything inside the run, including
+  its outermost edge, is still a reorder.
+  [Decision 0016](docs/decisions/0016-the-group-is-the-run-not-the-member-list.md)
+  owns the account.
 
 ### Changed
 
@@ -88,6 +65,10 @@ the account.
   builds every centre widget twice with `centerAnchor` set, so the note that
   said otherwise is gone; [Good to know](README.md#good-to-know) has the
   measurement.
+- A drop beside a member that is **not** part of the run now takes it out, where
+  before it did nothing. That is the fix above, and it is a behaviour change for
+  one arrangement: a hand-edited `members` with widgets on both sides of the
+  mark. Members inside the run are unaffected.
 
 ### Added
 
@@ -107,6 +88,11 @@ the account.
   have caught this on the day it landed.
 - The neighbourhood sweep now also holds Pocket's copy of the bar's drop rule to
   the installed shell's own, pixel by pixel. A one-character drift fails it.
+- **`tests/live.sh --gesture`** drives a real drag on the running bar with a
+  virtual pointer — one member out past the mark and back in — and fails when
+  either drop goes unrecorded. It snapshots `shell.json` first and restores it
+  from a trap. It is the only check here that can see the gesture break after
+  the first drop.
 
 ## [0.3.3] — 2026-09-08
 
