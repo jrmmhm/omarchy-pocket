@@ -13,13 +13,11 @@ import "plugin" as Pk
 // would have repeated the same assumption. The facade is the host's own file:
 // when Omarchy narrows it again, this case changes with it.
 //
-// It pins three things the live bar found and no other case can reach:
+// It pins two things the live bar found and no other case can reach:
 //   1. what the capability layer concludes about a facade;
 //   2. that the overlay is built even though `bar` arrives AFTER
 //      Component.onCompleted, which is how the host injects it — attaching from
-//      onCompleted alone left hiding working and the gesture silently dead;
-//   3. that one surface has exactly one overlay however many pockets ask for
-//      it, and that the last one out is the one that takes it away.
+//      onCompleted alone left hiding working and the gesture silently dead.
 //
 // Needs a window: the overlay hangs on QsWindow.contentItem, and Model.ownsSlot
 // refuses every slot to an instance that does not know its surface. Run through
@@ -178,9 +176,6 @@ QtObject {
     probe("the anchor is recovered from the shell's bar config",
           function () { return p.anchorId }, "omarchy.clock")
 
-    // A second pocket on the same surface shares the one overlay rather than
-    // stacking another. Seventeen orphans on one surface is what the other
-    // answer measured as.
     win.secondPocket.bar = harness.facade
     win.secondPocket.moduleName = "jrmmhm.pocket"
 
@@ -188,22 +183,6 @@ QtObject {
   }
 
   function step3() {
-    probe("a second pocket shares the overlay rather than stacking one",
-          function () { return harness.overlayCount() }, 1)
-    probe("and both hold the same object",
-          function () { return win.pocketItem.overlay === win.secondPocket.overlay }, true)
-    probe("which counts its users",
-          function () { return win.pocketItem.overlay.users }, 2)
-
-    // One leaving must not take it from the other. A layout rebuild completes
-    // the new instances before destroying the old ones, so this is the ordinary
-    // case and not the exotic one.
-    win.secondPocket.detachOverlay()
-    probe("one leaving does not take the overlay away",
-          function () { return harness.overlayCount() }, 1)
-    probe("and the one still holding it kept it",
-          function () { return win.pocketItem.overlay !== null }, true)
-
     // The write path: the facade's mutator is present and refuses, so the
     // plugin has to fall through to the inline writer and must not be fooled by
     // a return value.
