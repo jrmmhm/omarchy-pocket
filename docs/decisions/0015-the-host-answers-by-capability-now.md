@@ -9,6 +9,9 @@
   it before
 - Extends [0005](0005-a-pocket-drives-only-its-own-screens-slots.md) with the
   fold guard a facade leaves behind
+- Its overlay's lifecycle is corrected by
+  [0017](0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md): shared
+  between instances, the overlay's handlers died with the one that built it
 
 ## Context
 
