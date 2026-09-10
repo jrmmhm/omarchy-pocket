@@ -18,13 +18,38 @@
 #
 #   bash tests/live.sh            # expects the pocket collapsed
 #   bash tests/live.sh --open     # expects it fanned out (pinned or hovered)
+#   bash tests/live.sh --gesture  # DRIVES a real drag; writes and restores the config
 #
 # Exit 0 = the bar agrees with the setting. Exit 1 = it does not. Exit 2 = there
 # was nothing to ask.
+#
+# `--gesture` is the only mode here that writes anything, and it is the only
+# check in this repository that can see the drag break. Every other test drives
+# the drop rule against a fake bar, and the rule is not the risky half: the
+# gesture rests on the host delivering a press to ITS MouseArea before this
+# plugin's passive pointer handler sees it, on an overlay surviving the rebuild a
+# drop causes, and on a chain -- glass.pressed, localDrop, dropIntent,
+# commitDrop -- that a green suite says nothing about. It ships broken or it
+# ships working, and only a real button press knows which.
+#
+# What it does to the machine, and how it undoes it: it snapshots shell.json,
+# prints the path before touching anything, drags one member past the mark and
+# then back onto it, and restores the snapshot from a trap that also runs on a
+# failed assertion, an error and a Ctrl-C. The pointer releases its button and
+# destroys itself from the same kind of guard on the Python side, because a
+# script that dies mid-drag would otherwise leave the operator's desktop with a
+# held mouse button. The one state it deliberately does not restore is the
+# member ORDER inside `members`: the round trip leaves the widget against the
+# mark and the pocket rewrites the list to layout order, which is documented
+# behaviour -- the snapshot is what puts it back.
 set -u
 
 WANT_OPEN=0
-[ "${1:-}" = "--open" ] && WANT_OPEN=1
+WANT_GESTURE=0
+case "${1:-}" in
+  --open) WANT_OPEN=1 ;;
+  --gesture) WANT_GESTURE=1 ;;
+esac
 
 if ! command -v omarchy-shell >/dev/null 2>&1; then
   echo "LIVE SKIPPED (omarchy-shell is not installed)"
@@ -46,6 +71,97 @@ GEOMETRY="$(omarchy-shell shell debugBarGeometry 2>/dev/null)"
 if [ -z "$GEOMETRY" ]; then
   echo "LIVE SKIPPED (the shell returned no bar geometry)"
   exit 2
+fi
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --------------------------------------------------------------- the gesture
+
+restore_config() {
+  [ -n "${BACKUP:-}" ] || return 0
+  [ -f "$BACKUP" ] || return 0
+  # The bar persists its own move after the pocket has written, so a restore that
+  # lands in the middle of that is overwritten by it. Give the shell a moment to
+  # go quiet, then put the file back and read it again to prove it took.
+  sleep 1
+  cp "$BACKUP" "$CONFIG"
+  sleep 1
+  if ! cmp -s "$BACKUP" "$CONFIG"; then
+    echo "LIVE WARNING (the config did not come back; the snapshot is at $BACKUP)"
+    return 1
+  fi
+  return 0
+}
+
+members_now() {
+  python3 "$HERE/pointer.py" report 2>/dev/null | sed -n 's/.*members=//p'
+}
+
+holds() {
+  case ",$1," in *",$2,"*) return 0 ;; esac
+  return 1
+}
+
+if [ "$WANT_GESTURE" = "1" ]; then
+  if [ ! -r "$HERE/pointer.py" ]; then
+    echo "LIVE SKIPPED (gesture: tests/pointer.py is not here)"
+    exit 2
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || ! command -v hyprctl >/dev/null 2>&1; then
+    echo "LIVE SKIPPED (gesture: needs python3 and hyprctl)"
+    exit 2
+  fi
+  if [ ! -w /dev/uinput ]; then
+    echo "LIVE SKIPPED (gesture: /dev/uinput is not writable, so there is no pointer to drive)"
+    exit 2
+  fi
+
+  BEFORE="$(members_now)"
+  if [ -z "$BEFORE" ]; then
+    echo "LIVE SKIPPED (gesture: the pocket holds no members to drag)"
+    exit 2
+  fi
+
+  # The subject is the member nearest the mark, which is the last id in a list
+  # kept in layout order for every section but `left`. It is the one whose gaps
+  # the drop rule is most easily wrong about: one of them is the boundary
+  # between "reorder inside the run" and "leave the group".
+  SUBJECT="${BEFORE##*,}"
+
+  BACKUP="$(mktemp "${TMPDIR:-/tmp}/pocket-live-shell-json.XXXXXX")"
+  cp "$CONFIG" "$BACKUP"
+  echo "LIVE GESTURE (driving a real drag; shell.json snapshot at $BACKUP)"
+  trap 'restore_config' EXIT INT TERM
+
+  if ! python3 "$HERE/pointer.py" drag-out "$SUBJECT"; then
+    echo "LIVE SKIPPED (gesture: the drag could not be driven)"
+    exit 2
+  fi
+  AFTER_OUT="$(members_now)"
+  if holds "$AFTER_OUT" "$SUBJECT"; then
+    echo "LIVE FAILED (gesture: $SUBJECT was dragged past the mark and is still a member)"
+    echo "  members: $AFTER_OUT"
+    exit 1
+  fi
+
+  if ! python3 "$HERE/pointer.py" drag-in "$SUBJECT"; then
+    echo "LIVE SKIPPED (gesture: the second drag could not be driven)"
+    exit 2
+  fi
+  AFTER_IN="$(members_now)"
+  if ! holds "$AFTER_IN" "$SUBJECT"; then
+    echo "LIVE FAILED (gesture: $SUBJECT was dragged onto the mark and did not join)"
+    echo "  members: $AFTER_IN"
+    exit 1
+  fi
+
+  if ! restore_config; then
+    exit 1
+  fi
+  trap - EXIT INT TERM
+  rm -f "$BACKUP"
+  echo "LIVE PASSED (gesture: $SUBJECT left the pocket and came back, config restored)"
+  exit 0
 fi
 
 # python3 rather than jq: the shell already depends on a python3 being present

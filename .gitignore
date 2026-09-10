@@ -8,3 +8,4 @@
 .idea/
 *.swp
 *~
+tests/__pycache__/
