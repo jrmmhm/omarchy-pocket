@@ -32,8 +32,7 @@ the account.
   left open, carrying the whole entry across — without that, a second key on the
   entry would have been deleted by the first drag.
 - **The drag gesture works again**, including the mark lighting up before you
-  let go, and for every drop rather than only the first after a shell start.
-  Pocket now works out the bar's insertion line itself, from the pointer and
+  let go. Pocket now works out the bar's insertion line itself, from the pointer and
   the geometry of the slots it can see, with an overlay each widget instance
   builds and removes for itself
   ([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
