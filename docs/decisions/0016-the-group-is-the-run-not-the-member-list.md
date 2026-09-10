@@ -9,6 +9,9 @@
   did not notice that a stranded member could no longer be taken out either
 - Shares its side test with [0002](0002-members-belong-on-one-side.md)'s
   placement invariant, which had defined that side already
+- Its remark that `bar.layoutConfig` can lag a hand edit is narrowed by
+  [0017](0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md), which
+  measured when it does and when it does not
 
 ## Context
 
