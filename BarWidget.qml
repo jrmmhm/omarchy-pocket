@@ -28,6 +28,23 @@ import "Model.js" as Model
 // which is where all four of its defects come from.
 BarWidget {
   id: root
+
+  function findRegionSlots() {
+    var s = []
+    if (root.parent && root.parent.parent && root.parent.parent.parent) {
+       var row = root.parent.parent.parent
+       if (row.children) {
+           for (var i=0; i<row.children.length; i++) {
+               var child = row.children[i]
+               if (child.moduleName !== undefined) {
+                   s.push(child)
+               }
+           }
+       }
+    }
+    return s.length > 0 ? s : null
+  }
+
   moduleName: "jrmmhm.pocket"
 
   // ------------------------------------------------------------- settings
@@ -92,15 +109,10 @@ BarWidget {
       var want = root.canonical(ids[i])
       var hit = null
 
-      for (var j = 0; j < slots.length; j++) {
-        var slot = slots[j]
+      var candidateSlots = root.findRegionSlots() || slots
+      for (var j = 0; j < candidateSlots.length; j++) {
+        var slot = candidateSlots[j]
         if (!slot || root.canonical(slot.moduleName) !== want) continue
-        if (!Model.ownsSlot({
-              hostComparesWindows: root.hostComparesWindows,
-              surfaceKnown: mine !== null,
-              sameWindow: root.hostComparesWindows && mine !== null
-                ? bar.sameWindow(bar.slotWindow(slot), mine) : false
-            })) continue
         hit = slot
         break
       }
@@ -321,17 +333,12 @@ BarWidget {
     for (var i = 0; i < ids.length; i++) {
       if (ids[i] === root.moduleName) break
 
-      for (var j = 0; j < slots.length; j++) {
-        var slot = slots[j]
+      var candidateSlots = root.findRegionSlots() || slots
+      for (var j = 0; j < candidateSlots.length; j++) {
+        var slot = candidateSlots[j]
         if (!slot || slot.region !== root.ownRegion) continue
         if (root.canonical(slot.moduleName) !== ids[i]) continue
         if (used.indexOf(slot) !== -1) continue
-        if (!Model.ownsSlot({
-              hostComparesWindows: root.hostComparesWindows,
-              surfaceKnown: mine !== null,
-              sameWindow: root.hostComparesWindows && mine !== null
-                ? bar.sameWindow(bar.slotWindow(slot), mine) : false
-            })) continue
         // What is not drawn is not a candidate: moduleDropAtScene() skips a
         // slot that is invisible or has no size, so the bar can never name it —
         // and a collapsed pocket's own members are exactly that.
