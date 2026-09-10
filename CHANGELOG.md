@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A successful write is now held to changing one thing.** A refused write was
+  already asserted to leave `shell.json` exactly as it was; after a successful
+  one, the suite only looked at the entry beside the pocket. Every write path —
+  the host's config mutator, the placement repair, and the inline write Omarchy
+  4.0.3 leaves an installed plugin — is now compared against the whole file with
+  only the intended change applied, in both engines the code runs in. Nothing in
+  the plugin changed. (#5)
+
 ## [0.4.0] — 2026-09-10
 
 Omarchy 4.0.3 stopped injecting the bar into installed plugins, and Pocket
