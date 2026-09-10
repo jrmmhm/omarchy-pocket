@@ -6,9 +6,9 @@ import "plugin" as Pk
 // The real BarWidget.qml against a bar that is missing two of the symbols it
 // reads. This is the case the README makes a promise about — "a renamed one
 // makes a feature stop applying rather than misbehave" — and the only one of
-// the fifteen host reads that promise was ever false for.
+// the host reads that promise was ever false for.
 //
-// Measured before the guard: a bar publishing all fourteen other symbols but not
+// Measured before the guard: a bar publishing every other symbol but not
 // `moduleSlots` produced five TypeErrors per evaluation, at `resolution` and
 // `ownSlot` directly and at `memberHovered`, `apply()` and `tooltipText` through
 // them, and the tooltip was left unassigned. `slotBeforeSelf` never threw — it

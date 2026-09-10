@@ -9,13 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The drag gesture works for more than one drop per session.** On Omarchy
+  4.0.3 the first drag after a shell start was recorded and every one after it
+  was not: the bar moved the widget, Pocket did not take it in or let it go.
+  Every drop rebuilds the bar, and the overlay Pocket follows the pointer with
+  was shared between the widget's old and new instance — its handlers belonged
+  to the old one and stopped running when that was destroyed. Every instance
+  now builds its own.
+  [Decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)
+  owns the account.
 - **A member on the wrong side of the mark can be taken out again.** The rule
   that decides whether a drop leaves the group counted every id in `members`,
   including the widget being dragged — so a member sitting away from the run had
   itself against both of its own gaps, every short drag near it read as
-  "reordering inside the group", and nothing was written. Measured twice on a
-  live bar with a member past the mark: an 89px drag back into the gap beside it
-  did nothing at all. The rule now asks whether the gap touches a member of the
+  "reordering inside the group", and nothing was written. Measured on a live bar
+  with a member past the mark: a short drag back into the gap beside it did
+  nothing at all. The rule now asks whether the gap touches a member of the
   run on the pocket's own side of the mark, which is the same side
   `firstMisplacedMember()` already named. Everything inside the run, including
   its outermost edge, is still a reorder.
@@ -28,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before it did nothing. That is the fix, and it is a behaviour change for one
   arrangement: a hand-edited `members` with widgets on both sides of the mark.
   Members inside the run are unaffected.
+
+### Added
+
+- **`tests/live.sh --gesture`** drives a real drag on the running bar with a
+  virtual pointer — one member out past the mark and back in — and fails when
+  either drop goes unrecorded. It snapshots `shell.json` first and restores it
+  from a trap. It is the only check here that could see the defect above.
 
 ## [0.4.0] — 2026-09-09
 
@@ -42,7 +58,7 @@ the account.
 
 - **Pocket hides widgets again on Omarchy 4.0.3.** A third-party bar widget
   there receives a capability-scoped facade instead of the bar, and none of the
-  fifteen properties and functions this plugin reads are on it. Nothing threw
+  properties and functions this plugin reads are on it. Nothing threw
   and nothing warned; the pocket simply held nothing, on a bar that looked
   unchanged. Every host reading now has a preferred source and a fallback,
   chosen at runtime from what the host actually offers and never from a version
@@ -70,7 +86,8 @@ the account.
   move. The standing invariant is unchanged wherever it can still run.
 - **A member in `center` hides like any other on 4.0.3.** The bar no longer
   builds every centre widget twice with `centerAnchor` set, so the note that
-  said otherwise is gone. Measured: six centre entries, six slots, per surface.
+  said otherwise is gone; [Good to know](README.md#good-to-know) has the
+  measurement.
 
 ### Added
 
@@ -83,8 +100,9 @@ the account.
   of a stand-in. A mock would have repeated the assumption that let this break
   through a green suite.
 - **`tests/live.sh`** asks the running shell whether the bar is drawing what the
-  setting says it should. Against a pocket that hides nothing it answers "21 of
-  21 member slots disagree" — the original break, named. It is the only check
+  setting says it should. Against a pocket that hides nothing it names every
+  member slot that disagrees — the original break, named, and quoted in decision
+  0015. It is the only check
   here that needs a machine rather than a checkout, and the only one that would
   have caught this on the day it landed.
 - The neighbourhood sweep now also holds Pocket's copy of the bar's drop rule to

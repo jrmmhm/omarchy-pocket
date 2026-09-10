@@ -4,8 +4,8 @@
 #
 # Every other test drives the widget against objects the tests themselves wrote,
 # and that is exactly how the Omarchy 4.0.3 break got through: the suite was
-# green, 373 assertions, while the pocket sat on a live bar hiding nothing at
-# all. A fake bar cannot notice that the real one stopped answering.
+# green while the pocket sat on a live bar hiding nothing at all (decision 0015
+# has the count). A fake bar cannot notice that the real one stopped answering.
 #
 # So this asks the bar. `omarchy-shell shell debugBarGeometry` reports, per
 # module slot and per surface, whether it is drawn. A collapsed pocket whose

@@ -218,7 +218,8 @@ BarWidget {
   // Whether the host hands out its slot registry at all. Omarchy 4.0.3 stopped
   // doing so for installed plugins: a third-party bar widget is given the
   // capability-scoped `Ui/PluginBarApi` facade instead of the bar, and that
-  // facade publishes none of the fifteen symbols this file used to read. Asked
+  // facade publishes none of the symbols this file used to read — 0015 lists
+  // them. Asked
   // as "is the property there", never as a version number, so a host that gives
   // it back is used again without changing a line here.
   readonly property bool hostPublishesSlots: !!bar && bar.moduleSlots !== undefined
@@ -257,8 +258,7 @@ BarWidget {
   // not this pocket's own row: a member in another section is hidden today, and
   // the centre anchor is mounted beside the section loaders rather than inside
   // one, so a walk over the row alone would silently stop hiding the first and
-  // stop refusing the second. Measured on the live bar: 26 slots across all
-  // three sections, per surface.
+  // stop refusing the second. 0015 has what the live bar measured.
   //
   // Everything it finds is on this surface by construction — `children` is the
   // visual tree of one window — which is why the fallback needs no window

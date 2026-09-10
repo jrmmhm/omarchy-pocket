@@ -232,8 +232,9 @@ def members():
 def settle(reads=2, pause=0.35, tries=14):
     """Wait until the geometry stops changing.
 
-    Fanning out takes 600ms and a drop rebuilds every widget on every monitor, so
-    a reading taken too early describes a bar that is still moving -- and a drag
+    Fanning out is animated (`animationDuration` in BarWidget.qml) and a drop
+    rebuilds every widget on every monitor, so a reading taken too early
+    describes a bar that is still moving -- and a drag
     computed from it aims at a slot that has since slid sideways.
     """
     last, stable = None, 0

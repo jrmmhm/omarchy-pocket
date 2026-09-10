@@ -46,7 +46,9 @@ Bar size and screen scaling are not things Pocket has an opinion about. It
 hardcodes no pixel value anywhere, and the mark takes its slot from the same
 `Style` token every other bar icon uses, so a larger bar font, a different
 `size-horizontal`, or a fractional output scale move it exactly as they move
-its neighbours. Checked across three outputs at scales 1.5, 1.667 and 2.4.
+its neighbours. Checked on several fractional scales side by side;
+[decision 0010](docs/decisions/0010-the-publication-review-changes-documentation-not-code.md)
+has which.
 
 <details>
 <summary>What it leans on inside the shell, for anyone deciding whether to trust it across updates</summary>
@@ -59,11 +61,10 @@ update here.
 
 That layering is not decoration. **Omarchy 4.0.3 stopped injecting the bar into
 installed plugins**; a third-party widget now receives a capability-scoped
-facade, and every one of the fifteen symbols this plugin used to read is absent
-from it. Pocket kept every guard it promised — nothing threw, nothing warned —
-and did nothing at all, on a bar that looked exactly as it always had. All
-fifteen went at the same time, which is the case a per-symbol guard cannot
-help with.
+facade, and every symbol this plugin used to read is absent from it. Pocket kept
+every guard it promised — nothing threw, nothing warned — and did nothing at
+all, on a bar that looked exactly as it always had. They all went at the same
+time, which is the case a per-symbol guard cannot help with.
 
 Where the host no longer answers, Pocket works it out from the bar surface it
 is drawn on: it finds the neighbouring widgets by walking the window's own item
@@ -243,8 +244,8 @@ The one place a hidden widget is not equivalent to a shown one is
 
 ## The mark
 
-A row of dots that turns upright as the pocket opens, over the same 600 ms
-`OutCubic` the stock tray drawer uses, with the members fading out of it in a
+A row of dots that turns upright as the pocket opens, with the same duration and
+`OutCubic` curve the stock tray drawer uses, the members fading out of it in a
 cascade. Deliberately not a chevron: the tray sits in the same section doing a
 visually similar thing, and two identical glyphs beside each other are two
 things nobody can tell apart.
@@ -321,7 +322,9 @@ Three things change your first hour with it:
   that triggers it, are in
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 - **Switching monitor profiles makes the members flash.** A surface that is
-  being moved loses its window for about 50 ms, and a pocket that cannot tell
+  being moved loses its window for a moment —
+  [decision 0005](docs/decisions/0005-a-pocket-drives-only-its-own-screens-slots.md)
+  measured how long — and a pocket that cannot tell
   which screen it is on drives no slots at all — so it hands them back visible
   and takes them again when the window returns. It happens on a surface that is
   unmapped, so what is left is at most a single frame as it comes back.
@@ -438,6 +441,7 @@ plan to come back.
 ```bash
 bash tests/run.sh                    # ALL TESTS PASSED (N assertions, 0 failures)
 bash tests/live.sh                   # asks the RUNNING bar; needs a shell
+bash tests/live.sh --gesture         # DRIVES a real drag; restores shell.json
 qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
@@ -456,14 +460,21 @@ installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips
 itself where Quickshell or an Omarchy shell is absent, which is every CI runner.
 
 Two of those cases exist because the rest could not have caught the Omarchy
-4.0.3 break: the suite was green at 373 assertions while the plugin sat on a
-live bar hiding nothing. A fake bar cannot notice that the real one stopped
-answering. `tests/qml/facade.qml` therefore loads the host's own
-`Ui/PluginBarApi.qml` rather than a stand-in, and `tests/live.sh` asks the
-running shell whether the bar is drawing what the setting says it should. The
-second one is not part of `tests/run.sh` — it needs a machine, not a checkout —
-and it is the only check here that would have caught that break on the day it
-landed.
+4.0.3 break: the suite was green throughout while the plugin sat on a live bar
+hiding nothing ([decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md)
+has the count). A fake bar cannot notice that the real one stopped answering.
+`tests/qml/facade.qml` therefore loads the host's own `Ui/PluginBarApi.qml`
+rather than a stand-in, and `tests/live.sh` asks the running shell whether the
+bar is drawing what the setting says it should. The second one is not part of
+`tests/run.sh` — it needs a machine, not a checkout — and it is the only check
+here that would have caught that break on the day it landed.
+
+`tests/live.sh --gesture` goes one step further and drives a real drag with a
+virtual pointer, one member out past the mark and back in. The gesture broke on
+4.0.3 in a way only a real button press could see — it worked once per session
+([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
+It moves the pointer on your screens, snapshots `shell.json` before it starts,
+and puts it back from a trap.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

@@ -8,8 +8,8 @@ import "plugin" as Pk
 // the installed shell, not a hand-written stand-in.
 //
 // A stand-in is what this case exists to avoid. The break this whole version
-// answers was invisible to a suite whose fake bars all published the fifteen
-// symbols the plugin reads, and a mock written from the same understanding
+// answers was invisible to a suite whose fake bars all published every symbol
+// the plugin reads, and a mock written from the same understanding
 // would have repeated the same assumption. The facade is the host's own file:
 // when Omarchy narrows it again, this case changes with it.
 //
