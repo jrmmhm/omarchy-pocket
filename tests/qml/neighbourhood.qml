@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import "plugin" as Pk
+import "plugin/Model.js" as Model
 import "host/BarModel.js" as Host
 
 // The whole neighbourhood of the mark, swept rather than argued about.
@@ -192,7 +193,72 @@ QtObject {
     if (harness.step === 6) return harness.checkMembershipLatch()
     if (harness.step === 7) return harness.checkRepeatedIds()
     if (harness.step === 8) return harness.checkRefusedLight()
-    if (harness.step === 9) return harness.finish()
+    if (harness.step === 9) return harness.checkLocalDropAgrees()
+    if (harness.step === 10) return harness.finish()
+  }
+
+  // The plugin's own copy of the host's drop rule, held to the original.
+  //
+  // Since Omarchy 4.0.3 the facade no longer says where the bar is drawing its
+  // line, so the pocket computes it — and a copy that drifts is worse than no
+  // copy at all: the mark would light for one gap while the bar placed the
+  // widget in another, and the pocket would record a membership the user did
+  // not ask for. Nothing in the node suite can see this, because the thing it
+  // has to agree with is a file in the installed shell.
+  //
+  // Swept over the same neighbourhood the rest of this file uses, at every
+  // whole pixel across the run plus a stretch beyond both ends, in both the
+  // collapsed and the open geometry, and with each slot in turn excluded as the
+  // drag source — the exclusion is part of the host's filter and therefore part
+  // of what has to match.
+  function checkLocalDropAgrees() {
+    var mismatches = 0
+    var compared = 0
+    var span = 0
+    for (var w = 0; w < harness.slots.length; w++) span += harness.slots[w].width
+
+    for (var s = 0; s < harness.slots.length; s++) {
+      var source = harness.slots[s]
+      var rows = []
+      for (var i = 0; i < harness.slots.length; i++) {
+        var slot = harness.slots[i]
+        if (slot === source || !slot.visible || slot.width <= 0) continue
+        rows.push({ slot: slot, x: slot.x, y: 0, width: slot.width, height: slot.height })
+      }
+
+      for (var px = -20; px <= span + 20; px++) {
+        var point = { x: px, y: 0 }
+        var theirs = Host.nearestDropTarget(rows, point, false)
+        var ours = Model.nearestDropTarget(rows, point, false)
+        compared++
+
+        var same = (theirs === null && ours === null)
+          || (!!theirs && !!ours && theirs.slot === ours.slot && theirs.after === ours.after)
+        if (!same) {
+          mismatches++
+          if (mismatches <= 3) {
+            console.warn("FAIL: local drop target disagrees at x=" + px
+              + " source=" + source.moduleName
+              + "\n  host:   " + (theirs ? theirs.slot.moduleName + " after=" + theirs.after : "null")
+              + "\n  plugin: " + (ours ? ours.slot.moduleName + " after=" + ours.after : "null"))
+          }
+        }
+      }
+    }
+
+    harness.check("the copy of the host's drop rule agrees everywhere", mismatches, 0)
+    // A sweep that compared nothing would pass silently, which is the one
+    // result this file must never produce.
+    harness.check("and it compared a whole neighbourhood", compared > 500, true)
+
+    // The vertical axis is the same rule on the other coordinate, and a copy
+    // that transposed it would still pass everything above.
+    var vrows = [{ slot: harness.slots[0], x: 0, y: 0, width: 26, height: 40 },
+                 { slot: harness.slots[1], x: 0, y: 40, width: 26, height: 40 }]
+    var vtheirs = Host.nearestDropTarget(vrows, { x: 0, y: 70 }, true)
+    var vours = Model.nearestDropTarget(vrows, { x: 0, y: 70 }, true)
+    harness.check("and on a vertical bar too",
+      !!vours && !!vtheirs && vours.slot === vtheirs.slot && vours.after === vtheirs.after, true)
   }
 
   // The pocket's own write comes back in the middle of the gesture, and the

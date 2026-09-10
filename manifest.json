@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "jrmmhm.pocket",
   "name": "Pocket",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "author": "jrmmhm",
   "license": "MIT",
   "description": "Hide the bar widgets you rarely use behind one mark and reveal them on hover — a drawer that declutters a crowded bar. Drag a widget onto the mark to tuck it away, drag it back past it to take it out. Call it folding, grouping, collapse or overflow. Nothing moves: the hidden icons keep their own bar slots and settings, and stay enabled.",

@@ -51,10 +51,20 @@ ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
 # shell that costs us the neighbourhood sweep must not silently cost us this one
 # too. A case that quietly stops running is the kind of green tests/run.sh warns
 # about in its own header.
-CASES="model steer steer-readonly noslots neighbourhood"
+CASES="model steer steer-readonly noslots neighbourhood facade"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="model steer steer-readonly noslots"
+  CASES="model steer steer-readonly noslots facade"
+fi
+
+# The facade case loads the host's own Ui/PluginBarApi.qml rather than a
+# stand-in, which is the whole point of it -- a mock would repeat the same
+# assumption that let the 4.0.3 break through a green suite. A shell that
+# predates the facade simply has no such file, and there the case has nothing to
+# say rather than something wrong.
+if [ ! -f "$SHELL_DIR/Ui/PluginBarApi.qml" ]; then
+  echo "QML SKIPPED (facade: this shell has no Ui/PluginBarApi.qml to load)"
+  CASES="$(printf '%s\n' $CASES | grep -v '^facade$' | tr '\n' ' ')"
 fi
 
 status=0
@@ -67,7 +77,7 @@ for name in $CASES; do
   # none and keep the platform they were written for.
   #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
-  if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ]; then
+  if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ]; then
     output="$(QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
     output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"

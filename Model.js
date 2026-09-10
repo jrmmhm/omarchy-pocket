@@ -301,7 +301,24 @@ function membersValue(list, previousRaw) {
 // Ids out of the layout have neither problem. They are the same on every
 // screen, and they describe both sides of the gap rather than one of them.
 // See docs/decisions/0004.
-function gapTouchesMember(layoutIds, memberIds, targetId, after) {
+//
+// "One of this pocket's members" is narrower than "any id in `members`", and
+// the difference is a member the user has put on the wrong side of the mark.
+// The run is what fans out, and it lies on the side firstMisplacedMember()
+// already names — which is why both ask onPocketSide() and neither owns the
+// answer. Counting a member outside the run made the gaps on both of ITS sides
+// read as inside the group, so such a member could not be taken out by any
+// drop near itself: measured twice on a real bar, an 89px drag of a far-side
+// member back into the gap beside it wrote nothing at all. See
+// docs/decisions/0016.
+//
+// A layout this pocket cannot find itself in answers `true`, which is the safe
+// direction: nothing is ejected on the strength of a layout whose sides cannot
+// be told apart. It is reachable — `layoutConfig` is a snapshot refreshed on
+// registry events and can lag a hand edit, and a surface that has not resolved
+// its own slot yet has no region to read. The old rule needed no such guard
+// because it never asked where the pocket was.
+function gapTouchesMember(layoutIds, memberIds, targetId, after, pocketId, nearestAtEnd) {
   var ids = layoutIds || []
   var want = String(targetId || "").trim()
   if (want === "") return false
@@ -313,20 +330,51 @@ function gapTouchesMember(layoutIds, memberIds, targetId, after) {
   if (at === -1) return false
   if (after) at += 1
 
-  // The two range guards are on the engine's terms, not the test suite's. In
-  // node an out-of-range index is undefined and falls out harmlessly; the
-  // layout reaching this from QML is a sequence type, which is not obliged to
-  // be so forgiving. node cannot show the difference, so no test can either —
-  // the same reason the tiebreak in orderMembers() carries a comment instead
-  // of a fixture.
-  var before = at > 0 ? String(ids[at - 1]).trim() : ""
-  var behind = at < ids.length ? String(ids[at]).trim() : ""
+  var self = String(pocketId || "").trim()
+  var selfAt = -1
+  if (self !== "") {
+    for (var s = 0; s < ids.length; s++) {
+      if (String(ids[s]).trim() === self) { selfAt = s; break }
+    }
+  }
+  if (selfAt === -1) return true
+
+  // Both edges are answered by POSITION rather than by id. A hand-written
+  // layout may carry the same id twice, and the side test needs the index the
+  // gap actually touches — resolving the member's id to its first occurrence
+  // would answer for the other copy.
+  //
+  // The range guards inside memberOfRunAt() are on the engine's terms, not the
+  // test suite's. In node an out-of-range index is undefined and falls out
+  // harmlessly; the layout reaching this from QML is a sequence type, which is
+  // not obliged to be so forgiving. node cannot show the difference, so no test
+  // can either — the same reason the tiebreak in orderMembers() carries a
+  // comment instead of a fixture.
+  return memberOfRunAt(ids, at - 1, selfAt, memberIds, nearestAtEnd)
+    || memberOfRunAt(ids, at, selfAt, memberIds, nearestAtEnd)
+}
+
+// Which side of the mark the run lies on, as one sentence both callers ask.
+// With `nearestAtEnd` the members precede the pocket, so the run is at the
+// lower indices; in the `left` section it is the other way round. 0004 warns
+// that two copies of a membership rule drift apart, and this is the rule
+// firstMisplacedMember() was already applying by hand.
+function onPocketSide(index, selfAt, nearestAtEnd) {
+  return nearestAtEnd ? index < selfAt : index > selfAt
+}
+
+// Whether the layout entry at `index` is a member of the run: a member id, on
+// the pocket's own side of the mark.
+function memberOfRunAt(ids, index, selfAt, memberIds, nearestAtEnd) {
+  if (index < 0 || index >= ids.length) return false
+  if (!onPocketSide(index, selfAt, nearestAtEnd)) return false
+
+  var id = String(ids[index]).trim()
+  if (id === "") return false
 
   var members = memberIds || []
   for (var m = 0; m < members.length; m++) {
-    var id = String(members[m]).trim()
-    if (id === "") continue
-    if (id === before || id === behind) return true
+    if (String(members[m]).trim() === id) return true
   }
   return false
 }
@@ -417,6 +465,52 @@ function steerDropAfter(state) {
   return { after: false }
 }
 
+// Which gap the bar would draw its insertion line in, given the pointer and the
+// slots that are actually drawn. This is the host's own `nearestDropTarget`
+// rule, reimplemented rather than imported.
+//
+// Reimplemented, because importing `plugins/bar/BarModel.js` by absolute path
+// would make a renamed host file a hard load failure — the one degradation the
+// README says this plugin does not have. Copied rather than invented, because
+// the answer has to be the bar's: what the pocket decides and the line the user
+// is looking at must not disagree, and the bar places the widget from its own
+// answer whatever this one says.
+//
+// The copy is held to the original by tests/qml/neighbourhood.qml, which sweeps
+// both over the same neighbourhoods and fails on the first disagreement. That
+// is the guard; this comment is only the reason.
+//
+// The rule itself: every drawn slot offers two edges, the line goes in whichever
+// edge is nearest the pointer, and ties keep the first candidate walked — which
+// is why the caller must walk slots in the host's order and not, say, sorted by
+// position. `after` says the line sits on the far edge of the slot it names.
+function nearestDropTarget(candidates, point, vertical) {
+  var rows = candidates || []
+  var axis = vertical ? Number(point && point.y) : Number(point && point.x)
+  if (!isFinite(axis)) return null
+
+  var best = null
+  var bestDistance = Infinity
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i]
+    if (!row || !row.slot) continue
+
+    var start = Number(vertical ? row.y : row.x)
+    var size = Number(vertical ? row.height : row.width)
+    if (!isFinite(start) || !isFinite(size) || size <= 0) continue
+
+    var beforeDistance = Math.abs(axis - start)
+    var afterDistance = Math.abs(axis - (start + size))
+    var after = afterDistance < beforeDistance
+    var distance = after ? afterDistance : beforeDistance
+    if (distance < bestDistance) {
+      best = { slot: row.slot, after: after }
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
 // The bar's drop marker as Bar.qml computes it: a plain {x, y, width, height}.
 // Compared field by field because dropMarkerRect() returns a fresh object on
 // every call, so reference equality is always false and the pocket would
@@ -461,6 +555,77 @@ function setMembersOnEntry(config, region, id, value) {
   return false
 }
 
+// This plugin's own entry as the host holds it, or null. Read from the layout
+// snapshot rather than from the injected `settings`, for the reason
+// mergedEntrySettings() gives.
+function layoutEntryFor(layout, region, id) {
+  var entries = layout ? layout[region] : null
+  if (!entries || typeof entries.length !== "number") return null
+  var want = String(id || "").trim()
+  if (want === "") return null
+  for (var i = 0; i < entries.length; i++) {
+    if (entryIdOf(entries[i]) === want) return entries[i]
+  }
+  return null
+}
+
+// Settings keys that disarm a bar entry. `exec` means a command module,
+// `source` means a bare qml file, and `type` is taken literally; any of them on
+// an entry makes the bar skip registry resolution, and the slot renders as an
+// empty item with no warning anywhere. This list is the one owner of that fact:
+// tests/model-test.js holds the manifest to it, and mergedEntrySettings()
+// refuses to carry one into a write.
+var RESERVED_ENTRY_KEYS = ["type", "exec", "source"]
+
+function isReservedEntryKey(key) {
+  return RESERVED_ENTRY_KEYS.indexOf(String(key || "")) !== -1
+}
+
+// The settings an inline write has to carry.
+//
+// The host's own inline writer rebuilds the entry as `{id}` plus exactly what
+// it is handed, so every key omitted here is DELETED from the user's
+// shell.json. The README promises this plugin never touches anything else on
+// the entry, and without this merge that promise would be false the first time
+// anyone put a second key there — which the author's own bar does.
+//
+// It reads BOTH copies of the entry the host offers, because each is wrong in a
+// different way and only together are they right.
+//
+// `entry` is the host's layout snapshot. It is detached and cannot be written
+// from the scene, but it can be STALE: a shell.json write that changed only
+// inline settings takes the bar's delta path, which patches its layout in place
+// without reassigning it, so the snapshot handed to plugins is never refreshed
+// for it. Writing from the snapshot alone therefore resurrects the value a
+// neighbouring key had before the user edited it.
+//
+// `live` is the widget's own injected `settings`, which that same delta path
+// assigns directly — so it is always current. It is also a writable `var` in a
+// scene every plugin shares, and the facades are documented as not being a QML
+// sandbox, so a key another plugin dropped into it would be laundered into the
+// config through the one write this plugin is trusted with.
+//
+// So: the snapshot is the base, the live copy wins where they disagree, and a
+// key that disarms the entry is refused from either. `id` is dropped because
+// the host sets it from the entry it matched.
+function mergedEntrySettings(entry, live, key, value) {
+  var out = {}
+  var source
+
+  for (var pass = 0; pass < 2; pass++) {
+    source = pass === 0 ? entry : live
+    if (!isPlainObject(source)) continue
+    for (var k in source) {
+      if (k === "id" || isReservedEntryKey(k)) continue
+      out[k] = source[k]
+    }
+  }
+
+  var name = String(key || "")
+  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = value
+  return out
+}
+
 // The first member sitting on the wrong side of the pocket, or "" if the run
 // is intact. Members belong on one side — the side the pocket fans them out
 // towards — and a member that is not there fans out alone on the wrong side of
@@ -487,7 +652,10 @@ function firstMisplacedMember(layoutIds, selfId, memberIds, nearestAtEnd) {
     if (want === "" || want === self) continue
     for (var j = 0; j < ids.length; j++) {
       if (String(ids[j]).trim() !== want) continue
-      if (nearestAtEnd ? j > selfAt : j < selfAt) return want
+      // The same sentence gapTouchesMember() asks, and deliberately the same
+      // function: "on the wrong side of the mark" and "not part of the run"
+      // must not be able to disagree. See docs/decisions/0016.
+      if (!onPocketSide(j, selfAt, nearestAtEnd)) return want
       break
     }
   }
@@ -740,6 +908,7 @@ function describe(state) {
   var missing = s.missing || []
   var anchored = s.anchored || []
   var foreign = s.foreign || []
+  var selfHidden = s.selfHidden || []
 
   // An instance that does not know which bar surface it is on resolved nothing,
   // and every member came back unfound — but it never looked, so saying "not on
@@ -791,6 +960,20 @@ function describe(state) {
   if (!unknown && missing.length > 0) lines.push("Not on this bar: " + tooltipList(missing))
   if (!unknown && anchored.length > 0) lines.push("Refused, it is the center anchor: " + tooltipList(anchored))
   if (!unknown && foreign.length > 0) lines.push("In another section, so hiding it looks arbitrary: " + tooltipList(foreign))
+  // A one-way door, and the only line here that tells the user the gesture will
+  // not get them back out. The bar starts a drag only on a slot it is drawing,
+  // so a member whose own widget has hidden itself cannot be dragged anywhere —
+  // and from the outside it is indistinguishable from one the pocket is holding.
+  if (!unknown && selfHidden.length > 0)
+    lines.push("Hiding itself, so it cannot be dragged out — edit `members` to release it: "
+      + tooltipList(selfHidden))
+  // Named rather than repaired. Moving another widget's entry needs a write
+  // this shell no longer grants an installed plugin, so the standing invariant
+  // that used to put it back silently has nothing to act with — and a rule that
+  // stops working must say so rather than simply stop.
+  if (!unknown && typeof s.misplaced === "string" && s.misplaced !== "")
+    lines.push("On the wrong side of the mark, and this shell will not let Pocket move it: "
+      + tooltipSafe(s.misplaced))
   if (s.duplicateInstances) lines.push("A second Pocket entry exists — they will fight over shared members")
 
   return lines.join("\n")
@@ -809,5 +992,9 @@ if (typeof module !== "undefined" && module.exports) {
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
-                     membersInLayoutOrder: membersInLayoutOrder }
+                     membersInLayoutOrder: membersInLayoutOrder,
+                     layoutEntryFor: layoutEntryFor,
+                     mergedEntrySettings: mergedEntrySettings,
+                     reservedEntryKeys: RESERVED_ENTRY_KEYS,
+                     nearestDropTarget: nearestDropTarget }
 }

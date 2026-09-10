@@ -2,8 +2,19 @@
 
 - Status: accepted, complemented by [0005](0005-a-pocket-drives-only-its-own-screens-slots.md),
   guard narrowed by [0009](0009-a-drag-decides-against-the-membership-it-started-with.md)
+  and again by [0015](0015-the-host-answers-by-capability-now.md)
 - Date: 2026-08-27
 - Amends: [0001](0001-pocket-writes-its-own-members.md)
+
+> **Amendment, 2026-09-09.** On a host that no longer publishes the drag, the
+> dragged slot is read off the slots themselves — and only the surface the drag
+> is on carries one. Exactly one instance therefore sees a gesture at all, which
+> is a per-instance input into the rule this file asks to keep free of them. It
+> is safe for the reason given below for `targetIsSelf`: the instance that is
+> not being aimed at falls through to doing nothing. One writer instead of
+> several is also strictly better than what this file was defending against, and
+> it removes [0009](0009-a-drag-decides-against-the-membership-it-started-with.md)'s
+> race outright. See [0015](0015-the-host-answers-by-capability-now.md).
 
 ## Context
 

@@ -264,6 +264,23 @@ contains("rejected ids are named",
 contains("a second pocket is called out",
   Model.describe({ members: ["a"], duplicateInstances: true }), "second Pocket entry")
 
+// The one-way door. A member whose own widget has hidden itself has no drawn
+// slot, the bar starts a drag only on a drawn slot, and so the gesture that put
+// it in cannot take it out again -- on any host, old or new. Reported on the
+// user's own bar: the bluetooth widget went into the pocket while the adapter
+// was showing and could not be dragged back out once it stopped.
+contains("a member that hides itself is named",
+  Model.describe({ members: ["a"], selfHidden: ["a"] }), "Hiding itself")
+contains("and the way out is spelled out",
+  Model.describe({ members: ["a"], selfHidden: ["a"] }), "edit `members`")
+contains("and the id is escaped like every other",
+  Model.describe({ members: ["a"], selfHidden: ["a<b"] }), "a\\u003cb")
+// It is a line about the resolution, so an instance that never looked must not
+// print it, exactly as with the three lines beside it.
+check("a pocket that does not know its screen does not claim it either",
+  Model.describe({ members: ["a"], selfHidden: ["a"], surfaceUnknown: true })
+    .indexOf("Hiding itself") === -1, true)
+
 // An instance without a window resolves nothing, so every member comes back
 // unfound. Reporting that as "not on this bar" would be a claim about widgets
 // that are in fact sitting right there -- it never looked. Verbatim, because
@@ -739,7 +756,7 @@ const RUN_MEMBERS = ["mehiel.darky", "ianswope.snapshots", "omaplug",
                      "omarchy.tailscale", "omarchy.bluetooth"]
 
 function gap(target, after) {
-  return Model.gapTouchesMember(RUN, RUN_MEMBERS, target, after)
+  return Model.gapTouchesMember(RUN, RUN_MEMBERS, target, after, SELF, true)
 }
 
 // The defect this replaces: these two are the same gap, at the outer end of
@@ -770,25 +787,33 @@ check("an empty target id touches nothing", gap("", false), false)
 // empty or unknown target still comes out false by accident — through indexOf
 // and an out-of-range read — rather than because the rule refused it. Each was
 // watched failing with its guard removed.
+// Every layout here carries SELF, and it has to: without the pocket in it the
+// rule answers `true` by its own fail-safe, and all six of these would then be
+// green for that reason instead of for the guard each one exists to hold.
 check("an empty target id does not resolve to a malformed entry",
-  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], ["mehiel.darky"], "", false), false)
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug", SELF], ["mehiel.darky"], "", false,
+                         SELF, true), false)
 check("an empty member id does not match a malformed entry",
-  Model.gapTouchesMember(["mehiel.darky", "", "omaplug"], [""], "mehiel.darky", true), false)
+  Model.gapTouchesMember(["mehiel.darky", "", "omaplug", SELF], [""], "mehiel.darky", true,
+                         SELF, true), false)
 check("an unknown target does not fall through to the first gap",
-  Model.gapTouchesMember(["mehiel.darky", "omaplug"], ["mehiel.darky"], "nope", true), false)
+  Model.gapTouchesMember(["mehiel.darky", "omaplug", SELF], ["mehiel.darky"], "nope", true,
+                         SELF, true), false)
 check("no layout at all touches nothing",
-  Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false), false)
+  Model.gapTouchesMember(undefined, RUN_MEMBERS, "mehiel.darky", false, SELF, true), false)
 check("no members at all touches nothing",
-  Model.gapTouchesMember(RUN, [], "mehiel.darky", false), false)
+  Model.gapTouchesMember(RUN, [], "mehiel.darky", false, SELF, true), false)
 check("an empty member id is not matched against a gap edge",
-  Model.gapTouchesMember(["a", "b"], [""], "a", true), false)
+  Model.gapTouchesMember(["a", "b", SELF], [""], "a", true, SELF, true), false)
 
 // A single member is touched from both of its sides, so neither of the two
 // gaps around it can read as leaving.
 check("the only member, from its outer side",
-  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], "omarchy.tray", true), true)
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], "omarchy.tray", true,
+                         SELF, true), true)
 check("the only member, from its inner side",
-  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], SELF, false), true)
+  Model.gapTouchesMember(["omarchy.tray", "omaplug", SELF], ["omaplug"], SELF, false,
+                         SELF, true), true)
 
 // bar.layoutConfig is normalised and pins omarchy.tray to its section's inner
 // edge, while the bar's own move works on the raw shell.json section. When a
@@ -796,11 +821,79 @@ check("the only member, from its inner side",
 // entry — the membership verdicts must not.
 const TRAY_LAST = ["mehiel.darky", "omaplug", SELF, "jerome.focus", "omarchy.tray"]
 check("the run's outer gap still reads the same with the tray displaced",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "mehiel.darky", false), true)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "mehiel.darky", false,
+                         SELF, true), true)
 check("and the gap past the pocket still reads the same",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], SELF, true), false)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], SELF, true, SELF, true), false)
 check("a displaced tray at the far end is not against the group",
-  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "omarchy.tray", false), false)
+  Model.gapTouchesMember(TRAY_LAST, ["mehiel.darky", "omaplug"], "omarchy.tray", false,
+                         SELF, true), false)
+
+// ------------------------------------------------- the run, not the members
+
+// The defect this narrowing fixes, measured twice on a live bar: a member the
+// user has put on the FAR side of the mark could not be taken out by any drop
+// near itself, because the old rule counted it as the group it is not part of.
+// SPLIT is that arrangement -- omarchy.bluetooth is a member, sitting past the
+// pocket, exactly as the author's own bar had it.
+const SPLIT = ["omarchy.tray", "omaplug", "agx.screen-time", SELF,
+               "omarchy.agents", "jerome.focus", "omarchy.bluetooth", "omarchy.network"]
+const SPLIT_MEMBERS = ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
+
+function split(target, after) {
+  return Model.gapTouchesMember(SPLIT, SPLIT_MEMBERS, target, after, SELF, true)
+}
+
+// The two gaps either side of the far-side member. Both answered "against the
+// group" before, which is what made it unreachable; both have to answer
+// "outside" now, from either of the two targets that name them.
+check("the gap on the far-side member's inner side lets it leave",
+  split("jerome.focus", true), false)
+check("the same gap, named from the member itself", split("omarchy.bluetooth", false), false)
+check("the gap on its outer side lets it leave too",
+  split("omarchy.bluetooth", true), false)
+check("and the same gap named from the widget beyond it",
+  split("omarchy.network", false), false)
+
+// What must NOT change: the run on the pocket's own side is still the group,
+// including its outermost edge, so a member dropped inside it is reordered.
+check("the run's inner gap is still against the group", split(SELF, false), true)
+check("the run's outer gap is still against the group", split("omarchy.tray", true), true)
+check("a gap between two members of the run is still against it",
+  split("omaplug", true), true)
+check("the gap past the pocket is still outside", split(SELF, true), false)
+
+// The fail-safe. A layout this pocket cannot find itself in has no sides, so
+// every gap reads as inside the group and no drop can eject anything. Without
+// it, the same call ejects on every drop -- which is why the check is here and
+// not left to the argument.
+check("a layout without the pocket ejects nothing",
+  Model.gapTouchesMember(["omaplug", "omarchy.bluetooth"], ["omaplug"], "omaplug", true,
+                         SELF, true), true)
+check("nor does one with an empty pocket id",
+  Model.gapTouchesMember(SPLIT, SPLIT_MEMBERS, "jerome.focus", true, "", true), true)
+
+// The `left` section is the same rule mirrored: the pocket comes first and the
+// run follows it, so `nearestAtEnd` is false and the sides swap. The far-side
+// member is the one BEFORE the mark there.
+const LEFT_SPLIT = ["omarchy.bluetooth", SELF, "omaplug", "agx.screen-time", "omarchy.network"]
+const LEFT_MEMBERS = ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
+check("mirrored: the run after the mark is still the group",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, SELF, true, SELF, false), true)
+check("mirrored: the far-side member before the mark can leave",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, "omarchy.bluetooth", false, SELF, false), false)
+check("mirrored: the gap before the mark is outside the group",
+  Model.gapTouchesMember(LEFT_SPLIT, LEFT_MEMBERS, SELF, false, SELF, false), false)
+
+// A layout that names the same widget twice is legal by hand, and the side test
+// has to answer for the copy the gap actually touches rather than for the first
+// one it can find. Here the first copy is inside the run and the second is not:
+// the gap beside the second must still let it leave.
+const TWICE = ["omaplug", SELF, "omarchy.agents", "omaplug", "omarchy.network"]
+check("the copy inside the run is against the group",
+  Model.gapTouchesMember(TWICE, ["omaplug"], SELF, false, SELF, true), true)
+check("the copy outside it is not",
+  Model.gapTouchesMember(TWICE, ["omaplug"], "omarchy.agents", true, SELF, true), false)
 
 // ------------------------------------------------------ member order
 
@@ -1103,6 +1196,98 @@ check("a pocket the layout does not hold yet may write",
   Model.mayWrite(LAYOUT, "nope"), true)
 check("no layout at all may write", Model.mayWrite(null, SELF), true)
 
+// ------------------------------------------------------- the inline write
+
+// Omarchy 4.0.3 leaves an installed plugin one write: an inline update of its
+// own entry. That writer REBUILDS the entry as `{id}` plus exactly what it is
+// handed, so anything these two functions drop is deleted from the user's
+// shell.json. The README promises the opposite -- nothing else on the entry is
+// touched -- which is why the merge is a tested function and not a line inside
+// a handler.
+
+const ENTRY_LAYOUT = {
+  left: [{ id: "omarchy.menu" }],
+  center: [{ id: "omarchy.clock" }],
+  right: [{ id: "omarchy.tray" },
+          { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true }]
+}
+
+check("the plugin's own entry is found in its region",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "right", SELF),
+  { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true })
+check("an entry in another region is not this region's",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "left", SELF), null)
+check("a bare string entry answers as itself",
+  Model.layoutEntryFor({ right: [SELF] }, "right", SELF), SELF)
+check("a missing region is null, not a crash",
+  Model.layoutEntryFor(ENTRY_LAYOUT, "nope", SELF), null)
+check("a region that is not a list is null",
+  Model.layoutEntryFor({ right: "nope" }, "right", SELF), null)
+check("no layout is null", Model.layoutEntryFor(null, "right", SELF), null)
+check("an empty id is null", Model.layoutEntryFor(ENTRY_LAYOUT, "right", ""), null)
+
+// The whole point: every other key survives the write.
+const KEPT = Model.mergedEntrySettings(
+  { id: SELF, members: "old", showCount: true, note: "hand written" }, null,
+  "members", "new")
+check("the new value wins", KEPT.members, "new")
+check("a foreign key on the entry survives", KEPT.showCount, true)
+check("and so does a second one", KEPT.note, "hand written")
+// `id` is the host's to set, from the entry it matched. Carrying it would let a
+// mistyped copy of it reach the writer.
+check("id is never carried", "id" in KEPT, false)
+
+check("a bare string entry contributes no keys",
+  Model.mergedEntrySettings(SELF, null, "members", "a, b"), { members: "a, b" })
+check("no entry at all still writes the value",
+  Model.mergedEntrySettings(null, null, "members", "a, b"), { members: "a, b" })
+check("an array is not an entry",
+  Model.mergedEntrySettings(["a"], null, "members", "x"), { members: "x" })
+// An array-valued members is the shape a hand-edited config uses, and
+// membersValue() preserves it -- so the merge has to carry it unchanged.
+check("an array value passes through",
+  Model.mergedEntrySettings({ id: SELF }, null, "members", ["a", "b"]),
+  { members: ["a", "b"] })
+check("an empty key writes nothing",
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "", "x"),
+  { showCount: true })
+check("writing id is refused",
+  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "id", "evil"),
+  { showCount: true })
+
+// The second source, and why it exists. The host's layout snapshot goes stale
+// on a shell.json write that changed only inline settings -- the bar patches its
+// layout in place and never reassigns it, so the copy handed to plugins keeps
+// the old value -- while the widget's own injected `settings` is assigned
+// directly by that same path. Writing from the snapshot alone would resurrect
+// what the user had just edited away.
+const FRESH = Model.mergedEntrySettings(
+  { id: SELF, members: "old", showCount: true },
+  { members: "old", showCount: false, note: "added by hand" },
+  "members", "new")
+check("the live copy wins over a stale snapshot", FRESH.showCount, false)
+check("a key only the live copy has is still carried", FRESH.note, "added by hand")
+check("and the value being written still wins over both", FRESH.members, "new")
+check("a key only the snapshot has is not dropped",
+  Model.mergedEntrySettings({ id: SELF, older: 1 }, { members: "x" }, "members", "y").older, 1)
+
+// And the reason the live copy cannot simply BE the base: it is a writable
+// property in a scene every plugin shares. A key that disarms the entry is
+// refused from either source, so this plugin's own write cannot become the way
+// one arrives in the user's config.
+Model.reservedEntryKeys.forEach(word => {
+  const entry = { id: SELF }
+  entry[word] = "payload"
+  check(`a reserved key on the snapshot is refused: ${word}`,
+    word in Model.mergedEntrySettings(entry, null, "members", "a"), false)
+  const live = {}
+  live[word] = "payload"
+  check(`a reserved key injected into settings is refused: ${word}`,
+    word in Model.mergedEntrySettings({ id: SELF }, live, "members", "a"), false)
+  check(`and it cannot be written as the value's own key: ${word}`,
+    word in Model.mergedEntrySettings({ id: SELF }, null, word, "a"), false)
+})
+
 // --------------------------------------------------- manifest integrity
 
 // BarModel.customModuleType() infers a custom module from the entry's own keys:
@@ -1113,7 +1298,10 @@ check("no layout at all may write", Model.mayWrite(null, SELF), true)
 // reserved key in `defaults` or `schema` reaches the entry and disarms the
 // plugin. One assertion per reserved word, and one negative fixture per word so
 // the guard is seen failing rather than assumed to work.
-const RESERVED = ["type", "exec", "source"]
+// Taken from Model.js rather than restated here: mergedEntrySettings() refuses
+// the same words when it writes, and two copies of that list would be two
+// places to update and one place to forget.
+const RESERVED = Model.reservedEntryKeys
 
 function settingKeys(manifest) {
   const meta = (manifest && manifest.barWidget) || {}

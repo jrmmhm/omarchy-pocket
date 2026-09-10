@@ -46,25 +46,40 @@ Bar size and screen scaling are not things Pocket has an opinion about. It
 hardcodes no pixel value anywhere, and the mark takes its slot from the same
 `Style` token every other bar icon uses, so a larger bar font, a different
 `size-horizontal`, or a fractional output scale move it exactly as they move
-its neighbours. Checked across three outputs at scales 1.5, 1.667 and 2.4.
+its neighbours. Checked on several fractional scales side by side;
+[decision 0010](docs/decisions/0010-the-publication-review-changes-documentation-not-code.md)
+has which.
 
 <details>
 <summary>What it leans on inside the shell, for anyone deciding whether to trust it across updates</summary>
 
-Pocket reaches for fifteen properties and functions on the bar object, plus
-`shell.mutateShellConfig` on the shell that bar exposes. Exactly one of them,
-`bar.urgent`, is documented as available to plugins; the rest are engine
-internals, and it also imports the shell's own `qs.Commons` and `qs.Ui`
-modules.
+Pocket asks the bar for eight things, and for each it has a preferred way and a
+fallback. Which one it uses is decided at runtime from what the host actually
+offers, never from a version number — so an older Omarchy keeps the path it has
+always used, and a future one that hands the API back is used again without an
+update here.
 
-Every *property* it reads is guarded, so a renamed one makes a feature stop
-applying rather than misbehave — the drop steering simply stops steering, and
-the standing invariant still produces the correct layout. A renamed *module* is
-the exception: that is a hard load failure with no graceful half.
+That layering is not decoration. **Omarchy 4.0.3 stopped injecting the bar into
+installed plugins**; a third-party widget now receives a capability-scoped
+facade, and every symbol this plugin used to read is absent from it. Pocket kept
+every guard it promised — nothing threw, nothing warned — and did nothing at
+all, on a bar that looked exactly as it always had. They all went at the same
+time, which is the case a per-symbol guard cannot help with.
 
-Between Omarchy `4.0.0-beta3` and `4.0.1` the bar's API surface did not change
-by a single symbol. That is the basis for the version claim above — a
-measurement, not a promise from upstream, because upstream makes none.
+Where the host no longer answers, Pocket works it out from the bar surface it
+is drawn on: it finds the neighbouring widgets by walking the window's own item
+tree, and it follows the pointer through a drag with a Qt pointer handler. Both
+are things Omarchy's documentation says are available — "the facades are API
+boundaries, not same-process QML sandboxes" — rather than things it promises.
+Treat that as the honest position it is: if the scene stops being walkable,
+Pocket stops hiding and says so in its tooltip, and the preferred path is
+already asked first.
+
+It also imports the shell's own `qs.Commons` and `qs.Ui` modules. A renamed
+module is the one failure with no graceful half.
+
+[Decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md) has
+the whole table, what each fallback cost, and what is not recoverable.
 
 </details>
 
@@ -83,16 +98,32 @@ want it to hold onto it. That is the whole setup.
 
 ![Dragging a widget onto the mark puts it away; dragging it back out past the mark returns it](docs/pocket-drag.gif)
 
-**Drop a widget on the mark and it goes in.** From either side, and from a
-little beyond: what the pocket reads is the insertion line the bar is already
-drawing, and that line belongs to the mark from the middle of one neighbour to
-the middle of the other.
+**Drop a widget on the mark and it goes in.** What the pocket reads is the
+insertion line the bar draws, and that line belongs to the mark from the middle
+of one neighbour to the middle of the other.
+
+**On Omarchy 4.0.3 and later, only the half facing the members takes a widget
+in.** That host does not let a plugin move another widget's entry, so a widget
+arriving from the far side would be stuck there — splitting the group around the
+mark and, worse, breaking the way back out, because the gap past the mark would
+then have a member against it. The mark tells you: aim at the far half and it
+does not light. Aim at the half the group is on and it does. On earlier versions
+both halves work, because there the bar can be asked to place the widget
+correctly.
 
 **Drag a member past the middle of the mark and it comes out.** Dropping it
 anywhere outside the group takes it out as well. Move it around *inside* the
 group and it just gets reordered. That boundary runs through the middle of the
 mark: its two halves are the last gap inside the run and the first gap outside
 it.
+
+The group is the run on the pocket's own side of the mark, and only that. A
+member that is somewhere else — the far side of the mark, or cut off from the
+run by a widget that is not a member — is outside the group wherever it sits,
+so any drop beside it takes it out. Without that it could not be taken out at
+all: both gaps around such a member had the member itself against them, which
+read as "still inside the group", and a short drag anywhere near it did
+nothing.
 
 To reach a member you have to open the pocket first — a hidden widget is not on
 the bar to be grabbed. Point at the mark, then drag.
@@ -120,10 +151,18 @@ In the `right` section that means the members come *first* and the pocket last;
 in `left`, the pocket first. Fanning out changes the section's width, and this
 ordering is what keeps the mark itself from sliding out from under your pointer.
 
-Pocket keeps that arrangement for you. While you drag a widget onto it, it tells
-the bar which side the widget belongs on, so it lands there directly; and a
-member that ends up on the wrong side anyway is put back against the pocket. A
-widget already on the correct side is never moved.
+Pocket keeps that arrangement for you where the host lets it. While you drag a
+widget onto it, it tells the bar which side the widget belongs on, so it lands
+there directly; and a member that ends up on the wrong side anyway is put back
+against the pocket. A widget already on the correct side is never moved.
+
+**On Omarchy 4.0.3 and later it cannot do either**, because that host grants a
+plugin no write to another widget's entry. Instead it declines to take a widget
+in when the drop would land it on the far side — the bar still moves the widget
+there, it simply does not join the pocket — and if you hand-edit `members` into
+a split arrangement it names the misplaced widget in its tooltip rather than
+quietly fixing it. Such a widget can be dragged out from where it is, without
+being moved back first — see [Putting things in, taking them out](#putting-things-in-taking-them-out).
 
 The `members` list is kept in the order the widgets physically sit in, and
 rewritten when the two disagree — that order is what the fan-out follows, so a
@@ -205,8 +244,8 @@ The one place a hidden widget is not equivalent to a shown one is
 
 ## The mark
 
-A row of dots that turns upright as the pocket opens, over the same 600 ms
-`OutCubic` the stock tray drawer uses, with the members fading out of it in a
+A row of dots that turns upright as the pocket opens, with the same duration and
+`OutCubic` curve the stock tray drawer uses, the members fading out of it in a
 cascade. Deliberately not a chevron: the tray sits in the same section doing a
 visually similar thing, and two identical glyphs beside each other are two
 things nobody can tell apart.
@@ -228,14 +267,26 @@ seconds, not as a mode.
 
 Three things change your first hour with it:
 
-- **Keep members in the pocket's own section.** A member in `center` never
-  hides. With `centerAnchor` set — which is the default — the bar builds every
-  centre widget twice, once drawn and once as a hidden placeholder, and the
-  placeholder is created first, so Pocket binds that one every time. A member in
-  a different section than the pocket *is* hidden, but it fans out over there on
-  its own, which looks like a bug rather than a choice. The tooltip names both
-  cases. (Separately, a member may not be the `centerAnchor` itself — that is a
-  different mechanism and Pocket refuses it outright.)
+- **Keep members in the pocket's own section.** A member in a different section
+  than the pocket *is* hidden, but it fans out over there on its own, which
+  looks like a bug rather than a choice. The tooltip names it. (Separately, a
+  member may not be the `centerAnchor` itself — that is a different mechanism
+  and Pocket refuses it outright.)
+
+  Older versions of this page said a member in `center` never hides at all,
+  because the bar built every centre widget twice with `centerAnchor` set and
+  Pocket bound the hidden copy. Omarchy 4.0.3 does not build it twice — the
+  unanchored arrangement is not loaded while an anchor is set — so a centre
+  member hides there like any other. Measured on 4.0.3: six centre entries, six
+  slots, per surface.
+
+- **A member that hides itself cannot be dragged back out.** Some widgets
+  disappear when they have nothing to say — a battery widget with no battery, a
+  bluetooth icon with the adapter off. The bar only lets you grab a widget it is
+  drawing, so once such a member goes quiet there is nothing to take hold of,
+  and the gesture that put it in cannot get it out. This is true on every
+  Omarchy version. The tooltip names it and tells you to edit `members`; that is
+  the way back.
 - **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
   hidden group takes up no room, so the widget beside it stands against the mark
   and the bar draws its line there — which is the gesture for putting something
@@ -271,7 +322,9 @@ Three things change your first hour with it:
   that triggers it, are in
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
 - **Switching monitor profiles makes the members flash.** A surface that is
-  being moved loses its window for about 50 ms, and a pocket that cannot tell
+  being moved loses its window for a moment —
+  [decision 0005](docs/decisions/0005-a-pocket-drives-only-its-own-screens-slots.md)
+  measured how long — and a pocket that cannot tell
   which screen it is on drives no slots at all — so it hands them back visible
   and takes them again when the window returns. It happens on a surface that is
   unmapped, so what is left is at most a single frame as it comes back.
@@ -387,6 +440,8 @@ plan to come back.
 
 ```bash
 bash tests/run.sh                    # ALL TESTS PASSED (N assertions, 0 failures)
+bash tests/live.sh                   # asks the RUNNING bar; needs a shell
+bash tests/live.sh --gesture         # DRIVES a real drag; restores shell.json
 qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
@@ -396,13 +451,30 @@ it matters, in that engine too. A green `node` run is half the answer here, not
 the whole one: two assertions in this suite pass in `node` against code the bar
 would break on.
 
-`BarWidget.qml` keeps only what needs live objects. Most of that needs a real
-bar and is covered by using it, but three pieces are not: `tests/qml/` loads
-`BarWidget.qml` in Quickshell against objects that are not bars, and pins the
-drop steering — which fails silently in both directions it can fail — the
-membership a drag is decided against, and how the widget degrades when the host
-stops publishing a symbol it reads. It runs as part of `tests/run.sh` and skips
+`BarWidget.qml` keeps only what needs live objects. `tests/qml/` loads it in
+Quickshell and pins the drop steering — which fails silently in both directions
+it can fail — the membership a drag is decided against, how the widget degrades
+when the host stops publishing a symbol it reads, and that its copy of the bar's
+drop rule still agrees with the bar's own, swept pixel by pixel against the
+installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips
 itself where Quickshell or an Omarchy shell is absent, which is every CI runner.
+
+Two of those cases exist because the rest could not have caught the Omarchy
+4.0.3 break: the suite was green throughout while the plugin sat on a live bar
+hiding nothing ([decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md)
+has the count). A fake bar cannot notice that the real one stopped answering.
+`tests/qml/facade.qml` therefore loads the host's own `Ui/PluginBarApi.qml`
+rather than a stand-in, and `tests/live.sh` asks the running shell whether the
+bar is drawing what the setting says it should. The second one is not part of
+`tests/run.sh` — it needs a machine, not a checkout — and it is the only check
+here that would have caught that break on the day it landed.
+
+`tests/live.sh --gesture` goes one step further and drives a real drag with a
+virtual pointer, one member out past the mark and back in. The gesture broke on
+4.0.3 in a way only a real button press could see — it worked once per session
+([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
+It moves the pointer on your screens, snapshots `shell.json` before it starts,
+and puts it back from a trap.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

@@ -1,8 +1,19 @@
 # 5. A pocket drives only its own screen's slots
 
-- Status: accepted
+- Status: accepted; the fold guard extended by
+  [0015](0015-the-host-answers-by-capability-now.md) for hosts without
+  `barHovered`
 - Date: 2026-08-27
 - Complements: [0004](0004-membership-is-decided-from-the-gap-not-the-slot.md)
+
+> **Amendment, 2026-09-09.** This file rejects narrowing the fold guard to "is
+> the pointer on one of *my* slots", and that rejection stands — it is not what
+> 0015 does. Omarchy 4.0.3 removed `barHovered` from an installed plugin
+> altogether, and the guard is now a HoverHandler on the bar surface's own root
+> item, which is the same mechanism the host uses for `barHovered` and covers
+> the empty runs between sections exactly as it does. It is per surface rather
+> than shell-wide, so it also fixes the late fold this file's Consequences
+> describe. See [0015](0015-the-host-answers-by-capability-now.md).
 
 ## Context
 

@@ -1,8 +1,20 @@
 # 2. Members belong on one side of the pocket
 
-- Status: accepted
+- Status: accepted; the far-side half amended by
+  [0015](0015-the-host-answers-by-capability-now.md) for hosts that cannot be
+  steered
 - Date: 2026-08-27
 - Extends: [0001](0001-pocket-writes-its-own-members.md)
+
+> **Amendment, 2026-09-09.** Omarchy 4.0.3 refuses an installed plugin any write
+> to another widget's entry, so on that host neither the drop steering nor the
+> standing invariant below can run — a far-side arrival would stay on the far
+> side for good. There, and only there, a far-side release is refused instead:
+> option A, which this file measured as wrong. The measurement stands; what
+> changed is that the refusal is now visible before the button comes up, because
+> the predicate that refuses is the one that lights the mark. Everything below
+> is unchanged wherever the host can still be steered.
+> See [0015](0015-the-host-answers-by-capability-now.md).
 
 ## Context
 
