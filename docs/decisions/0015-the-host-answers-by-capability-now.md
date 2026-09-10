@@ -129,13 +129,18 @@ pocket open for the rest of the session.
 the entry as `{id}` plus exactly what it is handed, so every key omitted is
 deleted from the user's `shell.json`. The README promises the opposite, and
 without the merge that promise would be false the first time anyone put a second
-key on the entry — the author's own bar carries one. The merge base is the
-host's layout snapshot and never the injected `settings` property: that is a
-writable `var` in a scene every plugin shares, and a key another plugin dropped
-into it would otherwise be laundered into the config through the one write this
-plugin is trusted with. Capability is decided by whether this plugin's own
-mutator body RAN, because no return value separates "refused" from "did
-nothing".
+key on the entry — the author's own bar carries one. The merge reads both
+copies of the entry the host offers: its layout snapshot as the base, and the
+injected `settings` winning where the two disagree, because the snapshot goes
+stale on an edit that changes only inline settings. `settings` is a writable
+`var` in a scene every plugin shares, so a key that disarms the entry is refused
+from either copy. `mergedEntrySettings()` in `Model.js` owns that reasoning. The
+first version of this paragraph named the snapshot alone as the base; the code
+changed before 0.4.0 shipped, and this paragraph did not. The stale snapshot
+still leaves a gap, which
+[#16](https://github.com/jrmmhm/omarchy-pocket/issues/16) tracks. Capability is
+decided by whether this plugin's own mutator body RAN, because no return value
+separates "refused" from "did nothing".
 
 ### What the far side of the mark now does
 

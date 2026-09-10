@@ -1288,6 +1288,201 @@ Model.reservedEntryKeys.forEach(word => {
     word in Model.mergedEntrySettings({ id: SELF }, null, word, "a"), false)
 })
 
+// ------------------------------------------ a successful write changes one thing
+
+// untouched() above holds a refused write to "nothing moved". This holds a
+// successful one to "one thing moved", over the whole file rather than the
+// entries beside the pocket: the README promises that Pocket writes `members` on
+// its own entry and nothing else, and a write that also touched plugins[],
+// another section or a neighbour's key passed every assertion before these.
+//
+// The expected file is built by hand from a copy of the input -- never by
+// calling Model.js, so the comparison cannot share a mistake with the code it
+// checks. It is compared as JSON text, because the host writes the file with
+// JSON.stringify and key order is part of what lands on disk.
+// tests/qml/model.qml runs the same cases in Qt's V4 engine.
+
+// A whole shell.json in the shape mutateShellConfig() hands a mutator -- plain
+// objects and real arrays, as a JSON round trip produces them -- and a new one
+// per case, so no case sees another's write. It carries what a write must not
+// touch: keys above `bar`, plugins[], other widgets' entries with keys of their
+// own, a bare string entry in the pocket's own section, and keys on the
+// pocket's own entry beside `members`. `version: 1` because the host's
+// persistShellConfig() forces it, and a fixture without it would describe a
+// file the host never writes.
+function shellFixture() {
+  return {
+    version: 1,
+    theme: { name: "kanagawa" },
+    plugins: [{ id: "acme.tool", enabled: true, opts: { n: 1 } }],
+    bar: { position: "top", size: 32, layout: {
+      left: [{ id: "omarchy.menu", icon: "x" }, "omarchy.workspaces"],
+      center: [{ id: "omarchy.clock", format: "%H:%M" }],
+      right: [{ id: "omarchy.tray" }, { id: "mehiel.darky", color: "red" }, "omaplug",
+              { id: SELF, members: "mehiel.darky, omaplug", showCount: true, note: "hand written" },
+              { id: "jerome.focus", mode: 2 }, { id: "omarchy.bluetooth", quirk: 1 }]
+    } }
+  }
+}
+
+function clone(value) { return JSON.parse(JSON.stringify(value)) }
+
+// `write` performs the write and returns what it reported; `intend` applies the
+// one intended change, by hand, to a copy of the input. A write that throws
+// fails both labels instead of ending the run, so a mutant that throws is still
+// counted against every case after it.
+function onlyChange(label, config, write, intend) {
+  const expected = clone(config)
+  intend(expected)
+  let reported
+  try { reported = write(config) } catch (e) { reported = "threw: " + e }
+  check(label, reported, true)
+  check(label + " — and nothing else changed", JSON.stringify(config), JSON.stringify(expected))
+}
+
+const NEW_MEMBERS = "mehiel.darky, omaplug, omarchy.tray"
+
+onlyChange("a members write reports it found the entry", shellFixture(),
+  c => Model.setMembersOnEntry(c, "right", SELF, NEW_MEMBERS),
+  e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+onlyChange("an array-valued members write reports it found the entry", shellFixture(),
+  c => Model.setMembersOnEntry(c, "right", SELF, ["mehiel.darky"]),
+  e => { e.bar.layout.right[3].members = ["mehiel.darky"] })
+{
+  // A pocket that never had the key gains it, at the end of its entry.
+  const config = shellFixture()
+  config.bar.layout.right[3] = { id: SELF, showCount: true, note: "hand written" }
+  onlyChange("a first members write reports it found the entry", config,
+    c => Model.setMembersOnEntry(c, "right", SELF, "omaplug"),
+    e => { e.bar.layout.right[3].members = "omaplug" })
+}
+{
+  // A hand-written bare id is promoted, and the promotion is the one change.
+  const config = shellFixture()
+  config.bar.layout.right[3] = SELF
+  onlyChange("a bare string pocket entry is promoted", config,
+    c => Model.setMembersOnEntry(c, "right", SELF, "omaplug"),
+    e => { e.bar.layout.right[3] = { id: SELF, members: "omaplug" } })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.left.splice(1, 0, config.bar.layout.right.splice(3, 1)[0])
+  onlyChange("a members write in the left section reports it found the entry", config,
+    c => Model.setMembersOnEntry(c, "left", SELF, "omarchy.workspaces"),
+    e => { e.bar.layout.left[1].members = "omarchy.workspaces" })
+}
+
+// The placement repair moves one entry. Everything else in the file, the moved
+// entry's own keys and a bare string's shape included, comes out as it went in.
+onlyChange("a far-side member is moved against the pocket", shellFixture(),
+  c => Model.placeMemberBesideSelf(c, "right", "omarchy.bluetooth", SELF, true),
+  e => { const r = e.bar.layout.right; e.bar.layout.right = [r[0], r[1], r[2], r[5], r[3], r[4]] })
+{
+  const config = shellFixture()
+  const r = config.bar.layout.right
+  config.bar.layout.right = [r[0], r[1], r[3], r[2], r[4], r[5]]
+  onlyChange("a far-side bare string member is moved and stays a string", config,
+    c => Model.placeMemberBesideSelf(c, "right", "omaplug", SELF, true),
+    e => { const x = e.bar.layout.right; e.bar.layout.right = [x[0], x[1], x[3], x[2], x[4], x[5]] })
+}
+{
+  const config = shellFixture()
+  const pocket = config.bar.layout.right.splice(3, 1)[0]
+  config.bar.layout.left = [{ id: "omarchy.menu", icon: "x" }, { id: "agx.screen-time", limit: 5 },
+                            pocket, "omarchy.workspaces"]
+  onlyChange("a left-section member before the pocket is moved after it", config,
+    c => Model.placeMemberBesideSelf(c, "left", "agx.screen-time", SELF, false),
+    e => { const l = e.bar.layout.left; e.bar.layout.left = [l[0], l[2], l[1], l[3]] })
+}
+
+// The Omarchy 4.0.3 path. There the host's mutator is refused, and
+// writeMembers() hands mergedEntrySettings() to the host's inline writer, which
+// rebuilds the entry from it -- so what reaches the file is decided by two
+// functions, and one of them is the host's.
+//
+// hostInlineWrite() models that one, shell.qml::updateEntryInline in Omarchy
+// 4.0.3, reduced to the branch these fixtures reach: an entry whose `id`
+// matches is rebuilt as { id } plus every key it is handed, and a write that
+// changes nothing reports false. It is a copy of host code and can drift from
+// it -- tests/qml/run.sh links the host rather than copying it for exactly that
+// reason -- but the original closes over the whole shell root and cannot be
+// loaded on its own, and CI has no host to load it from. The fixtures keep the
+// host's other effects out of reach: they carry plugins[] and `version: 1`, so
+// the host scaffolds neither, and no pocket entry here is a bare string, which
+// the host does not match at all.
+function hostInlineWrite(config, id, settings) {
+  let dirty = false
+  for (const region of ["left", "center", "right"]) {
+    const entries = config.bar.layout[region] || []
+    for (let i = 0; i < entries.length; i++) {
+      if (!entries[i] || entries[i].id !== id) continue
+      const next = { id: id }
+      for (const k in settings) if (k !== "id") next[k] = settings[k]
+      if (JSON.stringify(entries[i]) === JSON.stringify(next)) continue
+      entries[i] = next
+      dirty = true
+    }
+  }
+  return dirty
+}
+
+// What the host hands the widget as `settings`: every key of its entry but
+// `id` (BarModel.js::entrySettings), reassigned whole on every inline change.
+function entrySettingsOf(entry) {
+  const out = {}
+  for (const k in entry) if (k !== "id") out[k] = entry[k]
+  return out
+}
+
+// writeMembers() as it runs on 4.0.3. `snapshot` is the facade's layout, a JSON
+// copy the host refreshes whenever it re-syncs its plugins -- which the delta
+// path for an inline-only edit does not do; `live` is the injected `settings`.
+function inlineWrite(config, region, value, snapshot, live) {
+  const entry = Model.layoutEntryFor(snapshot, region, SELF)
+  return hostInlineWrite(config, SELF, Model.mergedEntrySettings(entry, live, "members", value))
+}
+
+onlyChange("an inline members write reports it changed the entry", shellFixture(),
+  c => inlineWrite(c, "right", NEW_MEMBERS, clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+onlyChange("an array-valued inline write reports it changed the entry", shellFixture(),
+  c => inlineWrite(c, "right", ["omaplug"], clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  e => { e.bar.layout.right[3].members = ["omaplug"] })
+{
+  const config = shellFixture()
+  config.bar.layout.right[3] = { id: SELF, showCount: true, note: "hand written" }
+  onlyChange("a first inline members write reports it changed the entry", config,
+    c => inlineWrite(c, "right", "omaplug", clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = "omaplug" })
+}
+
+// The window the second source exists for. A hand edit of an inline setting
+// takes the bar's delta path: `settings` is reassigned, the facade's copy of the
+// layout is not. The file and `live` hold the edit, the snapshot does not, and
+// the file must keep what the user wrote.
+//
+// Not held here, and both measured: a key the user DELETES by hand in that
+// window comes back, because the merge takes the snapshot as its base; and a
+// key the user inserts in the MIDDLE of the entry moves to its end, because the
+// snapshot's keys are laid down first. Both are gaps in mergedEntrySettings(),
+// not properties this suite can assert today. Tracked in #16.
+{
+  const config = shellFixture()
+  const snapshot = clone(config.bar.layout)
+  config.bar.layout.right[3].showCount = false
+  onlyChange("an inline write over a stale snapshot keeps a hand-edited value", config,
+    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+{
+  const config = shellFixture()
+  const snapshot = clone(config.bar.layout)
+  config.bar.layout.right[3].added = 1
+  onlyChange("an inline write over a stale snapshot keeps a key added by hand", config,
+    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+
 // --------------------------------------------------- manifest integrity
 
 // BarModel.customModuleType() infers a custom module from the entry's own keys:

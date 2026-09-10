@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Every successful write path is now checked against the whole file.** A
+  refused write was already asserted to leave `shell.json` exactly as it was;
+  after a successful one, the suite only looked at the entry beside the pocket.
+  Every write path — the host's config mutator, the placement repair, and the
+  inline write Omarchy 4.0.3 leaves an installed plugin, run through a model of
+  the host's writer — is now compared against the whole file with only the
+  intended change applied, in both engines the code runs in. Nothing in the
+  plugin changed. (#5)
+
+### Documentation
+
+- **Decision 0015 described a merge the code no longer does.** It said the
+  inline write takes the host's layout snapshot alone as its base; since before
+  0.4.0 it also reads the injected `settings`, which win where the two disagree.
+  The paragraph is corrected, and it and the README now point at #16, where a
+  `members` write on 4.0.3 can change more than `members`.
+
 ## [0.4.0] — 2026-09-10
 
 Omarchy 4.0.3 stopped injecting the bar into installed plugins, and Pocket

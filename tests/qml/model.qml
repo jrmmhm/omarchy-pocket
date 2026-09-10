@@ -39,6 +39,180 @@ QtObject {
 
   function from(code) { return String.fromCharCode(code) }
 
+  // ------------------------------------------------- one write, one change
+  //
+  // Helpers for runWriteCases(). tests/model-test.js owns the reasoning behind
+  // each of them and runs the same cases in node.
+
+  readonly property string selfId: "jrmmhm.pocket"
+
+  // Built fresh per case by a function rather than declared as a property: the
+  // mutator path is handed a JSON round trip, which is plain JS, and a declared
+  // property would hand every case the same object.
+  function shellFixture() {
+    return {
+      version: 1,
+      theme: { name: "kanagawa" },
+      plugins: [{ id: "acme.tool", enabled: true, opts: { n: 1 } }],
+      bar: { position: "top", size: 32, layout: {
+        left: [{ id: "omarchy.menu", icon: "x" }, "omarchy.workspaces"],
+        center: [{ id: "omarchy.clock", format: "%H:%M" }],
+        right: [{ id: "omarchy.tray" }, { id: "mehiel.darky", color: "red" }, "omaplug",
+                { id: harness.selfId, members: "mehiel.darky, omaplug", showCount: true,
+                  note: "hand written" },
+                { id: "jerome.focus", mode: 2 }, { id: "omarchy.bluetooth", quirk: 1 }]
+      } }
+    }
+  }
+
+  function clone(value) { return JSON.parse(JSON.stringify(value)) }
+
+  function onlyChange(label, config, write, intend) {
+    var expected = harness.clone(config)
+    intend(expected)
+    var reported
+    try { reported = write(config) } catch (e) { reported = "threw: " + e }
+    harness.check(label, reported, true)
+    harness.check(label + " — and nothing else changed",
+                  JSON.stringify(config), JSON.stringify(expected))
+  }
+
+  // The host's inline writer, modelled. tests/model-test.js says what it covers
+  // and why it is a copy.
+  function hostInlineWrite(config, id, settings) {
+    var dirty = false
+    var regions = ["left", "center", "right"]
+    for (var r = 0; r < regions.length; r++) {
+      var entries = config.bar.layout[regions[r]] || []
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i] || entries[i].id !== id) continue
+        var next = { id: id }
+        for (var k in settings) if (k !== "id") next[k] = settings[k]
+        if (JSON.stringify(entries[i]) === JSON.stringify(next)) continue
+        entries[i] = next
+        dirty = true
+      }
+    }
+    return dirty
+  }
+
+  function entrySettingsOf(entry) {
+    var out = {}
+    for (var k in entry) if (k !== "id") out[k] = entry[k]
+    return out
+  }
+
+  function inlineWrite(config, region, value, snapshot, live) {
+    var entry = Model.layoutEntryFor(snapshot, region, harness.selfId)
+    return harness.hostInlineWrite(config, harness.selfId,
+                                   Model.mergedEntrySettings(entry, live, "members", value))
+  }
+
+  function runWriteCases() {
+    var self = harness.selfId
+    var value = "mehiel.darky, omaplug, omarchy.tray"
+    var config
+
+    harness.onlyChange("V4 a members write reports it found the entry", harness.shellFixture(),
+      function (c) { return Model.setMembersOnEntry(c, "right", self, value) },
+      function (e) { e.bar.layout.right[3].members = value })
+    harness.onlyChange("V4 an array-valued members write reports it found the entry",
+      harness.shellFixture(),
+      function (c) { return Model.setMembersOnEntry(c, "right", self, ["mehiel.darky"]) },
+      function (e) { e.bar.layout.right[3].members = ["mehiel.darky"] })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = { id: self, showCount: true, note: "hand written" }
+    harness.onlyChange("V4 a first members write reports it found the entry", config,
+      function (c) { return Model.setMembersOnEntry(c, "right", self, "omaplug") },
+      function (e) { e.bar.layout.right[3].members = "omaplug" })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = self
+    harness.onlyChange("V4 a bare string pocket entry is promoted", config,
+      function (c) { return Model.setMembersOnEntry(c, "right", self, "omaplug") },
+      function (e) { e.bar.layout.right[3] = { id: self, members: "omaplug" } })
+
+    config = harness.shellFixture()
+    config.bar.layout.left.splice(1, 0, config.bar.layout.right.splice(3, 1)[0])
+    harness.onlyChange("V4 a members write in the left section reports it found the entry",
+      config,
+      function (c) { return Model.setMembersOnEntry(c, "left", self, "omarchy.workspaces") },
+      function (e) { e.bar.layout.left[1].members = "omarchy.workspaces" })
+
+    harness.onlyChange("V4 a far-side member is moved against the pocket", harness.shellFixture(),
+      function (c) { return Model.placeMemberBesideSelf(c, "right", "omarchy.bluetooth", self, true) },
+      function (e) {
+        var r = e.bar.layout.right
+        e.bar.layout.right = [r[0], r[1], r[2], r[5], r[3], r[4]]
+      })
+
+    config = harness.shellFixture()
+    var r = config.bar.layout.right
+    config.bar.layout.right = [r[0], r[1], r[3], r[2], r[4], r[5]]
+    harness.onlyChange("V4 a far-side bare string member is moved and stays a string", config,
+      function (c) { return Model.placeMemberBesideSelf(c, "right", "omaplug", self, true) },
+      function (e) {
+        var x = e.bar.layout.right
+        e.bar.layout.right = [x[0], x[1], x[3], x[2], x[4], x[5]]
+      })
+
+    config = harness.shellFixture()
+    var pocket = config.bar.layout.right.splice(3, 1)[0]
+    config.bar.layout.left = [{ id: "omarchy.menu", icon: "x" }, { id: "agx.screen-time", limit: 5 },
+                              pocket, "omarchy.workspaces"]
+    harness.onlyChange("V4 a left-section member before the pocket is moved after it", config,
+      function (c) { return Model.placeMemberBesideSelf(c, "left", "agx.screen-time", self, false) },
+      function (e) {
+        var l = e.bar.layout.left
+        e.bar.layout.left = [l[0], l[2], l[1], l[3]]
+      })
+
+    harness.onlyChange("V4 an inline members write reports it changed the entry",
+      harness.shellFixture(),
+      function (c) {
+        return harness.inlineWrite(c, "right", value, harness.clone(c.bar.layout),
+                                   harness.entrySettingsOf(c.bar.layout.right[3]))
+      },
+      function (e) { e.bar.layout.right[3].members = value })
+    harness.onlyChange("V4 an array-valued inline write reports it changed the entry",
+      harness.shellFixture(),
+      function (c) {
+        return harness.inlineWrite(c, "right", ["omaplug"], harness.clone(c.bar.layout),
+                                   harness.entrySettingsOf(c.bar.layout.right[3]))
+      },
+      function (e) { e.bar.layout.right[3].members = ["omaplug"] })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = { id: self, showCount: true, note: "hand written" }
+    harness.onlyChange("V4 a first inline members write reports it changed the entry", config,
+      function (c) {
+        return harness.inlineWrite(c, "right", "omaplug", harness.clone(c.bar.layout),
+                                   harness.entrySettingsOf(c.bar.layout.right[3]))
+      },
+      function (e) { e.bar.layout.right[3].members = "omaplug" })
+
+    config = harness.shellFixture()
+    var stale = harness.clone(config.bar.layout)
+    config.bar.layout.right[3].showCount = false
+    harness.onlyChange("V4 an inline write over a stale snapshot keeps a hand-edited value", config,
+      function (c) {
+        return harness.inlineWrite(c, "right", value, stale,
+                                   harness.entrySettingsOf(c.bar.layout.right[3]))
+      },
+      function (e) { e.bar.layout.right[3].members = value })
+
+    config = harness.shellFixture()
+    var staleToo = harness.clone(config.bar.layout)
+    config.bar.layout.right[3].added = 1
+    harness.onlyChange("V4 an inline write over a stale snapshot keeps a key added by hand", config,
+      function (c) {
+        return harness.inlineWrite(c, "right", value, staleToo,
+                                   harness.entrySettingsOf(c.bar.layout.right[3]))
+      },
+      function (e) { e.bar.layout.right[3].members = value })
+  }
+
   function longestLine(rejected) {
     var lines = Model.describe({ members: [], rejected: rejected }).split("\n")
     var longest = 0
@@ -182,6 +356,14 @@ QtObject {
     check("V4 ejects nothing from a layout without the pocket",
           Model.gapTouchesMember(harness.pocketlessLayout, runMembers, "omaplug", true,
                                  "jrmmhm.pocket", true), true)
+
+    // ------------------------------------------------- one write, one change
+    //
+    // The whole-file comparison after a successful write, in the engine the bar
+    // runs. The functions under test read and write plain objects and arrays,
+    // and this is where Array.isArray() and key order are Qt's answer, not
+    // node's.
+    harness.runWriteCases()
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
