@@ -159,37 +159,52 @@ hover handler goes with it. It cannot press a button offscreen, so it pins the
 cause rather than the symptom; the symptom is `tests/live.sh --gesture`, which
 drives a real drag with a virtual pointer and is not part of `tests/run.sh`.
 
-## Open: the quickshell crashes of 2026-09-09 and 2026-09-10
+## The quickshell crashes of 2026-09-09 and 2026-09-10
 
-quickshell died with SIGSEGV four times on 2026-09-09 and never before in a
-`coredumpctl` history reaching back to July. All four stacks end in
-`derefWindow()` inside `~QQuickItem`, from a deferred delete; all four came
-while the session was locked, 46–82 s after it locked. A fifth followed on
-2026-09-10 at 09:34:09 with the same stack — `derefWindow` ←
-`setParentItem` ← `~QQuickItem` ← `deleteChildren` ← `sendPostedEvents` —
-on a build that still shared the overlay; lock-screen PAM sessions start 19 s
-after it, so the session was most likely locked then too. It came after a
-nine-hour locked stretch overnight that had produced none.
+quickshell died with SIGSEGV five times — four on 2026-09-09, one on
+2026-09-10 at 09:34:09 — and never before in a `coredumpctl` history reaching
+back to July. Each time quickshell's own supervisor relaunched the shell within
+a second and the lock came back; nothing was lost.
 
-The overlay was the prime suspect, as the one item this plugin hangs in a
-foreign window and deletes late, and frame `setParentItem` inside
-`~QQuickItem` is an item that still had a parent in a window when it was
-finally deleted. Against it: the first day brought Omarchy 4.0.2 → 4.0.3,
-qt6-base, Hyprland and mesa; the first four fell in hours of constant plugin
-edits and shell reloads; quickshell issue #972 describes a segfault when a
-process ends during a config reload, and every crash log ends in IpcHandler
-deregistrations. Without symbols the stack does not say which item it was.
+**What the cores prove.** All five stacks are identical to the byte offset.
+Symbolized through Arch's debuginfod, they are the deferred delete of one of
+quickshell's layer-shell windows: `WlrLayershell::~WlrLayershell` deletes its
+children, `ProxyWindowContentItem::~ProxyWindowContentItem` runs
+`QQuickItem::setParentItem(nullptr)`, and `derefWindow()` touches a window that
+is already gone. No frame belongs to this plugin, and the item that crashes is
+the window's own content item, not anything parented into it.
 
-What this change does to the question: it deletes overlays far more often, and
-it deletes each one after taking it out of the window, so none of those
-deletes can reach a window from the destructor the crash died in. That lowers
-this plugin's exposure to that stack; it does not show the plugin was the
-cause.
+**What the timeline shows.** All five came while the session was locked, 40–82 s
+after locking; the lock blanks the displays after 5 s. All five came through
+the idle lock, which starts the screensaver five minutes earlier and kills it on
+locking — five crashes in six idle locks — while twelve direct locks outside the
+tests never crashed. A config write rebuilds panels once per surface, three per
+write here, and the crash windows show one panel rebuild or none, which argues
+against a write from any plugin as the trigger.
 
-What would settle it: a crash on a build carrying this change, symbolicated,
-with the plugin's last overlay delete placed against it — or, the other way, a
-week of normal use with lock cycles and no crash. A soak of rebuilds while
-locked (`omarchy bar move` in a loop) on the build before this change and on
-this one, comparing `coredumpctl list quickshell`, would separate the two
-faster than waiting. No single lock proves anything: one survived and the next
-did not.
+**Upstream.** quickshell issue #910 reports the same innermost frames on
+Hyprland after sleep and monitor changes, open and unfixed. Reading
+`proxywindow.cpp`, `~ProxyWindowBase()` leaves the content item parented to the
+window's root item, which is the path these cores take.
+
+**The counter-tests.** Sixteen locks on 2026-09-10, each held at least 90 s,
+half with a stand-in that carries this plugin's id and none of its code and
+half with this build: ten direct locks, then six that first ran the screensaver
+for a minute. No crash in any of them. The single panel rebuild that preceded
+three of the crashes happened in every one, 32–70 s after locking, so tearing a
+window down under the lock is not enough on its own. What none of them
+reproduced is the idle path itself; a forced minute of screensaver was the
+closest a test got.
+
+**Verdict.** The crash is quickshell's, and this plugin is not in its path.
+Whether the plugin can make that path more likely is not decided by any test
+here; the stack, the upstream report and the trigger all point away from it.
+`detachOverlay()` taking the overlay off the surface before destroying it
+stays right on its own terms — an item still attached to a window during a
+deferred delete is exactly the shape of this crash — but it was never the fix
+for it.
+
+**What would settle the rest:** the next idle-lock crash on a build carrying
+this change. The overlay is no longer shared there, so if the plugin mattered,
+the crash should stop; if it does not, the next core says the same as these
+five.
