@@ -1461,9 +1461,11 @@ onlyChange("an array-valued inline write reports it changed the entry", shellFix
 // layout is not. The file and `live` hold the edit, the snapshot does not, and
 // the file must keep what the user wrote.
 //
-// Not held here: a key the user DELETES by hand in that window. The merge takes
-// the snapshot as its base, so that key comes back -- a gap in
-// mergedEntrySettings(), measured, and not a property this suite can assert.
+// Not held here, and both measured: a key the user DELETES by hand in that
+// window comes back, because the merge takes the snapshot as its base; and a
+// key the user inserts in the MIDDLE of the entry moves to its end, because the
+// snapshot's keys are laid down first. Both are gaps in mergedEntrySettings(),
+// not properties this suite can assert today.
 {
   const config = shellFixture()
   const snapshot = clone(config.bar.layout)
