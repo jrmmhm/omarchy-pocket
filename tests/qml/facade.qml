@@ -243,6 +243,15 @@ QtObject {
     // lives on. That is the order that killed the shared overlay.
     harness.survivor = win.secondPocket.overlay
     harness.departedHover = win.pocketItem.overlay.hoverHandler
+
+    // Off the surface in the same breath, not whenever the deferred delete gets
+    // round to it: an overlay still in the window would go on taking presses,
+    // and its destructor would reach into the window. Asked before the event
+    // loop runs, because afterwards the delete would pass this on its own.
+    win.pocketItem.detachOverlay()
+    probe("a retired overlay leaves the surface at once, before it is deleted",
+          function () { return harness.overlayCount() }, 1)
+
     loaderA.active = false
 
     harness.after(harness.step4)
