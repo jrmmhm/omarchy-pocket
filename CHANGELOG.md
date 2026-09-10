@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intended change applied, in both engines the code runs in. Nothing in the
   plugin changed. (#5)
 
+### Fixed
+
+- **A member reordered inside the pocket no longer fans out on its own.** On
+  Omarchy 4.0.3 a reorder leaves the running pocket holding the member list from
+  before it: Pocket writes the new order, the host applies it, and a few
+  milliseconds later puts the old one back. The fan-out counted along that list,
+  so the widget that had just moved arrived by itself, at the place it had left.
+  It now counts along the bar, which the host keeps current, and runs from the
+  widget against the mark outwards whatever the list says
+  ([decision 0018](docs/decisions/0018-the-fan-out-follows-the-bar-not-the-list.md)).
+
 ### Documentation
 
 - **Decision 0015 described a merge the code no longer does.** It said the

@@ -165,10 +165,10 @@ quietly fixing it. Such a widget can be dragged out from where it is, without
 being moved back first — see [Putting things in, taking them out](#putting-things-in-taking-them-out).
 
 The `members` list is kept in the order the widgets physically sit in, and
-rewritten when the two disagree — that order is what the fan-out follows, so a
-list that disagrees with the bar animates in a direction that is not there. If
-you write `members` by hand in a different order, expect it back in layout
-order. An id Pocket could not parse is kept rather than deleted, and while one
+rewritten when the two disagree. The fan-out does not depend on that list: it
+always runs from the widget against the mark outwards, in the order the bar
+shows, and a member sitting in another section fans out last. If you write
+`members` by hand in a different order, expect it back in layout order. An id Pocket could not parse is kept rather than deleted, and while one
 is present Pocket never rewrites the order *on its own*. A drag still does,
 because a drag is a change you asked for and it has to record where the widget
 went — and an unparsed id has no place on the bar to be sorted against, so it
@@ -457,7 +457,8 @@ would break on.
 
 `BarWidget.qml` keeps only what needs live objects. `tests/qml/` loads it in
 Quickshell and pins the drop steering — which fails silently in both directions
-it can fail — the membership a drag is decided against, how the widget degrades
+it can fail — the membership a drag is decided against, the fan-out order when
+the member list it holds lags the bar, how the widget degrades
 when the host stops publishing a symbol it reads, and that its copy of the bar's
 drop rule still agrees with the bar's own, swept pixel by pixel against the
 installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips
