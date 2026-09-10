@@ -357,6 +357,29 @@ QtObject {
           Model.gapTouchesMember(harness.pocketlessLayout, runMembers, "omaplug", true,
                                  "jrmmhm.pocket", true), true)
 
+    // ----------------------------------------------------------- the cascade
+    //
+    // cascadeRanks() sorts, and a sort is the engine's business — orderMembers()
+    // records what V4 made of a comparator node was content with. The layout
+    // arrives as the sequence type the host delivers, so it is declared below
+    // rather than built here. tests/model-test.js owns the reasoning per case.
+    checkList("V4 leads the cascade with the member against the mark",
+              Model.cascadeRanks(["ianswope.snapshots", "mehiel.darky", "omaplug"],
+                                 harness.cascadeRight, true), [1, 0, 2])
+    checkList("V4 leads a left-section cascade with the first member",
+              Model.cascadeRanks(["ianswope.snapshots", "mehiel.darky", "omaplug"],
+                                 harness.cascadeLeft, false), [1, 2, 0])
+    checkList("V4 keeps the old cascade with no layout",
+              Model.cascadeRanks(["a", "b", "c"], [], true), [2, 1, 0])
+    checkList("V4 sends a member from another section to the far end",
+              Model.cascadeRanks(["omaplug", "omarchy.clock", "mehiel.darky"],
+                                 harness.cascadeRight, true), [1, 2, 0])
+    checkList("V4 ranks prototype names like any id",
+              Model.cascadeRanks(["toString", "valueOf"], ["valueOf", "toString", "jrmmhm.pocket"],
+                                 true), [0, 1])
+    checkList("V4 takes the members as the sequence type a setting delivers",
+              Model.cascadeRanks(harness.cascadeMembers, harness.cascadeRight, true), [1, 0, 2])
+
     // ------------------------------------------------- one write, one change
     //
     // The whole-file comparison after a successful write, in the engine the bar
@@ -393,4 +416,11 @@ QtObject {
                              "omarchy.agents", "omarchy.bluetooth", "omarchy.network"]
   property var splitMembers: ["omaplug", "agx.screen-time", "omarchy.bluetooth"]
   property var pocketlessLayout: ["omaplug", "agx.screen-time", "omarchy.network"]
+
+  // The cascade fixtures, declared for the same reason as the three above.
+  property var cascadeRight: ["omarchy.tray", "omaplug", "ianswope.snapshots", "mehiel.darky",
+                              "jrmmhm.pocket"]
+  property var cascadeLeft: ["jrmmhm.pocket", "omaplug", "ianswope.snapshots", "mehiel.darky",
+                             "omarchy.tray"]
+  property var cascadeMembers: ["ianswope.snapshots", "mehiel.darky", "omaplug"]
 }

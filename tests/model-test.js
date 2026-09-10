@@ -211,6 +211,60 @@ for (const n of [1, 2, 4, 8, 20]) {
     Array.from({ length: n }, (_, i) => rf(0, i, n)).every(v => v === 0), true)
 }
 
+// The cascade's order comes from the layout, not from the list. See
+// docs/decisions/0018: the list a running pocket holds can lag the bar.
+const cr = Model.cascadeRanks
+const RUN_RIGHT = ["omarchy.tray", "omaplug", "ianswope.snapshots", "mehiel.darky", SELF]
+const RUN_LEFT = [SELF, "omaplug", "ianswope.snapshots", "mehiel.darky", "omarchy.tray"]
+
+// Rotated, not reversed: a reversed list is also passed by an implementation
+// that only reverses it.
+check("right: the member against the mark leads, whatever the list says",
+  cr(["ianswope.snapshots", "mehiel.darky", "omaplug"], RUN_RIGHT, true), [1, 0, 2])
+check("right: a list already in layout order keeps the old cascade",
+  cr(["omaplug", "ianswope.snapshots", "mehiel.darky"], RUN_RIGHT, true), [2, 1, 0])
+check("left: the first member after the mark leads",
+  cr(["ianswope.snapshots", "mehiel.darky", "omaplug"], RUN_LEFT, false), [1, 2, 0])
+check("left: a list already in layout order keeps the old cascade",
+  cr(["omaplug", "ianswope.snapshots", "mehiel.darky"], RUN_LEFT, false), [0, 1, 2])
+
+// With no layout to read the old list-counted cascade comes back exactly, which
+// is what a pocket that has not resolved its own section yet shows.
+check("right with no layout is the old cascade", cr(["a", "b", "c"], [], true), [2, 1, 0])
+check("left with no layout is the old cascade", cr(["a", "b", "c"], [], false), [0, 1, 2])
+check("a missing layout is no layout", cr(["a", "b"], undefined, true), [1, 0])
+
+// A member the section does not hold fans out last, at the far end — not at the
+// leading end, where the list-counted cascade put it in the right section.
+check("right: a member from another section fans out last",
+  cr(["omaplug", "omarchy.clock", "mehiel.darky"], RUN_RIGHT, true), [1, 2, 0])
+check("left: a member from another section fans out last",
+  cr(["omarchy.clock", "omaplug"], RUN_LEFT, false), [1, 0])
+check("right: two unknown ids keep their old relative place behind the known",
+  cr(["x.one", "mehiel.darky", "x.two"], RUN_RIGHT, true), [2, 0, 1])
+
+check("a repeated layout id ranks at its first occurrence",
+  cr(["omarchy.spacer", "omaplug"], ["omarchy.spacer", "omaplug", "omarchy.spacer", SELF], true),
+  [1, 0])
+check("an id is compared trimmed", cr([" mehiel.darky ", "omaplug"], RUN_RIGHT, true), [0, 1])
+check("an empty id is unknown, never a match for an empty entry",
+  cr(["", "omaplug"], ["", "omaplug", SELF], true), [1, 0])
+check("a prototype name is an ordinary id",
+  cr(["toString", "valueOf"], ["valueOf", "toString", SELF], true), [0, 1])
+check("no members, no ranks", cr([], RUN_RIGHT, true), [])
+check("a missing list is no members", cr(undefined, RUN_RIGHT, true), [])
+
+// Every result is a permutation of 0..n-1: two members sharing a place would
+// arrive together, and a gap would leave one member a stagger step late.
+for (const [label, ids, layout, end] of [
+  ["right mixed", ["x", "mehiel.darky", "omaplug", "y", "ianswope.snapshots"], RUN_RIGHT, true],
+  ["left mixed", ["x", "mehiel.darky", "omaplug", "y", "ianswope.snapshots"], RUN_LEFT, false],
+  ["all unknown", ["p", "q", "r", "s"], RUN_RIGHT, true],
+]) {
+  check(`${label}: the ranks are a permutation`,
+    cr(ids, layout, end).slice().sort((a, b) => a - b), ids.map((_, i) => i))
+}
+
 check("progress above one is clamped", rf(5, 2, 4), 1)
 check("progress below zero is clamped", rf(-5, 0, 4), 0)
 check("garbage progress reads as rest", rf("nonsense", 0, 4), 0)
