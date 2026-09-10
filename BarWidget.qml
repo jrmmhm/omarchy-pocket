@@ -311,7 +311,7 @@ BarWidget {
 
   // The settling pass after any change that rebuilds the bar. It redoes both
   // things a rebuild can leave behind — a walk taken before the later slots
-  // existed, and an overlay claim that lost its race with the teardown — and it
+  // existed, and an overlay that could not be built yet — and it
   // is bounded rather than repeating, so a bar that is already correct costs
   // one comparison and nothing else. Both calls are idempotent.
   Timer {
@@ -469,14 +469,12 @@ BarWidget {
       objectName: root.overlayName
       z: 99999
 
-      // Shared between the pocket instances of this surface and destroyed by
-      // the last one out. Never destroyed from a dying instance's own
-      // onDestruction: a layout rebuild completes the NEW instances before it
-      // destroys the old ones, so the old one would tear down the overlay the
-      // new one had just adopted, and the drag would be dead from the first
-      // drop onwards. Measured, along with what happens when nobody cleans up
-      // at all: seventeen orphans on one surface across one session.
-      property int users: 0
+      // Owned by the one pocket instance that built it, and destroyed by that
+      // instance and no other. Every handler body below runs in the QML context
+      // of the instance that CREATED this item and dies with it. Shared between
+      // the instances of a surface, the overlay outlived its creator on the
+      // first rebuild, and from then on no press ever reached `pressed`: the
+      // gesture worked once per session. See docs/decisions/0017.
 
       property bool hovered: false
       property bool pressed: false
@@ -515,6 +513,10 @@ BarWidget {
         }
       }
 
+      // For tests/qml/facade.qml, which has to reach the handler from outside to
+      // see that it goes with this item and that a surviving one stays armed.
+      readonly property var hoverHandler: surfaceHover
+
       // A bar rebuild destroys and recreates every item on this surface while a
       // hover is in flight, and Qt's hover bookkeeping does not always survive
       // it: measured on the live bar as `hovered` stuck true at a frozen
@@ -543,17 +545,14 @@ BarWidget {
       // that moves its ownership with it: destroying this item does NOT destroy
       // the handler. Measured — it is still there afterwards, and `destroy()`
       // does not take it either, because `destroy()` only works on objects that
-      // were created dynamically. So it is switched off instead, which is the
-      // one thing that reliably stops a handler being given events.
-      //
-      // What this defends against is a handler outliving the overlay and
-      // running its body against a destroyed `glass`, once the last pocket on a
-      // surface goes while the surface stays — removed from the bar, plugin
-      // disabled, or the host handing the drag API back. A review reported that
-      // as an error per pointer event; measured here it fired nothing at all
-      // after the item was gone, so the disable is a guard against a failure
-      // that was argued rather than one that was seen. It costs one assignment.
-      Component.onDestruction: surfaceHover.enabled = false
+      // were created dynamically. With one overlay per instance that would leave
+      // a live handler on the surface for every rebuild, so it is handed back
+      // before this item goes: switched off, and parented to this item again,
+      // which takes its ownership back with it. Measured: gone with the item.
+      function retire() {
+        surfaceHover.enabled = false
+        surfaceHover.parent = glass
+      }
 
       PointHandler {
         // target: null keeps it a pure observer — it moves nothing and takes no
@@ -578,53 +577,38 @@ BarWidget {
   function attachOverlay() {
     if (!root.overlayWanted || root.overlay !== null) return
     var host = root.surfaceRoot
-    if (!host || !host.children) return
-
-    var found = null
-    for (var i = 0; i < host.children.length; i++) {
-      var kid = host.children[i]
-      if (kid && kid.objectName === root.overlayName) { found = kid; break }
-    }
-
-    if (!found) {
-      found = overlayComponent.createObject(host)
-      if (!found) return
-      found.width = Qt.binding(function () { return host.width })
-      found.height = Qt.binding(function () { return host.height })
-    }
-
-    found.users += 1
-    root.overlay = found
+    if (!host) return
+    var glass = overlayComponent.createObject(host)
+    if (!glass) return
+    glass.width = Qt.binding(function () { return host.width })
+    glass.height = Qt.binding(function () { return host.height })
+    root.overlay = glass
   }
 
+  // Inline, and only ever this instance's own overlay. Nothing adopts one any
+  // more, so there is no claim to wait for — and a Qt.callLater scheduled from
+  // an instance that is being destroyed is dropped without a word, which would
+  // leave the overlay on the surface for good.
+  //
+  // Taken off the surface before it is destroyed, because destroy() is
+  // deferred: in that gap an item still in the window goes on being
+  // hit-tested, and its destructor would reach into the window. The bar takes
+  // its own items out of the window before deleting them — measured, an old
+  // pocket instance loses its window well before it is destroyed — and this
+  // does the same, so no rebuild adds a deferred delete of an item still
+  // attached to one. Why that matters is the open question in 0017.
   function detachOverlay() {
     var glass = root.overlay
     root.overlay = null
     if (!glass) return
-    glass.users -= 1
-    if (glass.users > 0) return
-
-    // Deferred, and this is the whole reason the overlay was going missing.
-    //
-    // A layout rebuild completes the new instances before it destroys the old
-    // ones — but the host injects `bar` from a callLater of its own, so the new
-    // instance's claim lands AFTER the old instance's release. Destroying inline
-    // meant the count reached zero in that gap, the object was scheduled for
-    // deletion, and the new instance then adopted a corpse: `overlay` came back
-    // null one frame later and stayed null for the life of the bar. Hiding went
-    // on working, because it needs no overlay, and the gesture was silently
-    // dead. Measured on the live bar: one `omarchy bar move` was enough.
-    //
-    // Deferring lets the claim raise the count again before this runs, in which
-    // case there is nothing to destroy.
-    Qt.callLater(function () {
-      if (glass && glass.users <= 0) glass.destroy()
-    })
+    glass.retire()
+    glass.parent = null
+    glass.destroy()
   }
 
   // A monitor move unmaps the surface and hands back a new root item. The
-  // overlay belongs to the old one and has to be found or built again on the
-  // new one, and the walk was over the old tree, so both are redone here.
+  // overlay belongs to the old one and is built again on the new one, and the
+  // walk was over the old tree, so both are redone here.
   onSurfaceRootChanged: {
     root.detachOverlay()
     root.attachOverlay()
