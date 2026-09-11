@@ -51,10 +51,10 @@ ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
 # shell that costs us the neighbourhood sweep must not silently cost us this one
 # too. A case that quietly stops running is the kind of green tests/run.sh warns
 # about in its own header.
-CASES="model steer steer-readonly noslots neighbourhood facade"
+CASES="model steer steer-readonly noslots neighbourhood facade cascade"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="model steer steer-readonly noslots facade"
+  CASES="model steer steer-readonly noslots facade cascade"
 fi
 
 # The facade case loads the host's own Ui/PluginBarApi.qml rather than a
@@ -77,7 +77,8 @@ for name in $CASES; do
   # none and keep the platform they were written for.
   #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
-  if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ]; then
+  if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ] \
+      || [ "$name" = "cascade" ]; then
     output="$(QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
     output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"

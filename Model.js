@@ -157,10 +157,11 @@ function isPlainObject(value) {
 }
 
 // Members are kept in the order their widgets physically sit on the bar, not
-// in the order they were added. The cascade in applyReveal() counts from the
-// member nearest the pocket outwards; if the list disagreed with the layout,
-// the animation would run in a direction that does not exist on screen. The
-// bar decides where a dropped widget lands, so the list follows the bar.
+// in the order they were added, so that shell.json reads the way the bar
+// looks. The cascade does not rest on it: cascadeRanks() reads the layout
+// itself, because the list a running pocket holds can lag the bar (see
+// docs/decisions/0018). The bar decides where a dropped widget lands, so the
+// list follows the bar.
 //
 // Ids the layout does not know — a typo the user has not fixed yet — keep
 // their relative order and collect at the end rather than being dropped.
@@ -219,9 +220,10 @@ function orderMembers(list, layoutIds) {
 //
 // It has to be checked on sight rather than folded into a gesture: reordering
 // a member inside the run moves widgets without this pocket writing anything
-// at all, and the cascade in applyReveal() counts from the member nearest the
-// pocket outwards — a list that disagrees with the layout animates in a
-// direction that does not exist on screen.
+// at all. The host can hand a running pocket the old list back after the
+// repair has written the new one; this then keeps answering false and the
+// repair finds nothing to write, which is harmless, and is why the cascade
+// asks the layout instead. docs/decisions/0018 has when and why.
 function membersInLayoutOrder(rawList, layoutIds) {
   var source = rawList || []
   var ordered = orderMembers(source, layoutIds)
@@ -740,6 +742,55 @@ function revealFraction(progress, index, count, maxStagger) {
   return Math.max(0, Math.min(1, (p - stagger * i) / span))
 }
 
+// Each member's place in the cascade, 0 leading, for the members in the order
+// they are handed over. revealFraction() takes this as its `index`.
+//
+// Counted along the LAYOUT, not along the list: the list a running pocket
+// holds can lag the bar after a reorder, and a cascade counted along it ran in
+// a direction that was not on screen — the moved widget fanned out on its own.
+// docs/decisions/0018 has the measurement, and why the layout does not lag in
+// the same way.
+//
+// Nearest the pocket leads: the highest layout position where the members
+// precede it (`nearestAtEnd`), the lowest where they follow it. An id the
+// layout does not hold — a member in another section, or a layout not known
+// yet — goes to the far end of the cascade, keeping the relative place the old
+// list-counted cascade gave it, so a layout that knows nothing reproduces that
+// cascade exactly. A repeated layout id ranks at its first occurrence, the
+// same rule orderMembers() applies.
+//
+// The comparator never answers NaN and never contradicts itself; orderMembers()
+// records what V4 does with one that does.
+function cascadeRanks(ids, layoutIds, nearestAtEnd) {
+  var source = ids || []
+  var layout = layoutIds || []
+  var known = []
+  for (var i = 0; i < layout.length; i++) known.push(String(layout[i]).trim())
+
+  var placed = []
+  var unplaced = []
+  for (var j = 0; j < source.length; j++) {
+    var id = String(source[j]).trim()
+    var at = id === "" ? -1 : known.indexOf(id)
+    if (at === -1) unplaced.push(j)
+    else placed.push({ at: at, j: j })
+  }
+
+  var towardEnd = nearestAtEnd === true
+  placed.sort(function (a, b) {
+    if (a.at !== b.at) return towardEnd ? b.at - a.at : a.at - b.at
+    return towardEnd ? b.j - a.j : a.j - b.j
+  })
+  if (towardEnd) unplaced.reverse()
+
+  var ranks = []
+  for (var k = 0; k < source.length; k++) ranks.push(0)
+  var rank = 0
+  for (var p = 0; p < placed.length; p++) ranks[placed[p].j] = rank++
+  for (var u = 0; u < unplaced.length; u++) ranks[unplaced[u]] = rank++
+  return ranks
+}
+
 // ---------------------------------------------------------- tooltip text
 
 // The plugin's text boundary. Everything a value contributes to the tooltip
@@ -982,7 +1033,7 @@ function describe(state) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
                      rejectedMembers: rejectedMembers, unreadableEntries: unreadableEntries,
-                     revealFraction: revealFraction,
+                     revealFraction: revealFraction, cascadeRanks: cascadeRanks,
                      tooltipSafe: tooltipSafe, tooltipList: tooltipList,
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,

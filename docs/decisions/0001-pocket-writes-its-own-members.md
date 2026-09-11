@@ -1,6 +1,8 @@
 # 1. Pocket writes its own `members`
 
-- Status: accepted, extended by [0002](0002-members-belong-on-one-side.md)
+- Status: accepted, extended by [0002](0002-members-belong-on-one-side.md); the
+  cascade's direction no longer rests on the member order, see
+  [0018](0018-the-fan-out-follows-the-bar-not-the-list.md)
 - Date: 2026-08-27
 
 ## Context

@@ -2,7 +2,9 @@
 
 - Status: accepted, complemented by [0005](0005-a-pocket-drives-only-its-own-screens-slots.md),
   guard narrowed by [0009](0009-a-drag-decides-against-the-membership-it-started-with.md)
-  and again by [0015](0015-the-host-answers-by-capability-now.md)
+  and again by [0015](0015-the-host-answers-by-capability-now.md); the cascade
+  no longer rests on the order check below, see
+  [0018](0018-the-fan-out-follows-the-bar-not-the-list.md)
 - Date: 2026-08-27
 - Amends: [0001](0001-pocket-writes-its-own-members.md)
 

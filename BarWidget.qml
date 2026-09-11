@@ -1235,13 +1235,29 @@ BarWidget {
 
   onRevealProgressChanged: applyReveal()
 
+  // Each driven slot's place in the cascade, counted along the bar rather than
+  // along `members`. The list this instance holds can lag the bar after a
+  // reorder, and counting along it made the moved widget fan out alone, at the
+  // place it had left. Model.cascadeRanks() owns the rule; docs/decisions/0018
+  // the measurement.
+  //
+  // Reads `driven`, the slots' own names and the layout, and nothing that
+  // applyReveal() writes, so it cannot feed back into the reveal it steers.
+  readonly property var revealRanks: {
+    var list = root.driven
+    var names = []
+    for (var i = 0; i < list.length; i++) names.push(list[i] ? root.canonical(list[i].moduleName) : "")
+    return Model.cascadeRanks(names, root.layoutIds(root.ownRegion), root.membersLeadFromEnd)
+  }
+
   function applyReveal() {
     var list = root.driven
     var n = list.length
+    var ranks = root.revealRanks
 
     for (var i = 0; i < n; i++) {
       if (root.isHeld(list[i])) continue
-      var order = root.membersLeadFromEnd ? (n - 1 - i) : i
+      var order = ranks.length === n ? ranks[i] : (root.membersLeadFromEnd ? (n - 1 - i) : i)
       var f = Model.revealFraction(root.revealProgress, order, n)
       root.setSlotProperty(list[i], "transformOrigin", root.growthOrigin)
       root.setSlotProperty(list[i], "opacity", f)

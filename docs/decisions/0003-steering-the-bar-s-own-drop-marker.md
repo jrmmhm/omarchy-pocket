@@ -1,7 +1,9 @@
 # 3. Steering the bar's own drop marker
 
 - Status: accepted; its mechanism replaced by
-  [0006](0006-the-drop-steering-listens-it-does-not-sample.md)
+  [0006](0006-the-drop-steering-listens-it-does-not-sample.md); the cascade it
+  describes no longer rests on the member order, see
+  [0018](0018-the-fan-out-follows-the-bar-not-the-list.md)
 - Date: 2026-08-27
 - Resolves the open question in [0002](0002-members-belong-on-one-side.md)
 
