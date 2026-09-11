@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-09-11
+
+A member reordered inside the pocket fanned out on its own on Omarchy 4.0.3,
+because the running pocket was handed back the member list from before the
+reorder. The fan-out now follows the bar.
+[Decision 0018](docs/decisions/0018-the-fan-out-follows-the-bar-not-the-list.md)
+owns the account.
+
 ### Added
 
 - **Every successful write path is now checked against the whole file.** A
@@ -467,7 +475,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.0
 [0.3.3]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.2
