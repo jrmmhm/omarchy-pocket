@@ -200,7 +200,9 @@ produce one; both shapes work when you edit the file yourself.
 `pinned` and `locked` are normally set by clicking the mark, and each one names
 screens. A laptop panel is named by its connector (`eDP-1`), and any other
 screen by its model as the compositor reports it (`ASUS VG289`; `hyprctl
-monitors` lists it as `model`). By hand, separate the names with commas — not
+monitors` lists it as `model`), followed by its serial number where that
+reaches Pocket. The tooltip does not show the name, but `shell.json` does once
+you have clicked. By hand, separate the names with commas — not
 spaces, because a model name has spaces in it — or write a JSON array:
 `omarchy bar set jrmmhm.pocket locked "eDP-1, ASUS VG289"`. A name no
 connected screen has does nothing, and a screen that is not named starts
@@ -357,9 +359,11 @@ Three things change your first hour with it:
   the pin is kept per screen, such a click pins the *other* screen's pocket and
   that pin stays until you click it off there. The right click does not go
   through that hit test.
-- **Two identical monitors share one pin and one lock.** Pocket names a screen
-  by its model, and the serial number that would tell two of the same model
-  apart does not reach it on current Omarchy.
+- **Two identical monitors can share one pin and one lock.** Pocket names a
+  screen by its model and serial number, and where the serial number does not
+  reach it, two of the same model have the same name.
+  [Decision 0021](docs/decisions/0021-the-pin-and-the-lock-belong-to-a-screen.md)
+  records where it was measured not to.
 - **Switching monitor profiles makes the members flash.** A surface that is
   being moved loses its window for a moment —
   [decision 0005](docs/decisions/0005-a-pocket-drives-only-its-own-screens-slots.md)

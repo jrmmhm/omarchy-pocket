@@ -34,7 +34,7 @@
         "key": "pinned",
         "type": "string",
         "label": "Screens it stays open on, comma separated",
-        "description": "Usually set by left-clicking the pocket on that screen. A laptop panel is named by its connector (eDP-1), any other screen by its model (ASUS VG289)."
+        "description": "Usually set by left-clicking the pocket on that screen. A laptop panel is named by its connector (eDP-1), any other screen by its model (ASUS VG289) and, where reported, its serial number."
       },
       {
         "key": "locked",

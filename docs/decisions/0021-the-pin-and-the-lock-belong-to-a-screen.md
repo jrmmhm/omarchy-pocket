@@ -107,9 +107,9 @@ right name.
   is asked again once the write has returned (`foldIfLocked()`). Both values
   arrive in the same `settings` assignment, and inside the lock's own change
   handler `pinned` can still answer with the pin from before the write.
-- **The screen name is latched.** A monitor move unmaps the surface for a
-  moment (0005). A name that went blank then would drop both states and bring
-  them back in an order the bindings choose.
+- **The screen name is latched** (`Model.screenKeyAfter()`). A monitor move
+  unmaps the surface for a moment (0005). A name that went blank then would
+  drop both states and bring them back in an order the bindings choose.
 - **Where Pocket cannot name its screen or may not write,** the left click pins
   for the session as before. The right click is neither offered nor acted on,
   and a persisted pin is not read, because no click could release it. A lock
@@ -168,8 +168,16 @@ case was added.
   carried, not only `members`. A pin or lock clicked within that window after a
   drop can be undone in the running pockets. The next write from them then
   carries the old list back into the file. Nothing automatic writes `pinned`
-  or `locked`, so it takes a click inside the window. The mutator path is not
-  affected.
+  or `locked`, so it takes a click inside the window. This is the path every
+  current Omarchy takes: from 4.0.3 an installed bar widget's mutator refuses,
+  and every write is inline. Only ≤4.0.2, whose mutator runs, is protected by
+  reading the list inside the mutator.
+- *The latch was not seen to fail on a real monitor move*, which would have
+  moved the owner's workspaces. Its rule is `Model.screenKeyAfter()`, held in
+  both engines. A live mutant without the construction-time latch kept the
+  pin through a restart all the same: on 4.0.4 the window arrives after
+  construction, and the change handler takes the name. The line stays for a
+  host that builds the widget inside its window.
 - *Overlapping outputs.* A left click can land on another screen's pocket
   there (0007). That click now pins the other screen and persists.
 - *Identical monitors* share their state, and a serial number that starts
