@@ -1,6 +1,8 @@
 # 20. A right click locks the pocket shut
 
-- Status: accepted
+- Status: accepted; where the lock lives and the pin's staying unwritten are
+  superseded by [0021](0021-the-pin-and-the-lock-belong-to-a-screen.md): both
+  are per-screen settings now
 - Date: 2026-10-05
 - Answers [#20](https://github.com/jrmmhm/omarchy-pocket/issues/20)
 - Gives the pin's reason for staying unwritten

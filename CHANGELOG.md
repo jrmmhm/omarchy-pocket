@@ -12,17 +12,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A right click locks the pocket shut.** A locked pocket does not open when the
   pointer passes over it, closes at once when you lock it, and dims its mark. A
   left click still pins it open, and a member's panel opened by keybinding still
-  opens it. The lock is a setting, `locked`, on Pocket's own entry, so it
-  survives a restart and holds on every screen. Requested in #20;
+  opens it. The lock belongs to the screen you right-click on: it is the
+  `locked` setting on Pocket's own entry, a list of screen names, so it
+  survives a restart and leaves your other monitors alone. Requested in #20;
   [decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
-  owns the account.
+  owns the clicks,
+  [decision 0021](docs/decisions/0021-the-pin-and-the-lock-belong-to-a-screen.md)
+  the screens.
 - **The tooltip says what both clicks do**, directly under its first line, and
-  what each would do next: pin or release, lock or unlock.
+  what each would do next: pin or release, lock or unlock, on this screen.
 
 ### Changed
 
 - **A right click no longer pins.** It locks instead. The left and middle
   clicks pin as before.
+- **The pin survives rebuilds, restarts and reboots, on the screen it was set
+  on.** It is the `pinned` setting now, a list of screen names like `locked`.
+  It used to be dropped by every drop, every plugin enable and every restart.
+  Where Pocket may not write, it still is.
 - The tooltip's first line reads `Pocket pinned open` while pinned and
   `Pocket locked shut — holding N widgets` while locked. The separate
   `Pinned — click to release` line and the `click to keep it open` suffix are

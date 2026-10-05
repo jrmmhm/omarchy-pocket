@@ -187,7 +187,8 @@ it by hand:
 | Setting | Type | Default | What it does |
 | :--- | :--- | :--- | :--- |
 | `members` | string or array | `""` | Ids of the bar widgets to tuck away |
-| `locked` | boolean | `false` | Keeps the pocket shut when the pointer passes over it — see [The mark](#the-mark) |
+| `pinned` | string or array | `""` | Screens the pocket stays open on — see [The mark](#the-mark) |
+| `locked` | string or array | `""` | Screens the pocket stays shut on when the pointer passes over it — see [The mark](#the-mark) |
 
 `members` also accepts a JSON array, which is the nicer shape by hand. Pocket
 writes back whichever shape it finds, and never touches anything else on the
@@ -196,10 +197,15 @@ Pocket's `settings`, which `mergedEntrySettings()` in `Model.js` explains. The
 manifest declares `members` as a string because Omarchy's settings form can only
 produce one; both shapes work when you edit the file yourself.
 
-`locked` is normally set with a right click; by hand, `true` locks, and so does
-the string `"true"` that `omarchy bar set jrmmhm.pocket locked true` writes.
-Anything else leaves it unlocked. The file hot-reloads, so there is no restart
-after an edit.
+`pinned` and `locked` are normally set by clicking the mark, and each one names
+screens. A laptop panel is named by its connector (`eDP-1`), and any other
+screen by its model as the compositor reports it (`ASUS VG289`; `hyprctl
+monitors` lists it as `model`). By hand, separate the names with commas — not
+spaces, because a model name has spaces in it — or write a JSON array:
+`omarchy bar set jrmmhm.pocket locked "eDP-1, ASUS VG289"`. A name no
+connected screen has does nothing, and a screen that is not named starts
+unpinned and unlocked. The file hot-reloads, so there is no restart after an
+edit.
 
 The order you drag survives more than a restart. The run's physical order lives
 in `bar.layout` and `members` mirrors it, both in that one file, written by the
@@ -258,8 +264,8 @@ visually similar thing, and two identical glyphs beside each other are two
 things nobody can tell apart.
 
 The tooltip says what the two clicks do, directly under its first line, and
-what each would do *next* — `Left click: pin it open` becomes `Left click:
-release the pin` once it is pinned.
+what each would do *next* — `Left click: pin it open on this screen` becomes
+`Left click: release the pin` once it is pinned.
 
 **Left-click the mark to pin it open**, click again to release. That is the way
 out of the cases where no leave event is ever coming — a workspace switch that
@@ -268,26 +274,27 @@ lit for as long as it is pinned, in the same alert colour a drag uses; the
 tooltip is what tells the two apart, and it says `Pocket pinned open` in words.
 The middle click pins too.
 
-The pin holds until you click it again or until the bar is rebuilt, and any
-change to the layout rebuilds it: a drop, a member being put back on the right
-side, enabling any plugin at all. It is never written to disk either, because
-`shell.json` is shared by every bar surface and persisting it would make one
-screen's transient state everyone's. Treat it as a pointer aid for the next few
-seconds, not as a mode.
+The pin belongs to the screen you clicked on: the pocket on your other monitor
+is not pinned by it. It holds until you click it again, through rebuilds of the
+bar, restarts and reboots, because it is the `pinned` setting on Pocket's own
+entry and names that screen. Where Pocket may not write — a second Pocket entry,
+for one — the pin is only kept until the bar is rebuilt, the way every pin used
+to be.
 
 **Right-click the mark to lock it shut**, right-click again to unlock. A locked
 pocket does not open when the pointer passes over it, and its mark is dimmed.
-Locking closes it at once, even with the pointer still on it. This one *is* a
-mode: it is the `locked` setting on Pocket's own entry, so it survives a
-restart and holds on every screen at once. Two things still open a locked
-pocket. A left click pins it open as usual, and once you release the pin it is
-locked again. A member's panel opened by keybinding opens it as well, because
-that panel hangs from a widget that has to be drawn. A right click on a pinned
-pocket drops the pin on that screen and locks. Where Pocket may not write — a
-second Pocket entry, for one — the right click does nothing, and the tooltip
-leaves it out.
+Locking closes it at once, even with the pointer still on it. Like the pin, the
+lock belongs to the screen you clicked on, and it survives restarts: it is the
+`locked` setting. Two things still open a locked pocket. A left click pins it
+open as usual, and once you release the pin it is locked again. A member's panel
+opened by keybinding opens it as well, because that panel hangs from a widget
+that has to be drawn. A right click on a pinned pocket drops the pin on that
+screen and locks it, in one step. Where Pocket may not write, the right click
+does nothing, and the tooltip leaves it out.
 [Decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
-has why the two clicks are split this way.
+has why the two clicks are split this way, and
+[decision 0021](docs/decisions/0021-the-pin-and-the-lock-belong-to-a-screen.md)
+why both belong to a screen and how a screen is named.
 
 ## Good to know
 
@@ -346,7 +353,13 @@ Three things change your first hour with it:
   every contested click rather than an occasional one. On monitors side by side
   it was measured not to happen at all. What was measured, and the one condition
   that triggers it, are in
-  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md).
+  [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md). Since
+  the pin is kept per screen, such a click pins the *other* screen's pocket and
+  that pin stays until you click it off there. The right click does not go
+  through that hit test.
+- **Two identical monitors share one pin and one lock.** Pocket names a screen
+  by its model, and the serial number that would tell two of the same model
+  apart does not reach it on current Omarchy.
 - **Switching monitor profiles makes the members flash.** A surface that is
   being moved loses its window for a moment —
   [decision 0005](docs/decisions/0005-a-pocket-drives-only-its-own-screens-slots.md)
