@@ -804,12 +804,11 @@ function cascadeRanks(ids, layoutIds, nearestAtEnd) {
 // different monitor on the same port starts fresh.
 //
 // "What it is" is the model and the serial number, the two fields Quickshell's
-// ShellScreen carries. Measured on quickshell 0.3.1 and Hyprland 0.56 the
-// serial is empty, so two identical monitors share one name and one state; the
-// connector cannot tell them apart reliably either, because a dock renumbers
-// it. A serial that starts arriving later renames every external screen once.
-// Commas are dropped because the setting is a comma-separated list by hand.
-// See docs/decisions/0021.
+// ShellScreen carries. Where the serial does not arrive, two identical monitors
+// share one name and one state; the connector cannot tell them apart reliably
+// either, because a dock renumbers it. docs/decisions/0021 has what arrives on
+// which stack. Commas are dropped because the setting is a comma-separated list
+// by hand.
 var INTERNAL_OUTPUT = /^(eDP|LVDS|DSI)-/
 
 function screenKey(screen) {
@@ -820,6 +819,14 @@ function screenKey(screen) {
   var what = (String(screen.model || "") + " " + String(screen.serialNumber || ""))
     .replace(/,/g, " ").replace(/\s+/g, " ").trim()
   return what !== "" ? what : name
+}
+
+// The name a pocket keeps when its window reports a new one. A blank answer is
+// a surface unmapped for a moment (a monitor move), not a screen without a
+// name, so the last name holds until a real one replaces it.
+function screenKeyAfter(previous, live) {
+  var next = String(live || "")
+  return next !== "" ? next : String(previous || "")
 }
 
 // The screens a per-screen setting (`pinned`, `locked`) names. A string is
@@ -1129,7 +1136,8 @@ if (typeof module !== "undefined" && module.exports) {
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
                      mergedEntrySettings: mergedEntrySettings,
-                     screenKey: screenKey, screenList: screenList, onScreen: onScreen,
+                     screenKey: screenKey, screenKeyAfter: screenKeyAfter,
+                     screenList: screenList, onScreen: onScreen,
                      withScreen: withScreen,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }

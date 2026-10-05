@@ -77,7 +77,7 @@ BarWidget {
   // and locked pocket would fold and reopen on every undock. Writable, so that
   // tests/qml can put two screens' pockets in one offscreen window.
   property string screenKey: ""
-  onLiveScreenKeyChanged: if (liveScreenKey !== "") screenKey = liveScreenKey
+  onLiveScreenKeyChanged: screenKey = Model.screenKeyAfter(screenKey, liveScreenKey)
 
   function canonical(id) {
     return bar && typeof bar.canonicalWidgetId === "function"
@@ -1440,7 +1440,10 @@ BarWidget {
   Component.onCompleted: {
     // A binding's first value raises no change signal, so the latch takes it
     // here — before holdOpen is asked, because a persisted pin is part of it.
-    if (liveScreenKey !== "") screenKey = liveScreenKey
+    // On Omarchy 4.0.4 the window arrives after this and the handler above
+    // takes it instead (measured, 0021); this covers a host that builds the
+    // widget inside its window.
+    screenKey = Model.screenKeyAfter(screenKey, liveScreenKey)
     // Before anything reads `barSlots`: on a host that does not publish its
     // registry the walk IS the registry, and an empty one resolves nothing.
     root.attachOverlay()
