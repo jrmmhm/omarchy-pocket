@@ -19,6 +19,7 @@
 #   bash tests/live.sh            # expects the pocket collapsed
 #   bash tests/live.sh --open     # expects it fanned out (pinned or hovered)
 #   bash tests/live.sh --gesture  # DRIVES a real drag; writes and restores the config
+#   bash tests/live.sh --gesture DP-2  # the same, on the monitor on that connector
 #
 # Exit 0 = the bar agrees with the setting. Exit 1 = it does not. Exit 2 = there
 # was nothing to ask.
@@ -46,9 +47,10 @@ set -u
 
 WANT_OPEN=0
 WANT_GESTURE=0
+SCREEN=""
 case "${1:-}" in
   --open) WANT_OPEN=1 ;;
-  --gesture) WANT_GESTURE=1 ;;
+  --gesture) WANT_GESTURE=1; SCREEN="${2:-}" ;;
 esac
 
 if ! command -v omarchy-shell >/dev/null 2>&1; then
@@ -122,18 +124,24 @@ if [ "$WANT_GESTURE" = "1" ]; then
     exit 2
   fi
 
-  # The subject is the member nearest the mark, which is the last id in a list
-  # kept in layout order for every section but `left`. It is the one whose gaps
-  # the drop rule is most easily wrong about: one of them is the boundary
-  # between "reorder inside the run" and "leave the group".
-  SUBJECT="${BEFORE##*,}"
+  # The subject is the member nearest the mark, read off the layout by
+  # pointer.py: the last one before it, or in `left` the first one after it. It
+  # is the one whose gaps the drop rule is most easily wrong about: one of them
+  # is the boundary between "reorder inside the run" and "leave the group".
+  SUBJECT="$(python3 "$HERE/pointer.py" report 2>/dev/null | sed -n 's/.* nearest=\([^ ]*\) .*/\1/p')"
+  if [ -z "$SUBJECT" ]; then
+    echo "LIVE SKIPPED (gesture: no member sits against the mark)"
+    exit 2
+  fi
+  ON_SCREEN=()
+  [ -n "$SCREEN" ] && ON_SCREEN=(--screen "$SCREEN")
 
   BACKUP="$(mktemp "${TMPDIR:-/tmp}/pocket-live-shell-json.XXXXXX")"
   cp "$CONFIG" "$BACKUP"
   echo "LIVE GESTURE (driving a real drag; shell.json snapshot at $BACKUP)"
   trap 'restore_config' EXIT INT TERM
 
-  if ! python3 "$HERE/pointer.py" drag-out "$SUBJECT"; then
+  if ! python3 "$HERE/pointer.py" drag-out "$SUBJECT" "${ON_SCREEN[@]}"; then
     echo "LIVE SKIPPED (gesture: the drag could not be driven)"
     exit 2
   fi
@@ -144,7 +152,7 @@ if [ "$WANT_GESTURE" = "1" ]; then
     exit 1
   fi
 
-  if ! python3 "$HERE/pointer.py" drag-in "$SUBJECT"; then
+  if ! python3 "$HERE/pointer.py" drag-in "$SUBJECT" "${ON_SCREEN[@]}"; then
     echo "LIVE SKIPPED (gesture: the second drag could not be driven)"
     exit 2
   fi

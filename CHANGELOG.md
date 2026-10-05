@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A right click locks the pocket shut.** A locked pocket does not open when the
+  pointer passes over it, closes at once when you lock it, and dims its mark. A
+  left click still pins it open, and a member's panel opened by keybinding still
+  opens it. The lock belongs to the screen you right-click on: it is the
+  `locked` setting on Pocket's own entry, a list of screen names, so it
+  survives a restart and leaves your other monitors alone. Requested in #20;
+  [decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
+  owns the clicks,
+  [decision 0021](docs/decisions/0021-the-pin-and-the-lock-belong-to-a-screen.md)
+  the screens.
+- **The tooltip says what both clicks do**, directly under its first line, and
+  what each would do next: pin or release, lock or unlock, on this screen.
+
+### Changed
+
+- **A right click no longer pins.** It locks instead. The left and middle
+  clicks pin as before.
+- **The pin survives rebuilds, restarts and reboots, on the screen it was set
+  on.** It is the `pinned` setting now, a list of screen names like `locked`.
+  It used to be dropped by every drop, every plugin enable and every restart.
+  Where Pocket may not write, it still is.
+- The tooltip's first line reads `Pocket pinned open` while pinned and
+  `Pocket locked shut — holding N widgets` while locked. The separate
+  `Pinned — click to release` line and the `click to keep it open` suffix are
+  gone; the click hints replace them.
+- **A panel opened elsewhere no longer holds an open pocket** on Omarchy 4.0.3
+  and later, as long as every member says whether its own panel is open. A
+  member that does not keeps the old behaviour: any open panel holds an open
+  pocket until it closes.
+- The README's notes on more than one monitor are corrected and extended: each
+  screen's pocket folds on its own on 4.0.3+, mirroring leaves one bar, and a
+  monitor plugged back in keeps its pin
+  ([decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)).
+
+### Fixed
+
+- **A member's panel opened by keybinding opens the pocket** on Omarchy 4.0.3
+  and later, on the screen the panel opens on, locked or not, as it already did
+  on older versions. On 4.0.3 and later the panel hung from a hidden widget
+  while the pocket stayed shut, on every screen ([decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)).
+
+- **A members write no longer undoes a hand edit to Pocket's own entry** on
+  Omarchy 4.0.3 and later. After such an edit, the next write put a key you had
+  deleted back and moved a key you had inserted to the end of the entry. Both
+  were measured on a live 4.0.4 bar. The write is now built from the settings
+  the host hands the running widget, which the edit has already updated (#16,
+  [decision 0019](docs/decisions/0019-the-inline-write-starts-from-the-injected-settings.md)).
+
 ## [0.4.1] — 2026-09-11
 
 A member reordered inside the pocket fanned out on its own on Omarchy 4.0.3,

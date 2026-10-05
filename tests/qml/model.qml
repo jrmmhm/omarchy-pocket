@@ -102,10 +102,9 @@ QtObject {
     return out
   }
 
-  function inlineWrite(config, region, value, snapshot, live) {
-    var entry = Model.layoutEntryFor(snapshot, region, harness.selfId)
+  function inlineWrite(config, value, live) {
     return harness.hostInlineWrite(config, harness.selfId,
-                                   Model.mergedEntrySettings(entry, live, "members", value))
+                                   Model.mergedEntrySettings(live, "members", value))
   }
 
   function runWriteCases() {
@@ -140,6 +139,59 @@ QtObject {
       function (c) { return Model.setMembersOnEntry(c, "left", self, "omarchy.workspaces") },
       function (e) { e.bar.layout.left[1].members = "omarchy.workspaces" })
 
+    harness.onlyChange("V4 a locked write reports it found the entry", harness.shellFixture(),
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", true) },
+      function (e) { e.bar.layout.right[3].locked = true })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3].locked = true
+    harness.onlyChange("V4 an unlock rewrites the key in its place", config,
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", false) },
+      function (e) { e.bar.layout.right[3].locked = false })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = self
+    harness.onlyChange("V4 a bare string pocket entry is promoted by a locked write", config,
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", true) },
+      function (e) { e.bar.layout.right[3] = { id: self, locked: true } })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3].pinned = ["eDP-1"]
+    harness.onlyChange("V4 a per-screen write adds this screen to the list the file holds", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "pinned",
+          function (v) { return Model.withScreen(v, "ASUS VG289", true) })
+      },
+      function (e) { e.bar.layout.right[3].pinned = ["eDP-1", "ASUS VG289"] })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3].locked = "eDP-1, ASUS VG289"
+    harness.onlyChange("V4 a per-screen write removes only this screen", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "locked",
+          function (v) { return Model.withScreen(v, "eDP-1", false) })
+      },
+      function (e) { e.bar.layout.right[3].locked = "ASUS VG289" })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = self
+    harness.onlyChange("V4 a per-screen write promotes a bare string entry", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "locked",
+          function (v) { return Model.withScreen(v, "eDP-1", true) })
+      },
+      function (e) { e.bar.layout.right[3] = { id: self, locked: "eDP-1" } })
+
+    var refused = ["id", ""].concat(Model.RESERVED_ENTRY_KEYS)
+    for (var w = 0; w < refused.length; w++) {
+      config = harness.shellFixture()
+      var before = JSON.stringify(config)
+      harness.check("V4 a refused key reports false: '" + refused[w] + "'",
+                    Model.setEntrySetting(config, "right", self, refused[w], "payload"), false)
+      harness.check("V4 a refused key leaves the file alone: '" + refused[w] + "'",
+                    JSON.stringify(config), before)
+    }
+
     harness.onlyChange("V4 a far-side member is moved against the pocket", harness.shellFixture(),
       function (c) { return Model.placeMemberBesideSelf(c, "right", "omarchy.bluetooth", self, true) },
       function (e) {
@@ -168,48 +220,51 @@ QtObject {
         e.bar.layout.left = [l[0], l[2], l[1], l[3]]
       })
 
+    // The cases after the first three are the hand edits #16 was about; the
+    // last two failed in this engine while the merge started from the snapshot.
+    function liveOf(c) { return harness.entrySettingsOf(c.bar.layout.right[3]) }
+
     harness.onlyChange("V4 an inline members write reports it changed the entry",
       harness.shellFixture(),
-      function (c) {
-        return harness.inlineWrite(c, "right", value, harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
     harness.onlyChange("V4 an array-valued inline write reports it changed the entry",
       harness.shellFixture(),
-      function (c) {
-        return harness.inlineWrite(c, "right", ["omaplug"], harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, ["omaplug"], liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = ["omaplug"] })
 
     config = harness.shellFixture()
     config.bar.layout.right[3] = { id: self, showCount: true, note: "hand written" }
     harness.onlyChange("V4 a first inline members write reports it changed the entry", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", "omaplug", harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, "omaplug", liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = "omaplug" })
 
     config = harness.shellFixture()
-    var stale = harness.clone(config.bar.layout)
     config.bar.layout.right[3].showCount = false
-    harness.onlyChange("V4 an inline write over a stale snapshot keeps a hand-edited value", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", value, stale,
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+    harness.onlyChange("V4 an inline write after a hand edit keeps the edited value", config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
 
     config = harness.shellFixture()
-    var staleToo = harness.clone(config.bar.layout)
     config.bar.layout.right[3].added = 1
-    harness.onlyChange("V4 an inline write over a stale snapshot keeps a key added by hand", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", value, staleToo,
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key added by hand", config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
+      function (e) { e.bar.layout.right[3].members = value })
+
+    config = harness.shellFixture()
+    delete config.bar.layout.right[3].note
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key deleted by hand deleted",
+      config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
+      function (e) { e.bar.layout.right[3].members = value })
+
+    config = harness.shellFixture()
+    var old = config.bar.layout.right[3]
+    config.bar.layout.right[3] = { id: self, inserted: 1, members: old.members,
+                                   showCount: old.showCount, note: old.note }
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key inserted mid-entry in place",
+      config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
   }
 
@@ -256,7 +311,90 @@ QtObject {
 
     var tooltip = Model.describe({ members: ["omarchy.audio"], rejected: rejected })
     check("V4 lets no markup character through", /[<>&]/.test(tooltip), false)
-    check("V4 lets a value forge no line", tooltip.split("\n").length, 2)
+    // Four of Pocket's own: the first line, the two click hints, the rejected ids.
+    check("V4 lets a value forge no line", tooltip.split("\n").length, 4)
+
+    // The click hints, in the engine the bar runs.
+    // tests/model-test.js owns the reasoning per case.
+    check("V4 explains both clicks",
+          Model.describe({ members: ["a", "b"] }),
+          "Pocket holding 2 widgets\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
+    check("V4 describes a locked pocket",
+          Model.describe({ members: ["a", "b"], locked: true }),
+          "Pocket locked shut — holding 2 widgets\nLeft click: pin it open on this screen\nRight click: unlock")
+    check("V4 lets the pin win the first line and keeps the unlock",
+          Model.describe({ members: ["a"], expanded: true, pinned: true, locked: true }),
+          "Pocket pinned open\nLeft click: release the pin\nRight click: unlock")
+    check("V4 leaves the right click out where Pocket may not write",
+          Model.describe({ members: ["a"], lockable: false }),
+          "Pocket holding 1 widget\nLeft click: pin it open on this screen")
+    check("V4 keeps the hints ahead of every problem line",
+          Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4).join("|"),
+          "Left click: pin it open on this screen|Right click: lock it shut on this screen|Not on this bar: b")
+    check("V4 says a locked pocket of one is singular",
+          Model.describe({ members: ["a"], locked: true }).split("\n")[0],
+          "Pocket locked shut — holding 1 widget")
+    check("V4 offers no clicks on an empty pocket",
+          Model.describe({ members: [] }).indexOf("click"), -1)
+    check("V4 offers no clicks on an unusable pocket",
+          Model.describe({ members: ["a"], missing: ["a"] }).indexOf("click"), -1)
+    check("V4 still offers the unlock on a locked unusable pocket",
+          Model.describe({ members: ["a"], missing: ["a"], locked: true })
+            .indexOf("Right click: unlock") !== -1, true)
+    check("V4 still offers the release on a pinned empty pocket",
+          Model.describe({ members: [], pinned: true }).indexOf("Left click: release the pin") !== -1,
+          true)
+    check("V4 offers no clicks without a known screen",
+          Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
+
+    // Per-screen state, in the engine the bar runs. tests/model-test.js owns
+    // the reasoning per case; the lists here arrive as the sequence type a
+    // setting delivers, declared below.
+    check("V4 names a laptop panel by its connector",
+          Model.screenKey({ name: "eDP-1", model: "0x9EA9", serialNumber: "" }), "eDP-1")
+    check("V4 names an external screen by its model",
+          Model.screenKey({ name: "HDMI-A-1", model: "ASUS VG289", serialNumber: "" }), "ASUS VG289")
+    check("V4 adds a serial where there is one",
+          Model.screenKey({ name: "DP-2", model: "VS248", serialNumber: "J5LMQS157979" }),
+          "VS248 J5LMQS157979")
+    check("V4 falls back to the connector without a model",
+          Model.screenKey({ name: "DP-1", model: "" }), "DP-1")
+    check("V4 drops commas from a model", Model.screenKey({ name: "DP-1", model: "Acme, Inc" }),
+          "Acme Inc")
+    check("V4 reads missing fields as empty",
+          Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
+    check("V4 has no key without a screen", Model.screenKey(null), "")
+    check("V4 has no key without a name", Model.screenKey({ model: "X" }), "")
+    check("V4 keeps the last name over a blank answer", Model.screenKeyAfter("ASUS VG289", ""),
+          "ASUS VG289")
+    check("V4 lets a new name replace the last", Model.screenKeyAfter("eDP-1", "ASUS VG289"),
+          "ASUS VG289")
+    check("V4 takes the first name", Model.screenKeyAfter("", "eDP-1"), "eDP-1")
+    check("V4 has no name from nothing", Model.screenKeyAfter(undefined, null), "")
+    checkList("V4 splits a comma string on commas only",
+              Model.screenList("eDP-1, ASUS VG289"), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads the sequence type a setting delivers",
+              Model.screenList(harness.screensSetting), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads an array-like value like an array",
+              Model.screenList({ length: 2, 0: "eDP-1", 1: "ASUS VG289" }), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads the legacy boolean as no screen", Model.screenList(true), [])
+    check("V4 finds a listed screen in the sequence type",
+          Model.onScreen(harness.screensSetting, "ASUS VG289"), true)
+    check("V4 does not find a never-seen screen",
+          Model.onScreen(harness.screensSetting, "DELL U2720Q"), false)
+    check("V4 never finds the empty key", Model.onScreen(harness.screensSetting, ""), false)
+    checkList("V4 switches a screen off in the sequence type and keeps an array",
+              Model.withScreen(harness.screensSetting, "eDP-1", false), ["ASUS VG289"])
+    checkList("V4 switches a screen on once",
+              Model.withScreen(harness.screensSetting, "eDP-1", true), ["ASUS VG289", "eDP-1"])
+    check("V4 keeps a comma string a comma string",
+          Model.withScreen("eDP-1", "ASUS VG289", true), "eDP-1, ASUS VG289")
+    check("V4 replaces the legacy boolean with this screen",
+          Model.withScreen(true, "eDP-1", true), "eDP-1")
+    checkList("V4 hands a function value the live value",
+              Model.mergedEntrySettings({ members: "a", pinned: harness.screensSetting }, "pinned",
+                function (v) { return Model.withScreen(v, "eDP-1", false) }),
+              { members: "a", pinned: ["ASUS VG289"] })
 
     // Bounded on the other axis too, which the per-value cap does not cover.
     // Twice, because the harmless flood and the hostile one reach the caps by
@@ -423,4 +561,8 @@ QtObject {
   property var cascadeLeft: ["jrmmhm.pocket", "omaplug", "ianswope.snapshots", "mehiel.darky",
                              "omarchy.tray"]
   property var cascadeMembers: ["ianswope.snapshots", "mehiel.darky", "omaplug"]
+
+  // A per-screen list as a hand-written array arrives, declared for the same
+  // reason as the fixtures above.
+  property var screensSetting: [" eDP-1", "ASUS VG289", "eDP-1", 5]
 }

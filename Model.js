@@ -537,13 +537,19 @@ function rawSection(config, region) {
   return Array.isArray(entries) ? entries : null
 }
 
-// Set `members` on this plugin's own entry inside a raw shell.json. The config
+// Set one key on this plugin's own entry inside a raw shell.json. The config
 // reaching a mutator is whatever the user's file holds, so entries may be bare
 // id strings. Every other key on the entry is left exactly as it was, and
-// nothing outside the entry is touched. Reports whether it was found at all.
-function setMembersOnEntry(config, region, id, value) {
+// nothing outside the entry is touched. Reports whether it was written at all.
+//
+// `id` and the keys that disarm an entry are refused before anything is looked
+// at, for the reason mergedEntrySettings() refuses them on the other path.
+function setEntrySetting(config, region, id, key, value) {
   var want = String(id || "").trim()
   if (want === "") return false
+
+  var name = String(key || "")
+  if (name === "" || name === "id" || isReservedEntryKey(name)) return false
 
   var entries = rawSection(config, region)
   if (entries === null) return false
@@ -551,24 +557,23 @@ function setMembersOnEntry(config, region, id, value) {
   for (var i = 0; i < entries.length; i++) {
     if (entryIdOf(entries[i]) !== want) continue
     if (!isPlainObject(entries[i])) entries[i] = { id: want }
-    entries[i].members = value
+    entries[i][name] = nextValue(value, entries[i][name])
     return true
   }
   return false
 }
 
-// This plugin's own entry as the host holds it, or null. Read from the layout
-// snapshot rather than from the injected `settings`, for the reason
-// mergedEntrySettings() gives.
-function layoutEntryFor(layout, region, id) {
-  var entries = layout ? layout[region] : null
-  if (!entries || typeof entries.length !== "number") return null
-  var want = String(id || "").trim()
-  if (want === "") return null
-  for (var i = 0; i < entries.length; i++) {
-    if (entryIdOf(entries[i]) === want) return entries[i]
-  }
-  return null
+// A value to write is either the value, or a function of the value the entry
+// holds now. The function form exists for the per-screen lists: one screen's
+// write must change its own key and nothing else in a list every screen shares,
+// so it has to start from the freshest copy of that list the write path has —
+// the config inside the mutator, `settings` on the inline path.
+function nextValue(value, current) {
+  return typeof value === "function" ? value(current) : value
+}
+
+function setMembersOnEntry(config, region, id, value) {
+  return setEntrySetting(config, region, id, "members", value)
 }
 
 // Settings keys that disarm a bar entry. `exec` means a command module,
@@ -591,40 +596,38 @@ function isReservedEntryKey(key) {
 // the entry, and without this merge that promise would be false the first time
 // anyone put a second key there — which the author's own bar does.
 //
-// It reads BOTH copies of the entry the host offers, because each is wrong in a
-// different way and only together are they right.
+// It is built from ONE copy of the entry: `live`, the widget's own injected
+// `settings`. The host hands that over as the whole entry minus `id`, in the
+// file's key order (BarModel.js::entrySettings), and assigns it again on every
+// inline change through the bar's delta path — so it holds what the user wrote,
+// including what the user deleted and where the user put a key.
 //
-// `entry` is the host's layout snapshot. It is detached and cannot be written
-// from the scene, but it can be STALE: a shell.json write that changed only
-// inline settings takes the bar's delta path, which patches its layout in place
-// without reassigning it, so the snapshot handed to plugins is never refreshed
-// for it. Writing from the snapshot alone therefore resurrects the value a
-// neighbouring key had before the user edited it.
+// The two other copies a plugin can see are each stale exactly where this one
+// is needed. The facade's `layoutConfig` snapshot is not refreshed by that delta
+// path, so a key deleted by hand came back on the next write and a key inserted
+// mid-entry moved to its end (#16) — that snapshot used to be the base here. The
+// shell facade's `barConfig` is refreshed, but from inside the change handler,
+// before the binding it copies has re-evaluated, so it is always one change late
+// (omacom/omarchy#11505). docs/decisions/0019 has the measurement and the one
+// known way `live` lags, which only ever concerns `members`.
 //
-// `live` is the widget's own injected `settings`, which that same delta path
-// assigns directly — so it is always current. It is also a writable `var` in a
-// scene every plugin shares, and the facades are documented as not being a QML
-// sandbox, so a key another plugin dropped into it would be laundered into the
-// config through the one write this plugin is trusted with.
-//
-// So: the snapshot is the base, the live copy wins where they disagree, and a
-// key that disarms the entry is refused from either. `id` is dropped because
-// the host sets it from the entry it matched.
-function mergedEntrySettings(entry, live, key, value) {
+// A key that disarms the entry is refused, from `live` and as the written key,
+// so this plugin's own write can never be the way one reaches the user's
+// config. That is all it can promise: `live` is a writable `var` in a scene
+// every plugin shares, and a plugin that wanted to could call the same writer
+// directly. `id` is dropped because the host sets it from the entry it matched.
+function mergedEntrySettings(live, key, value) {
   var out = {}
-  var source
 
-  for (var pass = 0; pass < 2; pass++) {
-    source = pass === 0 ? entry : live
-    if (!isPlainObject(source)) continue
-    for (var k in source) {
+  if (isPlainObject(live)) {
+    for (var k in live) {
       if (k === "id" || isReservedEntryKey(k)) continue
-      out[k] = source[k]
+      out[k] = live[k]
     }
   }
 
   var name = String(key || "")
-  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = value
+  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = nextValue(value, out[name])
   return out
 }
 
@@ -791,6 +794,75 @@ function cascadeRanks(ids, layoutIds, nearestAtEnd) {
   return ranks
 }
 
+// ------------------------------------------------------- per-screen state
+
+// Which screen a pocket is on, as a name that survives a restart and a replug.
+// The same split the author's monitor tool makes: a laptop panel by its
+// connector, because there is exactly one and its EDID description has been
+// seen to change under a disk swap; every other screen by what it is rather
+// than where it is plugged in, so it keeps its state on another port and a
+// different monitor on the same port starts fresh.
+//
+// "What it is" is the model and the serial number, the two fields Quickshell's
+// ShellScreen carries. Where the serial does not arrive, two identical monitors
+// share one name and one state; the connector cannot tell them apart reliably
+// either, because a dock renumbers it. docs/decisions/0021 has what arrives on
+// which stack. Commas are dropped because the setting is a comma-separated list
+// by hand.
+var INTERNAL_OUTPUT = /^(eDP|LVDS|DSI)-/
+
+function screenKey(screen) {
+  if (!screen) return ""
+  var name = String(screen.name || "").trim()
+  if (name === "") return ""
+  if (INTERNAL_OUTPUT.test(name)) return name
+  var what = (String(screen.model || "") + " " + String(screen.serialNumber || ""))
+    .replace(/,/g, " ").replace(/\s+/g, " ").trim()
+  return what !== "" ? what : name
+}
+
+// The name a pocket keeps when its window reports a new one. A blank answer is
+// a surface unmapped for a moment (a monitor move), not a screen without a
+// name, so the last name holds until a real one replaces it.
+function screenKeyAfter(previous, live) {
+  var next = String(live || "")
+  return next !== "" ? next : String(previous || "")
+}
+
+// The screens a per-screen setting (`pinned`, `locked`) names. A string is
+// split on commas only — a model name has spaces in it — and an array is
+// duck-typed for the reason toList() gives. Anything else names no screen,
+// which is what the unreleased boolean `locked` of 0020 now reads as: locked
+// nowhere, until the next right click writes a list.
+function screenList(value) {
+  if (value === null || value === undefined) return []
+  var raw = []
+  if (typeof value === "string") raw = value.split(",")
+  else if (typeof value === "object" && typeof value.length === "number") {
+    for (var i = 0; i < value.length; i++) if (typeof value[i] === "string") raw.push(value[i])
+  }
+  var out = []
+  for (var j = 0; j < raw.length; j++) {
+    var key = raw[j].trim()
+    if (key !== "" && out.indexOf(key) === -1) out.push(key)
+  }
+  return out
+}
+
+function onScreen(value, key) {
+  var want = String(key || "")
+  return want !== "" && screenList(value).indexOf(want) !== -1
+}
+
+// The list with this screen switched on or off and every other screen left
+// where it was, in the shape it was found in (membersValue() owns that rule).
+function withScreen(value, key, on) {
+  var want = String(key || "")
+  var list = screenList(value).filter(function (k) { return k !== want })
+  if (on) list.push(want)
+  return membersValue(list, value)
+}
+
 // ---------------------------------------------------------- tooltip text
 
 // The plugin's text boundary. Everything a value contributes to the tooltip
@@ -941,9 +1013,10 @@ function tooltipList(values) {
   return rest > 0 ? line + ", +" + rest + " more" : line
 }
 
-// One tooltip line per condition, most actionable first. The pocket is the only
-// place these problems surface: a member that never appears produces no error
-// anywhere else in the shell.
+// One tooltip line per condition: what the pocket is doing, what the two
+// buttons would do, and then every problem, most actionable first. The pocket
+// is the only place these problems surface: a member that never appears
+// produces no error anywhere else in the shell.
 //
 // Every value it interpolates goes through tooltipList(), including the three
 // lists that can only hold ids the allowlist already accepted. That those are
@@ -995,13 +1068,30 @@ function describe(state) {
     lines.push("Pocket holding nothing — nothing in `members` could be used")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
+  } else if (s.pinned) {
+    // Ahead of the lock, because the pin wins: a pinned pocket is open whether
+    // or not it is locked, and this line describes what is on screen.
+    lines.push("Pocket pinned open")
+  } else if (s.locked) {
+    lines.push("Pocket locked shut — holding " + held + " widget" + (held === 1 ? "" : "s"))
   } else if (s.expanded) {
-    lines.push("Pocket open — click to keep it open")
+    lines.push("Pocket open")
   } else {
     lines.push("Pocket holding " + held + " widget" + (held === 1 ? "" : "s"))
   }
 
-  if (s.pinned) lines.push("Pinned — click to release")
+  // What the two buttons do, directly under the first line — the one thing on
+  // the mark nothing else explains. Each names what THIS click would do next,
+  // so the line changes with the state. Not on an empty pocket, where neither
+  // does anything worth saying, unless one of them is what is holding it. The
+  // right click is left out where it cannot write (`lockable`), because a hint
+  // for a click that does nothing is a hint that lies. Both say "on this
+  // screen", because that is all either of them reaches (docs/decisions/0021).
+  if (!unknown && (held > 0 || s.pinned || s.locked)) {
+    lines.push("Left click: " + (s.pinned ? "release the pin" : "pin it open on this screen"))
+    if (s.lockable !== false)
+      lines.push("Right click: " + (s.locked ? "unlock" : "lock it shut on this screen"))
+  }
   // Ahead of the rejected line, because it is the earlier failure: these
   // entries never became an id at all, so nothing downstream had anything to
   // refuse. Positions rather than values, for the reason unreadableEntries()
@@ -1038,14 +1128,17 @@ if (typeof module !== "undefined" && module.exports) {
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
-                     setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
+                     setMembersOnEntry: setMembersOnEntry, setEntrySetting: setEntrySetting,
+                     countEntries: countEntries,
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
-                     layoutEntryFor: layoutEntryFor,
                      mergedEntrySettings: mergedEntrySettings,
+                     screenKey: screenKey, screenKeyAfter: screenKeyAfter,
+                     screenList: screenList, onScreen: onScreen,
+                     withScreen: withScreen,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }
 }

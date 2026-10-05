@@ -17,11 +17,12 @@ import "Model.js" as Model
 // keeps telling the truth about a tucked-away widget: `inBar` still finds it,
 // `findPanelWidget` still finds it, its settings still live on its own entry.
 //
-// Membership can be changed by dragging, and that is the one thing the pocket
-// writes: its own `members` key, on its own layout entry, through the host's
-// own config mutator. The gesture itself belongs to the bar — the pocket only
-// reads the drop marker the bar is already drawing. See
-// docs/decisions/0001-pocket-writes-its-own-members.md.
+// Membership can be changed by dragging, and that is what the pocket writes:
+// its own `members` key, on its own layout entry, through the host's own config
+// mutator — and its per-screen `pinned` and `locked` lists the same way. The
+// gesture itself belongs to the bar — the pocket only reads the drop marker the
+// bar is already drawing. See
+// docs/decisions/0001-pocket-writes-its-own-members.md, 0020 and 0021.
 //
 // The alternative — mounting other widgets' components inside this one — is
 // what ianswope.stack does, and it forces the members out of `bar.layout`,
@@ -64,6 +65,19 @@ BarWidget {
   // whatever the host can do, so conditioning the tooltip differently would let
   // it describe a pocket other than the one on screen.
   readonly property bool surfaceUnknown: ownWindow === null
+
+  // Which screen this pocket is on, by a name that survives a restart and a
+  // replug: what the per-screen `pinned` and `locked` lists are keyed by.
+  // Model.screenKey() owns the rule, docs/decisions/0021 the measurement.
+  readonly property string liveScreenKey: Model.screenKey(root.ownWindow ? root.ownWindow.screen : null)
+
+  // Latched rather than bound. A monitor move unmaps the surface for a moment
+  // (0005), and a name that went blank for that moment would drop the pin and
+  // the lock and bring them back in whatever order the bindings run — a pinned
+  // and locked pocket would fold and reopen on every undock. Writable, so that
+  // tests/qml can put two screens' pockets in one offscreen window.
+  property string screenKey: ""
+  onLiveScreenKeyChanged: screenKey = Model.screenKeyAfter(screenKey, liveScreenKey)
 
   function canonical(id) {
     return bar && typeof bar.canonicalWidgetId === "function"
@@ -347,7 +361,69 @@ BarWidget {
   // ---------------------------------------------------------------- state
 
   property bool expanded: false
-  property bool pinned: false
+
+  // Whether this pocket can keep a per-screen state at all: it knows which
+  // screen it is on, and it may write its entry.
+  readonly property bool persistsScreenState: root.screenKey !== "" && root.mayWriteMembers
+
+  // Pinned open on this screen. A per-screen setting, so it survives a restart
+  // and every rebuild, and it stays on the screen it was set on. The session
+  // pin is the old unwritten one, kept for a pocket that cannot persist one —
+  // a second Pocket entry, a host with no write left, a screen with no name
+  // yet — so the click still does what it says there. docs/decisions/0021.
+  property bool sessionPinned: false
+  readonly property bool pinned: root.sessionPinned
+    || (root.persistsScreenState && Model.onScreen(setting("pinned", ""), root.screenKey))
+
+  // Locked shut on this screen: the pointer no longer opens the pocket. A mode
+  // rather than a pointer aid, kept per screen like the pin. Read whether or
+  // not this pocket may write, as before: a lock set by hand still holds where
+  // the right click cannot lift it. See docs/decisions/0020 and 0021.
+  readonly property bool locked: Model.onScreen(setting("locked", ""), root.screenKey)
+
+  // This screen switched on or off in a per-screen list, every other screen
+  // left as the write path finds it. A function rather than a value, so the
+  // list is read inside the write from the freshest copy that path has
+  // (Model.nextValue()): a pocket whose `settings` lag must not drop another
+  // screen from a list they share.
+  function screenChange(on) {
+    var key = root.screenKey
+    return function (current) { return Model.withScreen(current, key, on) }
+  }
+
+  function setPinned(on) {
+    if (on === root.pinned) return
+    if (!on) {
+      root.sessionPinned = false
+      if (root.pinned) root.writeSettings({ pinned: root.screenChange(false) })
+      return
+    }
+    if (root.persistsScreenState && root.writeSettings({ pinned: root.screenChange(true) })) return
+    root.sessionPinned = true
+  }
+
+  // One write for both keys: locking drops this screen's pin, so the pocket the
+  // user just locked actually closes, and a lock and an unpin that landed
+  // separately could be split by a refusal or a rebuild between them. Another
+  // screen's pin is that screen's and stays.
+  function toggleLock() {
+    if (!root.persistsScreenState) return
+    var lock = !root.locked
+    var changes = { locked: root.screenChange(lock) }
+    var wasSessionPinned = root.sessionPinned
+    if (lock) {
+      root.sessionPinned = false
+      if (Model.onScreen(setting("pinned", ""), root.screenKey)) changes.pinned = root.screenChange(false)
+    }
+    if (!root.writeSettings(changes)) {
+      root.sessionPinned = wasSessionPinned
+      return
+    }
+    // Asked again after the write, not left to onLockedChanged: the lock and
+    // the dropped pin arrive in the same `settings`, and inside the lock's own
+    // change handler `pinned` can still answer for the pin a moment ago.
+    root.foldIfLocked()
+  }
 
   // Every slot this pocket has currently taken over. Kept as its own list
   // rather than derived from `resolution`, because the restore has to reach
@@ -366,17 +442,38 @@ BarWidget {
   // A bar panel covers the whole screen with an input mask while it is open, so
   // no hover reaches the bar at all during that time. Without this the pocket
   // would fold up underneath the panel the user just opened from it.
+  //
+  // A host that will not say WHOSE panel is open — the facade hands every popout
+  // this plugin does not own over as an anonymous `{ foreign: true }` — is asked
+  // the member instead: a member whose own widget keeps the host's panel
+  // contract (`open()`, `close()`, `opened`, the test Bar.qml's
+  // panelNavigationSlots() makes) and reports `opened`. A keybinding opens the
+  // focused screen's copy, and the resolution is this surface's slots, so only
+  // that screen's pocket opens. Without it a summoned member's panel hung from
+  // a hidden slot on every 4.0.3+ host, and the pocket stayed shut — measured,
+  // docs/decisions/0022. Asked only for the marker, so a host that hands over
+  // the object answers exactly as before.
   readonly property bool memberPanelOpen: {
     var active = bar ? bar.activePopout : null
     if (!active) return false
     var list = root.resolution.slots
-    for (var i = 0; i < list.length; i++) if (list[i] && list[i].activeItem === active) return true
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i] ? list[i].activeItem : null
+      if (!item) continue
+      if (item === active) return true
+      if (active.foreign === true && root.keepsPanelContract(item) && item.opened === true) return true
+    }
     return false
   }
 
-  // The same question the property above answers, for a host that will not say
-  // WHOSE panel is open. The facade replaces a popout this plugin does not own
-  // with an anonymous marker, so "is it one of my members" has no answer there.
+  function keepsPanelContract(item) {
+    return !!item && typeof item.open === "function" && typeof item.close === "function"
+      && item.opened !== undefined
+  }
+
+  // The same question for a member that does not keep that contract, on a host
+  // that will not say whose panel is open. Such a member's panel cannot be told
+  // from anyone else's, so any foreign popout holds the pocket.
   //
   // Holding on it is right: a panel opened from the pocket must not fold the
   // pocket away underneath itself. Opening on it is not — `activePopout` is
@@ -385,13 +482,19 @@ BarWidget {
   // itself. Hence `expanded &&`, the same shape and the same reason as
   // dragHoldsOpen below.
   //
-  // Only ever true where the exact answer is unavailable, so a host that hands
-  // over the object keeps opening the pocket for a member summoned by keybind,
-  // exactly as before.
+  // Only where some member lacks the contract: a member that keeps it is
+  // answered exactly by memberPanelOpen above, and holding for it here as well
+  // kept a pocket open on one screen for a panel opened on another.
   readonly property bool foreignPanelHold: {
     if (!root.expanded) return false
     var active = bar ? bar.activePopout : null
-    return !!active && active.foreign === true
+    if (!active || active.foreign !== true) return false
+    var list = root.resolution.slots
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i] ? list[i].activeItem : null
+      if (item && !root.keepsPanelContract(item)) return true
+    }
+    return false
   }
 
   // Requiring `expanded` means this can only ever keep the pocket open, never
@@ -400,8 +503,12 @@ BarWidget {
   // the mouse grab, so every hover flag is frozen at whatever it last was.
   readonly property bool dragHoldsOpen: expanded && dragSource !== null
 
-  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen
-    || foreignPanelHold || dragHoldsOpen
+  // The lock takes away the pointer's two terms and nothing else. The pin still
+  // wins, because it is the click the user made last on this screen; a member's
+  // panel still opens it, because a panel summoned by keybinding is asked for
+  // and has to hang from a widget that is drawn.
+  readonly property bool holdOpen: pinned || (!locked && (selfHovered || memberHovered))
+    || memberPanelOpen || foreignPanelHold || dragHoldsOpen
 
   // Whether the pointer is still somewhere on this bar, which is what the fold
   // timer waits for. The host's own `barHovered` counts across every surface —
@@ -1062,28 +1169,60 @@ BarWidget {
   // is handed, so it is handed the whole entry (see Model.mergedEntrySettings).
   // It cannot match a bare id string, so a hand-written entry of that shape has
   // no write path left there at all — the tooltip is what says so.
-  function writeMembers(value) {
+  //
+  // Every key this plugin owns goes through here — `members`, and the
+  // per-screen `pinned` and `locked` — under the same permission, so a second
+  // pocket entry refuses all of them. Several keys go out as one write. A
+  // value may be a function of the value the entry holds (Model.nextValue()).
+  function writeSettings(changes) {
     if (!root.mayWriteMembers) return false
     if (!bar || !bar.shell) return false
 
     var region = root.ownRegion
     var selfId = root.moduleName
+    var keys = Object.keys(changes)
 
     if (typeof bar.shell.mutateShellConfig === "function") {
       var written = false
       bar.shell.mutateShellConfig(function (config) {
-        written = Model.setMembersOnEntry(config, region, selfId, value)
+        var all = true
+        for (var i = 0; i < keys.length; i++)
+          all = Model.setEntrySetting(config, region, selfId, keys[i], changes[keys[i]]) && all
+        written = all
       })
       if (written) return true
     }
 
     if (typeof bar.shell.updateEntryInline !== "function") return false
-    // Both copies of the entry, because each is wrong differently: the host's
-    // snapshot is detached but goes stale on an inline-only config change, and
-    // the injected `settings` is current but writable from the shared scene.
-    var entry = Model.layoutEntryFor(root.barLayout, region, selfId)
-    return bar.shell.updateEntryInline(selfId,
-      Model.mergedEntrySettings(entry, root.settings, "members", value)) === true
+    // The injected `settings` and not the layout snapshot: the snapshot goes
+    // stale on an inline-only config change (#16, docs/decisions/0019).
+    var next = root.settings
+    for (var k = 0; k < keys.length; k++)
+      next = Model.mergedEntrySettings(next, keys[k], changes[keys[k]])
+
+    // The one key `settings` is known to hold stale: after a reorder the host
+    // can hand a running pocket its old `members` back (docs/decisions/0018).
+    // Carried as it stands, a write of any other key would put that old order
+    // back into shell.json, and the order repair would not see it — the value
+    // it compares does not change. So it goes out in layout order, which is
+    // exactly what repairMemberOrder() would write, under the same guard.
+    if (keys.indexOf("members") === -1 && root.membersMisordered) {
+      var raw = root.setting("members", "")
+      next.members = Model.membersValue(
+        Model.orderMembers(Model.toList(raw), root.layoutIds(region)), raw)
+    }
+
+    return bar.shell.updateEntryInline(selfId, next) === true
+  }
+
+  function writeSetting(key, value) {
+    var changes = {}
+    changes[key] = value
+    return root.writeSettings(changes)
+  }
+
+  function writeMembers(value) {
+    return root.writeSetting("members", value)
   }
 
   // Written synchronously, before the bar persists its own move. Deferring it
@@ -1326,6 +1465,12 @@ BarWidget {
   // and holdOpen would then never *change* — it was already true when this
   // instance was born.
   Component.onCompleted: {
+    // A binding's first value raises no change signal, so the latch takes it
+    // here — before holdOpen is asked, because a persisted pin is part of it.
+    // On Omarchy 4.0.4 the window arrives after this and the handler above
+    // takes it instead (measured, 0021); this covers a host that builds the
+    // widget inside its window.
+    screenKey = Model.screenKeyAfter(screenKey, liveScreenKey)
     // Before anything reads `barSlots`: on a host that does not publish its
     // registry the walk IS the registry, and an empty one resolves nothing.
     root.attachOverlay()
@@ -1353,6 +1498,29 @@ BarWidget {
   }
 
   onHoldOpenChanged: if (holdOpen) expanded = true
+
+  // Locking folds at once, without waiting for the pointer to leave the bar the
+  // way the fold timer does — the pointer is on the mark, because that is where
+  // the right click was. Only when nothing else holds it: folding underneath a
+  // member's open panel, or on another screen whose pocket is pinned, would hide
+  // a widget something is still using, and `holdOpen` would never change again
+  // to bring it back.
+  //
+  // The terms are asked one by one rather than through `holdOpen`, because
+  // `holdOpen` depends on `locked` and this is `locked`'s own change handler: a
+  // binding that depends on the changing property has not necessarily been
+  // re-evaluated yet when the handler runs (the same ordering is
+  // omacom/omarchy#11505), and the stale answer would be the hover that held it
+  // a moment ago. None of these depends on `locked`. `pinned` can still be
+  // stale here when it changed in the same `settings`, which is why the right
+  // click asks again once its write has returned (toggleLock()).
+  function foldIfLocked() {
+    if (!locked) return
+    if (pinned || memberPanelOpen || foreignPanelHold || dragHoldsOpen) return
+    expanded = false
+  }
+
+  onLockedChanged: foldIfLocked()
 
   // A repeating tick rather than a one-shot restarted on hover-end. Omarchy's
   // own bar polls hover the same way for its tooltip, for the same reason: a
@@ -1393,6 +1561,10 @@ BarWidget {
     // all it means the pocket is pinned open — a state the user asked for by
     // clicking, and the tooltip names it in words.
     active: root.pinned || root.dropArmed || root.dropReleases
+    // Locked reads as switched off. Not while the mark is lit, though: dimming
+    // the light a drag answers with would weaken the one answer it gives before
+    // the button comes up, and a pinned pocket is open, not shut.
+    dimmed: root.locked && !root.pinned && !root.dropArmed && !root.dropReleases
     // Two answers, two colours, because they are opposite answers and the
     // difference is the whole gesture: taking a widget in keeps the colour the
     // bar gives an active widget, letting a member go borrows the colour
@@ -1423,6 +1595,7 @@ BarWidget {
     // markup. Nothing assigned here may depend on that decision.
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
+      locked: root.locked, lockable: root.persistsScreenState,
       rejected: root.rejectedIds, unreadable: root.unreadableAt,
       missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
@@ -1437,14 +1610,21 @@ BarWidget {
     // where no leave event is coming — a panel grabbing input, a workspace
     // switch teleporting the cursor.
     //
-    // Session-only on purpose, though not for the reason this comment used to
-    // give. Writing shell.json is safe: the host writes it atomically, and the
-    // pocket now writes `members` itself. The pin stays unwritten because it is
-    // a pointer aid for the next few seconds and because shell.json is shared
-    // by every bar surface — persisting it would make one screen's transient
-    // state everyone's.
+    // Both are written per screen: the pin and the lock each change this
+    // screen's name in a list on Pocket's own entry, so they survive a restart
+    // and leave every other screen alone (docs/decisions/0021). The right click
+    // locks, every other button pins and never touches the lock. A left click
+    // reaches the pocket through the bar's own hit test, which on overlapping
+    // outputs can pick another screen's pocket (docs/decisions/0007): there it
+    // pins that screen, and the pin stays until it is clicked off. The right
+    // click bypasses that hit test. The host passes the button as `code`; see
+    // docs/decisions/0020.
     onPressed: function(code) {
-      root.pinned = !root.pinned
+      if (code === Qt.RightButton) {
+        root.toggleLock()
+        return
+      }
+      root.setPinned(!root.pinned)
       if (root.pinned) root.expanded = true
     }
   }

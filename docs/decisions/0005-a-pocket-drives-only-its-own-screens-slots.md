@@ -2,7 +2,8 @@
 
 - Status: accepted; the fold guard extended by
   [0015](0015-the-host-answers-by-capability-now.md) for hosts without
-  `barHovered`
+  `barHovered`; the per-screen fold that gives a 4.0.3+ host was measured on
+  three monitors in [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
 - Date: 2026-08-27
 - Complements: [0004](0004-membership-is-decided-from-the-gap-not-the-slot.md)
 

@@ -303,10 +303,127 @@ check("a configured but unusable pocket does not claim to be open",
 check("a member in another section still counts as held",
   Model.describe({ members: ["a", "b"], foreign: ["b"] }).split("\n")[0],
   "Pocket holding 2 widgets")
-contains("open pocket offers the pin",
-  Model.describe({ members: ["a"], expanded: true }), "click to keep it open")
-contains("pinned pocket offers the release",
-  Model.describe({ members: ["a"], pinned: true }), "click to release")
+// The two clicks, spelled out directly under the first line and verbatim,
+// because they are the only explanation of the mark anywhere on the bar. Each
+// line says what that click would do next, so the text follows the state.
+check("a collapsed pocket explains both clicks",
+  Model.describe({ members: ["a", "b"] }),
+  "Pocket holding 2 widgets\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
+check("an open pocket offers the pin",
+  Model.describe({ members: ["a"], expanded: true }),
+  "Pocket open\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
+check("a pinned pocket offers the release, and says it is pinned",
+  Model.describe({ members: ["a"], expanded: true, pinned: true }),
+  "Pocket pinned open\nLeft click: release the pin\nRight click: lock it shut on this screen")
+check("a locked pocket says so and offers the unlock",
+  Model.describe({ members: ["a", "b"], locked: true }),
+  "Pocket locked shut — holding 2 widgets\nLeft click: pin it open on this screen\nRight click: unlock")
+check("a locked pocket holding one widget is singular",
+  Model.describe({ members: ["a"], locked: true }).split("\n")[0],
+  "Pocket locked shut — holding 1 widget")
+// The pin wins over the lock on screen, so the first line follows the pin --
+// and the right click still has to say it would unlock, or the lock is
+// invisible for as long as the pin holds.
+check("a pinned locked pocket is described as pinned, and can still be unlocked",
+  Model.describe({ members: ["a"], expanded: true, pinned: true, locked: true }),
+  "Pocket pinned open\nLeft click: release the pin\nRight click: unlock")
+// A right click that cannot write does nothing, so it is not offered.
+check("the right click is not offered where Pocket may not write",
+  Model.describe({ members: ["a"], lockable: false }),
+  "Pocket holding 1 widget\nLeft click: pin it open on this screen")
+check("the hints come before every problem line",
+  Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4),
+  ["Left click: pin it open on this screen", "Right click: lock it shut on this screen", "Not on this bar: b"])
+// Neither click does anything worth saying on an empty pocket or one that can
+// use nothing -- unless one of them is what is holding it, which the user has
+// to be able to undo.
+check("an empty pocket offers no clicks",
+  Model.describe({ members: [] }).indexOf("click"), -1)
+check("an unusable pocket offers no clicks",
+  Model.describe({ members: ["a"], missing: ["a"] }).indexOf("click"), -1)
+contains("but a locked unusable pocket still offers the unlock",
+  Model.describe({ members: ["a"], missing: ["a"], locked: true }), "Right click: unlock")
+contains("and a pinned empty pocket the release",
+  Model.describe({ members: [], pinned: true }), "Left click: release the pin")
+check("a pocket that does not know its screen offers no clicks",
+  Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
+
+// ------------------------------------------------------ per-screen state
+
+// Which screen a pocket is on (docs/decisions/0021). The fields are the ones
+// Quickshell's ShellScreen carries; the values are the ones measured on the
+// author's laptop, where the serial number is empty.
+check("a laptop panel is named by its connector",
+  Model.screenKey({ name: "eDP-1", model: "0x9EA9", serialNumber: "" }), "eDP-1")
+check("so are the other internal connector kinds",
+  [Model.screenKey({ name: "LVDS-1", model: "x" }), Model.screenKey({ name: "DSI-2", model: "x" })],
+  ["LVDS-1", "DSI-2"])
+check("an external screen is named by its model, not its port",
+  Model.screenKey({ name: "HDMI-A-1", model: "ASUS VG289", serialNumber: "" }), "ASUS VG289")
+check("the same monitor on another port keeps its name",
+  Model.screenKey({ name: "DP-3", model: "ASUS VG289" }), "ASUS VG289")
+check("a serial number, where the stack delivers one, tells twins apart",
+  Model.screenKey({ name: "DP-2", model: "VS248", serialNumber: "J5LMQS157979" }), "VS248 J5LMQS157979")
+check("a screen without a model falls back to its connector",
+  Model.screenKey({ name: "DP-1", model: "", serialNumber: "" }), "DP-1")
+check("a model with a comma cannot split the list it is written into",
+  Model.screenKey({ name: "DP-1", model: "Acme, Inc  27\"" }), "Acme Inc 27\"")
+check("only the connector's start marks an internal panel",
+  Model.screenKey({ name: "HDMI-eDP-1", model: "TV" }), "TV")
+for (const screen of [null, undefined, {}, { name: "" }, { name: "  ", model: "X" }]) {
+  check(`no screen name means no key: ${JSON.stringify(screen)}`, Model.screenKey(screen), "")
+}
+check("missing fields read as empty, never as the word undefined",
+  Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
+
+// The latch: a blank answer is a surface unmapped for a moment, so the last
+// name holds; a real name always wins.
+check("a blank answer keeps the last name", Model.screenKeyAfter("ASUS VG289", ""), "ASUS VG289")
+check("a missing answer keeps the last name", Model.screenKeyAfter("eDP-1", undefined), "eDP-1")
+check("a new name replaces the last one", Model.screenKeyAfter("eDP-1", "ASUS VG289"), "ASUS VG289")
+check("the first name is taken", Model.screenKeyAfter("", "eDP-1"), "eDP-1")
+check("nothing before and nothing now is no name", Model.screenKeyAfter(undefined, ""), "")
+
+// The list a per-screen setting holds. Split on commas only: a model name has
+// spaces in it, which is exactly what toList() splits `members` on.
+check("a comma string names its screens",
+  Model.screenList("eDP-1, ASUS VG289"), ["eDP-1", "ASUS VG289"])
+check("an array names its screens", Model.screenList(["ASUS VG289", "eDP-1"]), ["ASUS VG289", "eDP-1"])
+check("blanks and repeats are dropped",
+  Model.screenList(" eDP-1 ,, eDP-1, ,ASUS VG289 "), ["eDP-1", "ASUS VG289"])
+check("an array's non-strings are dropped", Model.screenList(["eDP-1", 5, null, { id: "x" }]), ["eDP-1"])
+// The shape a hand-written array reaches QML in fails Array.isArray().
+check("an array-like value is read like an array",
+  Model.screenList({ length: 2, 0: "eDP-1", 1: "ASUS VG289" }), ["eDP-1", "ASUS VG289"])
+// The unreleased boolean `locked` of 0020 names no screen.
+for (const value of [true, false, undefined, null, "", 1, {}]) {
+  check(`${JSON.stringify(value)} names no screen`, Model.screenList(value), [])
+}
+
+check("a listed screen is on", Model.onScreen("eDP-1, ASUS VG289", "ASUS VG289"), true)
+check("an unlisted screen is off", Model.onScreen("eDP-1", "ASUS VG289"), false)
+check("a never-seen screen is off", Model.onScreen(["eDP-1", "ASUS VG289"], "DELL U2720Q"), false)
+check("no key is never on, even against a blank entry", Model.onScreen(["", "eDP-1"], ""), false)
+check("the legacy boolean is on for no screen", Model.onScreen(true, "eDP-1"), false)
+check("a name is matched whole, not as a prefix", Model.onScreen("ASUS VG2", "ASUS VG289"), false)
+
+check("switching a screen on appends it and keeps the others",
+  Model.withScreen(["eDP-1"], "ASUS VG289", true), ["eDP-1", "ASUS VG289"])
+check("switching it off removes it and keeps the others",
+  Model.withScreen(["eDP-1", "ASUS VG289"], "eDP-1", false), ["ASUS VG289"])
+check("switching on twice lists it once",
+  Model.withScreen(["eDP-1"], "eDP-1", true), ["eDP-1"])
+check("switching off an unlisted screen changes nothing",
+  Model.withScreen("eDP-1", "ASUS VG289", false), "eDP-1")
+check("a comma string stays a comma string",
+  Model.withScreen("eDP-1", "ASUS VG289", true), "eDP-1, ASUS VG289")
+check("nothing to keep writes the string the manifest declares",
+  Model.withScreen("", "eDP-1", true), "eDP-1")
+check("the legacy boolean is replaced by a list of this screen",
+  Model.withScreen(true, "ASUS VG289", true), "ASUS VG289")
+check("an unlock over the legacy boolean writes an empty list",
+  Model.withScreen(true, "ASUS VG289", false), "")
+check("no key switches nothing on", Model.withScreen(["eDP-1"], "", true), ["eDP-1"])
 contains("missing members are named",
   Model.describe({ members: ["a"], missing: ["a"] }), "Not on this bar: a")
 contains("the center anchor refusal is named",
@@ -424,8 +541,10 @@ check("missing goes through the boundary",
 check("anchored goes through the boundary",
   Model.describe({ members: ["a"], anchored: [SMUGGLED] }).split("\n")[1],
   "Refused, it is the center anchor: a\\u003cb")
+// Line 4 rather than 2: a member in another section is still held, so the two
+// click hints come first. The other two above hold nothing and print none.
 check("foreign goes through the boundary",
-  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[1],
+  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[3],
   "In another section, so hiding it looks arbitrary: a\\u003cb")
 
 // The line the whole thing hangs on. mightBeRichText() reads no further than
@@ -441,8 +560,9 @@ check("and the first line in particular carries none",
   /[<>&]/.test(hostileTooltip.split("\n")[0]), false)
 
 // A value carrying a line break used to forge a whole tooltip line, and the
-// line it forged was one of Pocket's own warnings.
-check("a value cannot forge a line", hostileTooltip.split("\n").length, 2)
+// line it forged was one of Pocket's own warnings. Four lines are Pocket's
+// own: the first, the two click hints, and the one naming the rejected ids.
+check("a value cannot forge a line", hostileTooltip.split("\n").length, 4)
 check("nor smuggle the warning it forged",
   hostileTooltip.indexOf("\nA second Pocket entry exists"), -1)
 
@@ -1254,92 +1374,78 @@ check("no layout at all may write", Model.mayWrite(null, SELF), true)
 
 // Omarchy 4.0.3 leaves an installed plugin one write: an inline update of its
 // own entry. That writer REBUILDS the entry as `{id}` plus exactly what it is
-// handed, so anything these two functions drop is deleted from the user's
+// handed, so anything this function drops is deleted from the user's
 // shell.json. The README promises the opposite -- nothing else on the entry is
 // touched -- which is why the merge is a tested function and not a line inside
 // a handler.
 
-const ENTRY_LAYOUT = {
-  left: [{ id: "omarchy.menu" }],
-  center: [{ id: "omarchy.clock" }],
-  right: [{ id: "omarchy.tray" },
-          { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true }]
-}
-
-check("the plugin's own entry is found in its region",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "right", SELF),
-  { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true })
-check("an entry in another region is not this region's",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "left", SELF), null)
-check("a bare string entry answers as itself",
-  Model.layoutEntryFor({ right: [SELF] }, "right", SELF), SELF)
-check("a missing region is null, not a crash",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "nope", SELF), null)
-check("a region that is not a list is null",
-  Model.layoutEntryFor({ right: "nope" }, "right", SELF), null)
-check("no layout is null", Model.layoutEntryFor(null, "right", SELF), null)
-check("an empty id is null", Model.layoutEntryFor(ENTRY_LAYOUT, "right", ""), null)
-
-// The whole point: every other key survives the write.
+// The whole point: every other key survives the write. `live` is the injected
+// `settings`, which the host builds as the whole entry minus `id`.
 const KEPT = Model.mergedEntrySettings(
-  { id: SELF, members: "old", showCount: true, note: "hand written" }, null,
-  "members", "new")
+  { members: "old", showCount: true, note: "hand written" }, "members", "new")
 check("the new value wins", KEPT.members, "new")
 check("a foreign key on the entry survives", KEPT.showCount, true)
 check("and so does a second one", KEPT.note, "hand written")
 // `id` is the host's to set, from the entry it matched. Carrying it would let a
 // mistyped copy of it reach the writer.
-check("id is never carried", "id" in KEPT, false)
+check("id is never carried",
+  "id" in Model.mergedEntrySettings({ id: SELF, members: "old" }, "members", "new"), false)
 
-check("a bare string entry contributes no keys",
-  Model.mergedEntrySettings(SELF, null, "members", "a, b"), { members: "a, b" })
-check("no entry at all still writes the value",
-  Model.mergedEntrySettings(null, null, "members", "a, b"), { members: "a, b" })
+// Key order is part of what lands on disk: the host's writer lays the keys
+// down in the order it is handed them. A key the user put in the middle of the
+// entry has to stay there, and the written key keeps its own place (#16).
+check("the entry's key order is kept, the written key in its own place",
+  Object.keys(Model.mergedEntrySettings({ inserted: 1, members: "old", note: "x" }, "members", "new")),
+  ["inserted", "members", "note"])
+// A key that is not in `settings` is not in the user's entry any more. The
+// layout snapshot this used to start from still held such a key after a hand
+// edit, and the next write put it back (#16).
+check("a key the live copy does not hold is not invented",
+  Model.mergedEntrySettings({ members: "old" }, "members", "new"), { members: "new" })
+
+check("a live copy that is a string contributes no keys",
+  Model.mergedEntrySettings(SELF, "members", "a, b"), { members: "a, b" })
+check("no live copy at all still writes the value",
+  Model.mergedEntrySettings(null, "members", "a, b"), { members: "a, b" })
 check("an array is not an entry",
-  Model.mergedEntrySettings(["a"], null, "members", "x"), { members: "x" })
+  Model.mergedEntrySettings(["a"], "members", "x"), { members: "x" })
 // An array-valued members is the shape a hand-edited config uses, and
 // membersValue() preserves it -- so the merge has to carry it unchanged.
 check("an array value passes through",
-  Model.mergedEntrySettings({ id: SELF }, null, "members", ["a", "b"]),
+  Model.mergedEntrySettings({}, "members", ["a", "b"]),
   { members: ["a", "b"] })
 check("an empty key writes nothing",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "", "x"),
+  Model.mergedEntrySettings({ showCount: true }, "", "x"),
   { showCount: true })
 check("writing id is refused",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "id", "evil"),
+  Model.mergedEntrySettings({ showCount: true }, "id", "evil"),
   { showCount: true })
 
-// The second source, and why it exists. The host's layout snapshot goes stale
-// on a shell.json write that changed only inline settings -- the bar patches its
-// layout in place and never reassigns it, so the copy handed to plugins keeps
-// the old value -- while the widget's own injected `settings` is assigned
-// directly by that same path. Writing from the snapshot alone would resurrect
-// what the user had just edited away.
-const FRESH = Model.mergedEntrySettings(
-  { id: SELF, members: "old", showCount: true },
-  { members: "old", showCount: false, note: "added by hand" },
-  "members", "new")
-check("the live copy wins over a stale snapshot", FRESH.showCount, false)
-check("a key only the live copy has is still carried", FRESH.note, "added by hand")
-check("and the value being written still wins over both", FRESH.members, "new")
-check("a key only the snapshot has is not dropped",
-  Model.mergedEntrySettings({ id: SELF, older: 1 }, { members: "x" }, "members", "y").older, 1)
+// The function form a per-screen write uses: the new value is computed from the
+// value the live copy holds, in its own place, and nothing else moves.
+check("a function value is handed the live value",
+  Model.mergedEntrySettings({ members: "a", pinned: ["eDP-1"], note: "x" }, "pinned",
+    v => Model.withScreen(v, "ASUS VG289", true)),
+  { members: "a", pinned: ["eDP-1", "ASUS VG289"], note: "x" })
+check("and keeps the key's place in the entry",
+  Object.keys(Model.mergedEntrySettings({ locked: "", members: "a" }, "locked", v => v + "eDP-1")),
+  ["locked", "members"])
+check("a function value over a key the entry lacks is handed undefined",
+  Model.mergedEntrySettings({ members: "a" }, "locked", v => v === undefined ? "none" : "some"),
+  { members: "a", locked: "none" })
+check("a function value cannot write a refused key",
+  Model.mergedEntrySettings({ members: "a" }, "id", () => "evil"), { members: "a" })
 
-// And the reason the live copy cannot simply BE the base: it is a writable
-// property in a scene every plugin shares. A key that disarms the entry is
-// refused from either source, so this plugin's own write cannot become the way
-// one arrives in the user's config.
+// The live copy is a writable property in a scene every plugin shares. A key
+// that disarms the entry is refused from it, so this plugin's own write cannot
+// become the way one arrives in the user's config.
 Model.reservedEntryKeys.forEach(word => {
-  const entry = { id: SELF }
-  entry[word] = "payload"
-  check(`a reserved key on the snapshot is refused: ${word}`,
-    word in Model.mergedEntrySettings(entry, null, "members", "a"), false)
   const live = {}
   live[word] = "payload"
   check(`a reserved key injected into settings is refused: ${word}`,
-    word in Model.mergedEntrySettings({ id: SELF }, live, "members", "a"), false)
+    word in Model.mergedEntrySettings(live, "members", "a"), false)
   check(`and it cannot be written as the value's own key: ${word}`,
-    word in Model.mergedEntrySettings({ id: SELF }, null, word, "a"), false)
+    word in Model.mergedEntrySettings({}, word, "a"), false)
 })
 
 // ------------------------------------------ a successful write changes one thing
@@ -1426,6 +1532,61 @@ onlyChange("an array-valued members write reports it found the entry", shellFixt
     e => { e.bar.layout.left[1].members = "omarchy.workspaces" })
 }
 
+// The lock is the second key Pocket writes, through the same function. It
+// lands after the keys already there, like a first `members` write.
+onlyChange("a locked write reports it found the entry", shellFixture(),
+  c => Model.setEntrySetting(c, "right", SELF, "locked", true),
+  e => { e.bar.layout.right[3].locked = true })
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].locked = true
+  onlyChange("an unlock rewrites the key in its place", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", false),
+    e => { e.bar.layout.right[3].locked = false })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3] = SELF
+  onlyChange("a bare string pocket entry is promoted by a locked write", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", true),
+    e => { e.bar.layout.right[3] = { id: SELF, locked: true } })
+}
+
+// The per-screen write on the mutator path: computed inside the mutator from
+// the list the config holds, so a pocket whose `settings` lag cannot drop
+// another screen from it (docs/decisions/0021).
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].pinned = ["eDP-1"]
+  onlyChange("a per-screen write adds this screen to the list the file holds", config,
+    c => Model.setEntrySetting(c, "right", SELF, "pinned", v => Model.withScreen(v, "ASUS VG289", true)),
+    e => { e.bar.layout.right[3].pinned = ["eDP-1", "ASUS VG289"] })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].locked = "eDP-1, ASUS VG289"
+  onlyChange("a per-screen write removes only this screen", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", v => Model.withScreen(v, "eDP-1", false)),
+    e => { e.bar.layout.right[3].locked = "ASUS VG289" })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3] = SELF
+  onlyChange("a per-screen write promotes a bare string entry", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", v => Model.withScreen(v, "eDP-1", true)),
+    e => { e.bar.layout.right[3] = { id: SELF, locked: "eDP-1" } })
+}
+// A refused key leaves the whole file as it was, the way a refused entry does.
+// One case per word, so the guard is seen refusing each of them.
+untouched("writing the id itself is refused",
+  shellFixture(), c => Model.setEntrySetting(c, "right", SELF, "id", "evil"))
+untouched("an empty key is refused",
+  shellFixture(), c => Model.setEntrySetting(c, "right", SELF, "", "x"))
+for (const word of Model.reservedEntryKeys) {
+  untouched(`a key that disarms the entry is refused: ${word}`,
+    shellFixture(), c => Model.setEntrySetting(c, "right", SELF, word, "payload"))
+}
+
 // The placement repair moves one entry. Everything else in the file, the moved
 // entry's own keys and a bare string's shape included, comes out as it went in.
 onlyChange("a far-side member is moved against the pocket", shellFixture(),
@@ -1488,52 +1649,62 @@ function entrySettingsOf(entry) {
   return out
 }
 
-// writeMembers() as it runs on 4.0.3. `snapshot` is the facade's layout, a JSON
-// copy the host refreshes whenever it re-syncs its plugins -- which the delta
-// path for an inline-only edit does not do; `live` is the injected `settings`.
-function inlineWrite(config, region, value, snapshot, live) {
-  const entry = Model.layoutEntryFor(snapshot, region, SELF)
-  return hostInlineWrite(config, SELF, Model.mergedEntrySettings(entry, live, "members", value))
+// writeMembers() as it runs on 4.0.3: `live` is the injected `settings`, which
+// the host reassigns from the entry on every inline change. The layout snapshot
+// the facade also hands over is deliberately not an argument -- it is stale
+// after exactly the hand edits below, and docs/decisions/0019 has why.
+function inlineWrite(config, value, live) {
+  return hostInlineWrite(config, SELF, Model.mergedEntrySettings(live, "members", value))
 }
 
 onlyChange("an inline members write reports it changed the entry", shellFixture(),
-  c => inlineWrite(c, "right", NEW_MEMBERS, clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
   e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 onlyChange("an array-valued inline write reports it changed the entry", shellFixture(),
-  c => inlineWrite(c, "right", ["omaplug"], clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  c => inlineWrite(c, ["omaplug"], entrySettingsOf(c.bar.layout.right[3])),
   e => { e.bar.layout.right[3].members = ["omaplug"] })
 {
   const config = shellFixture()
   config.bar.layout.right[3] = { id: SELF, showCount: true, note: "hand written" }
   onlyChange("a first inline members write reports it changed the entry", config,
-    c => inlineWrite(c, "right", "omaplug", clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+    c => inlineWrite(c, "omaplug", entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = "omaplug" })
 }
 
-// The window the second source exists for. A hand edit of an inline setting
-// takes the bar's delta path: `settings` is reassigned, the facade's copy of the
-// layout is not. The file and `live` hold the edit, the snapshot does not, and
-// the file must keep what the user wrote.
-//
-// Not held here, and both measured: a key the user DELETES by hand in that
-// window comes back, because the merge takes the snapshot as its base; and a
-// key the user inserts in the MIDDLE of the entry moves to its end, because the
-// snapshot's keys are laid down first. Both are gaps in mergedEntrySettings(),
-// not properties this suite can assert today. Tracked in #16.
+// The window #16 was about. A hand edit of an inline setting takes the bar's
+// delta path: `settings` is reassigned, the facade's copy of the layout is not.
+// The file and `live` hold the edit, and the write must keep what the user
+// wrote -- a changed value, a new key, a deleted key, and a key's position.
+// The last two were measured failing on a live 4.0.4 bar while the merge
+// started from the snapshot.
 {
   const config = shellFixture()
-  const snapshot = clone(config.bar.layout)
   config.bar.layout.right[3].showCount = false
-  onlyChange("an inline write over a stale snapshot keeps a hand-edited value", config,
-    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+  onlyChange("an inline write after a hand edit keeps the edited value", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 }
 {
   const config = shellFixture()
-  const snapshot = clone(config.bar.layout)
   config.bar.layout.right[3].added = 1
-  onlyChange("an inline write over a stale snapshot keeps a key added by hand", config,
-    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+  onlyChange("an inline write after a hand edit keeps a key added by hand", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+{
+  const config = shellFixture()
+  delete config.bar.layout.right[3].note
+  onlyChange("an inline write after a hand edit keeps a key deleted by hand deleted", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+{
+  const config = shellFixture()
+  const old = config.bar.layout.right[3]
+  config.bar.layout.right[3] = { id: SELF, inserted: 1, members: old.members,
+                                 showCount: old.showCount, note: old.note }
+  onlyChange("an inline write after a hand edit keeps a key inserted mid-entry in place", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 }
 
