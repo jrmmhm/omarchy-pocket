@@ -17,11 +17,12 @@ import "Model.js" as Model
 // keeps telling the truth about a tucked-away widget: `inBar` still finds it,
 // `findPanelWidget` still finds it, its settings still live on its own entry.
 //
-// Membership can be changed by dragging, and that is the one thing the pocket
-// writes: its own `members` key, on its own layout entry, through the host's
-// own config mutator. The gesture itself belongs to the bar — the pocket only
-// reads the drop marker the bar is already drawing. See
-// docs/decisions/0001-pocket-writes-its-own-members.md.
+// Membership can be changed by dragging, and that is what the pocket writes:
+// its own `members` key, on its own layout entry, through the host's own config
+// mutator — and, since a right click locks it, its own `locked` key the same
+// way. The gesture itself belongs to the bar — the pocket only reads the drop
+// marker the bar is already drawing. See
+// docs/decisions/0001-pocket-writes-its-own-members.md and 0020.
 //
 // The alternative — mounting other widgets' components inside this one — is
 // what ianswope.stack does, and it forces the members out of `bar.layout`,

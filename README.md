@@ -192,13 +192,14 @@ it by hand:
 `members` also accepts a JSON array, which is the nicer shape by hand. Pocket
 writes back whichever shape it finds, and never touches anything else on the
 entry — on Omarchy 4.0.3 on the assumption that no other plugin writes into
-Pocket's `settings`, which `mergedEntrySettings()` in `Model.js` explains.
+Pocket's `settings`, which `mergedEntrySettings()` in `Model.js` explains. The
+manifest declares `members` as a string because Omarchy's settings form can only
+produce one; both shapes work when you edit the file yourself.
+
 `locked` is normally set with a right click; by hand, `true` locks, and so does
 the string `"true"` that `omarchy bar set jrmmhm.pocket locked true` writes.
-Anything else leaves it unlocked. The manifest declares the
-setting as a string because Omarchy's settings form can only produce one; both
-shapes work when you edit the file yourself. The file hot-reloads, so there is
-no restart after an edit.
+Anything else leaves it unlocked. The file hot-reloads, so there is no restart
+after an edit.
 
 The order you drag survives more than a restart. The run's physical order lives
 in `bar.layout` and `members` mirrors it, both in that one file, written by the

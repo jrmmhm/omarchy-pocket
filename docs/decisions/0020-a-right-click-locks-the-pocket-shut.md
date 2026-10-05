@@ -33,9 +33,8 @@ happens on every drop and every plugin enable. The pin's stated reason for
 staying unwritten is that `shell.json` is shared by every surface, so persisting
 one screen's transient state makes it everyone's. Here that sharing is the
 point: a lock that held on one monitor and not the other would read as broken.
-It also turns up wherever settings are edited. `omarchy bar set jrmmhm.pocket
-locked true` works, and writes the string `"true"`, which `Model.isLocked()`
-accepts for that reason.
+It can also be set wherever settings are edited, including `omarchy bar set`.
+Which values count as locked is `Model.isLocked()`'s to say.
 
 *B — Session-only, per instance, like the pin.* Rejected. It would silently
 unlock on every rebuild, which in practice means after every drop.
