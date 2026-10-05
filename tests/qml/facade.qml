@@ -77,7 +77,16 @@ QtObject {
     }
     // Present and refusing, exactly as the facade's is for a plugin that does
     // not declare kind "bar". The plugin must not read the return value.
-    function mutateShellConfig(mutator) { return false }
+    //
+    // Given a config, it runs the mutator over it instead, the way the trusted
+    // bar's mutator does on Omarchy 4.0.2 and earlier -- and returns undefined,
+    // as that one does.
+    property var mutatorConfig: null
+    function mutateShellConfig(mutator) {
+      if (mutatorConfig === null) return false
+      mutator(mutatorConfig)
+      return undefined
+    }
   }
 
   // The host's own facade, constructed the way Bar.qml constructs it.
@@ -431,8 +440,12 @@ QtObject {
     // by not handing writes back, so the order repair's own write never reaches
     // `settings`. A lock written now must not carry the old order into the file.
     harness.fakeShell.modelDelta = false
+    // The snapshot's own copy of the entry still carries a key the user has
+    // since deleted by hand -- the state #16 was about. The write must be built
+    // from `settings`, which no longer has it, and not from this.
     harness.facade.layoutConfig = ({ left: [], center: [], right: [
-      { id: "omarchy.network" }, { id: "omarchy.audio" }, { id: "jrmmhm.pocket" }] })
+      { id: "omarchy.network" }, { id: "omarchy.audio" },
+      { id: "jrmmhm.pocket", deletedByHand: true, members: "omarchy.audio, omarchy.network" }] })
     p.settings = ({ members: "omarchy.audio, omarchy.network" })
 
     harness.after(harness.step8)
@@ -448,6 +461,26 @@ QtObject {
     probe("and carries members in the bar's order, not the stale one",
           function () { return harness.fakeShell.lastSettings.members },
           "omarchy.network, omarchy.audio")
+    probe("and is built from settings, not from the snapshot's stale entry (#16)",
+          function () { return "deletedByHand" in harness.fakeShell.lastSettings }, false)
+
+    // The other write path. On a host whose config mutator runs, the lock goes
+    // through it and changes the one key on the entry, nothing else -- and the
+    // inline writer is never asked.
+    var writes = harness.fakeShell.inlineWrites
+    harness.fakeShell.mutatorConfig = ({ bar: { layout: { left: [], center: [], right: [
+      { id: "omarchy.network" },
+      { id: "jrmmhm.pocket", members: "omarchy.network, omarchy.audio", note: "x" }] } } })
+    p.settings = ({ members: "omarchy.network, omarchy.audio", note: "x" })
+    harness.button().triggerPress(Qt.RightButton)
+    probe("on a host whose mutator runs, the lock is written through it",
+          function () { return JSON.stringify(harness.fakeShell.mutatorConfig.bar.layout.right) },
+          JSON.stringify([{ id: "omarchy.network" },
+                          { id: "jrmmhm.pocket", members: "omarchy.network, omarchy.audio",
+                            note: "x", locked: true }]))
+    probe("and the inline writer is not asked as well",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.fakeShell.mutatorConfig = null
 
     Qt.callLater(harness.finish)
   }

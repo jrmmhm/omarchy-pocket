@@ -301,6 +301,24 @@ QtObject {
     check("V4 leaves the right click out where Pocket may not write",
           Model.describe({ members: ["a"], lockable: false }),
           "Pocket holding 1 widget\nLeft click: pin it open")
+    check("V4 keeps the hints ahead of every problem line",
+          Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4).join("|"),
+          "Left click: pin it open|Right click: lock it shut|Not on this bar: b")
+    check("V4 says a locked pocket of one is singular",
+          Model.describe({ members: ["a"], locked: true }).split("\n")[0],
+          "Pocket locked shut — holding 1 widget")
+    check("V4 offers no clicks on an empty pocket",
+          Model.describe({ members: [] }).indexOf("click"), -1)
+    check("V4 offers no clicks on an unusable pocket",
+          Model.describe({ members: ["a"], missing: ["a"] }).indexOf("click"), -1)
+    check("V4 still offers the unlock on a locked unusable pocket",
+          Model.describe({ members: ["a"], missing: ["a"], locked: true })
+            .indexOf("Right click: unlock") !== -1, true)
+    check("V4 still offers the release on a pinned empty pocket",
+          Model.describe({ members: [], pinned: true }).indexOf("Left click: release the pin") !== -1,
+          true)
+    check("V4 offers no clicks without a known screen",
+          Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
     check("V4 locks on true", Model.isLocked(true), true)
     check("V4 locks on the string the bar CLI writes", Model.isLocked("true"), true)
     check("V4 does not lock on false", Model.isLocked(false), false)
