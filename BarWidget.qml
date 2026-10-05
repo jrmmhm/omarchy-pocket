@@ -442,17 +442,38 @@ BarWidget {
   // A bar panel covers the whole screen with an input mask while it is open, so
   // no hover reaches the bar at all during that time. Without this the pocket
   // would fold up underneath the panel the user just opened from it.
+  //
+  // A host that will not say WHOSE panel is open — the facade hands every popout
+  // this plugin does not own over as an anonymous `{ foreign: true }` — is asked
+  // the member instead: a member whose own widget keeps the host's panel
+  // contract (`open()`, `close()`, `opened`, the test Bar.qml's
+  // panelNavigationSlots() makes) and reports `opened`. A keybinding opens the
+  // focused screen's copy, and the resolution is this surface's slots, so only
+  // that screen's pocket opens. Without it a summoned member's panel hung from
+  // a hidden slot on every 4.0.3+ host, and the pocket stayed shut — measured,
+  // docs/decisions/0022. Asked only for the marker, so a host that hands over
+  // the object answers exactly as before.
   readonly property bool memberPanelOpen: {
     var active = bar ? bar.activePopout : null
     if (!active) return false
     var list = root.resolution.slots
-    for (var i = 0; i < list.length; i++) if (list[i] && list[i].activeItem === active) return true
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i] ? list[i].activeItem : null
+      if (!item) continue
+      if (item === active) return true
+      if (active.foreign === true && root.keepsPanelContract(item) && item.opened === true) return true
+    }
     return false
   }
 
-  // The same question the property above answers, for a host that will not say
-  // WHOSE panel is open. The facade replaces a popout this plugin does not own
-  // with an anonymous marker, so "is it one of my members" has no answer there.
+  function keepsPanelContract(item) {
+    return !!item && typeof item.open === "function" && typeof item.close === "function"
+      && item.opened !== undefined
+  }
+
+  // The same question for a member that does not keep that contract, on a host
+  // that will not say whose panel is open. Such a member's panel cannot be told
+  // from anyone else's, so any foreign popout holds the pocket.
   //
   // Holding on it is right: a panel opened from the pocket must not fold the
   // pocket away underneath itself. Opening on it is not — `activePopout` is
@@ -461,13 +482,19 @@ BarWidget {
   // itself. Hence `expanded &&`, the same shape and the same reason as
   // dragHoldsOpen below.
   //
-  // Only ever true where the exact answer is unavailable, so a host that hands
-  // over the object keeps opening the pocket for a member summoned by keybind,
-  // exactly as before.
+  // Only where some member lacks the contract: a member that keeps it is
+  // answered exactly by memberPanelOpen above, and holding for it here as well
+  // kept a pocket open on one screen for a panel opened on another.
   readonly property bool foreignPanelHold: {
     if (!root.expanded) return false
     var active = bar ? bar.activePopout : null
-    return !!active && active.foreign === true
+    if (!active || active.foreign !== true) return false
+    var list = root.resolution.slots
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i] ? list[i].activeItem : null
+      if (item && !root.keepsPanelContract(item)) return true
+    }
+    return false
   }
 
   // Requiring `expanded` means this can only ever keep the pocket open, never
