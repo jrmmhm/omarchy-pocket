@@ -1078,12 +1078,10 @@ BarWidget {
     }
 
     if (typeof bar.shell.updateEntryInline !== "function") return false
-    // Both copies of the entry, because each is wrong differently: the host's
-    // snapshot is detached but goes stale on an inline-only config change, and
-    // the injected `settings` is current but writable from the shared scene.
-    var entry = Model.layoutEntryFor(root.barLayout, region, selfId)
+    // The injected `settings` and not the layout snapshot: the snapshot goes
+    // stale on an inline-only config change (#16, docs/decisions/0019).
     return bar.shell.updateEntryInline(selfId,
-      Model.mergedEntrySettings(entry, root.settings, "members", value)) === true
+      Model.mergedEntrySettings(root.settings, "members", value)) === true
   }
 
   // Written synchronously, before the bar persists its own move. Deferring it

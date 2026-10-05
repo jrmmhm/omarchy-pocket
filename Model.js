@@ -557,20 +557,6 @@ function setMembersOnEntry(config, region, id, value) {
   return false
 }
 
-// This plugin's own entry as the host holds it, or null. Read from the layout
-// snapshot rather than from the injected `settings`, for the reason
-// mergedEntrySettings() gives.
-function layoutEntryFor(layout, region, id) {
-  var entries = layout ? layout[region] : null
-  if (!entries || typeof entries.length !== "number") return null
-  var want = String(id || "").trim()
-  if (want === "") return null
-  for (var i = 0; i < entries.length; i++) {
-    if (entryIdOf(entries[i]) === want) return entries[i]
-  }
-  return null
-}
-
 // Settings keys that disarm a bar entry. `exec` means a command module,
 // `source` means a bare qml file, and `type` is taken literally; any of them on
 // an entry makes the bar skip registry resolution, and the slot renders as an
@@ -591,35 +577,33 @@ function isReservedEntryKey(key) {
 // the entry, and without this merge that promise would be false the first time
 // anyone put a second key there — which the author's own bar does.
 //
-// It reads BOTH copies of the entry the host offers, because each is wrong in a
-// different way and only together are they right.
+// It is built from ONE copy of the entry: `live`, the widget's own injected
+// `settings`. The host hands that over as the whole entry minus `id`, in the
+// file's key order (BarModel.js::entrySettings), and assigns it again on every
+// inline change through the bar's delta path — so it holds what the user wrote,
+// including what the user deleted and where the user put a key.
 //
-// `entry` is the host's layout snapshot. It is detached and cannot be written
-// from the scene, but it can be STALE: a shell.json write that changed only
-// inline settings takes the bar's delta path, which patches its layout in place
-// without reassigning it, so the snapshot handed to plugins is never refreshed
-// for it. Writing from the snapshot alone therefore resurrects the value a
-// neighbouring key had before the user edited it.
+// The two other copies a plugin can see are each stale exactly where this one
+// is needed. The facade's `layoutConfig` snapshot is not refreshed by that delta
+// path, so a key deleted by hand came back on the next write and a key inserted
+// mid-entry moved to its end (#16) — that snapshot used to be the base here. The
+// shell facade's `barConfig` is refreshed, but from inside the change handler,
+// before the binding it copies has re-evaluated, so it is always one change late
+// (omacom/omarchy#11505). docs/decisions/0019 has the measurement and the one
+// known way `live` lags, which only ever concerns `members`.
 //
-// `live` is the widget's own injected `settings`, which that same delta path
-// assigns directly — so it is always current. It is also a writable `var` in a
-// scene every plugin shares, and the facades are documented as not being a QML
-// sandbox, so a key another plugin dropped into it would be laundered into the
-// config through the one write this plugin is trusted with.
-//
-// So: the snapshot is the base, the live copy wins where they disagree, and a
-// key that disarms the entry is refused from either. `id` is dropped because
-// the host sets it from the entry it matched.
-function mergedEntrySettings(entry, live, key, value) {
+// A key that disarms the entry is refused, from `live` and as the written key,
+// so this plugin's own write can never be the way one reaches the user's
+// config. That is all it can promise: `live` is a writable `var` in a scene
+// every plugin shares, and a plugin that wanted to could call the same writer
+// directly. `id` is dropped because the host sets it from the entry it matched.
+function mergedEntrySettings(live, key, value) {
   var out = {}
-  var source
 
-  for (var pass = 0; pass < 2; pass++) {
-    source = pass === 0 ? entry : live
-    if (!isPlainObject(source)) continue
-    for (var k in source) {
+  if (isPlainObject(live)) {
+    for (var k in live) {
       if (k === "id" || isReservedEntryKey(k)) continue
-      out[k] = source[k]
+      out[k] = live[k]
     }
   }
 
@@ -1044,7 +1028,6 @@ if (typeof module !== "undefined" && module.exports) {
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
-                     layoutEntryFor: layoutEntryFor,
                      mergedEntrySettings: mergedEntrySettings,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }

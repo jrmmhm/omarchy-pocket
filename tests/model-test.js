@@ -1254,92 +1254,63 @@ check("no layout at all may write", Model.mayWrite(null, SELF), true)
 
 // Omarchy 4.0.3 leaves an installed plugin one write: an inline update of its
 // own entry. That writer REBUILDS the entry as `{id}` plus exactly what it is
-// handed, so anything these two functions drop is deleted from the user's
+// handed, so anything this function drops is deleted from the user's
 // shell.json. The README promises the opposite -- nothing else on the entry is
 // touched -- which is why the merge is a tested function and not a line inside
 // a handler.
 
-const ENTRY_LAYOUT = {
-  left: [{ id: "omarchy.menu" }],
-  center: [{ id: "omarchy.clock" }],
-  right: [{ id: "omarchy.tray" },
-          { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true }]
-}
-
-check("the plugin's own entry is found in its region",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "right", SELF),
-  { id: SELF, members: "omaplug, omarchy.tailscale", showCount: true })
-check("an entry in another region is not this region's",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "left", SELF), null)
-check("a bare string entry answers as itself",
-  Model.layoutEntryFor({ right: [SELF] }, "right", SELF), SELF)
-check("a missing region is null, not a crash",
-  Model.layoutEntryFor(ENTRY_LAYOUT, "nope", SELF), null)
-check("a region that is not a list is null",
-  Model.layoutEntryFor({ right: "nope" }, "right", SELF), null)
-check("no layout is null", Model.layoutEntryFor(null, "right", SELF), null)
-check("an empty id is null", Model.layoutEntryFor(ENTRY_LAYOUT, "right", ""), null)
-
-// The whole point: every other key survives the write.
+// The whole point: every other key survives the write. `live` is the injected
+// `settings`, which the host builds as the whole entry minus `id`.
 const KEPT = Model.mergedEntrySettings(
-  { id: SELF, members: "old", showCount: true, note: "hand written" }, null,
-  "members", "new")
+  { members: "old", showCount: true, note: "hand written" }, "members", "new")
 check("the new value wins", KEPT.members, "new")
 check("a foreign key on the entry survives", KEPT.showCount, true)
 check("and so does a second one", KEPT.note, "hand written")
 // `id` is the host's to set, from the entry it matched. Carrying it would let a
 // mistyped copy of it reach the writer.
-check("id is never carried", "id" in KEPT, false)
+check("id is never carried",
+  "id" in Model.mergedEntrySettings({ id: SELF, members: "old" }, "members", "new"), false)
 
-check("a bare string entry contributes no keys",
-  Model.mergedEntrySettings(SELF, null, "members", "a, b"), { members: "a, b" })
-check("no entry at all still writes the value",
-  Model.mergedEntrySettings(null, null, "members", "a, b"), { members: "a, b" })
+// Key order is part of what lands on disk: the host's writer lays the keys
+// down in the order it is handed them. A key the user put in the middle of the
+// entry has to stay there, and the written key keeps its own place (#16).
+check("the entry's key order is kept, the written key in its own place",
+  Object.keys(Model.mergedEntrySettings({ inserted: 1, members: "old", note: "x" }, "members", "new")),
+  ["inserted", "members", "note"])
+// A key that is not in `settings` is not in the user's entry any more. The
+// layout snapshot this used to start from still held such a key after a hand
+// edit, and the next write put it back (#16).
+check("a key the live copy does not hold is not invented",
+  Model.mergedEntrySettings({ members: "old" }, "members", "new"), { members: "new" })
+
+check("a live copy that is a string contributes no keys",
+  Model.mergedEntrySettings(SELF, "members", "a, b"), { members: "a, b" })
+check("no live copy at all still writes the value",
+  Model.mergedEntrySettings(null, "members", "a, b"), { members: "a, b" })
 check("an array is not an entry",
-  Model.mergedEntrySettings(["a"], null, "members", "x"), { members: "x" })
+  Model.mergedEntrySettings(["a"], "members", "x"), { members: "x" })
 // An array-valued members is the shape a hand-edited config uses, and
 // membersValue() preserves it -- so the merge has to carry it unchanged.
 check("an array value passes through",
-  Model.mergedEntrySettings({ id: SELF }, null, "members", ["a", "b"]),
+  Model.mergedEntrySettings({}, "members", ["a", "b"]),
   { members: ["a", "b"] })
 check("an empty key writes nothing",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "", "x"),
+  Model.mergedEntrySettings({ showCount: true }, "", "x"),
   { showCount: true })
 check("writing id is refused",
-  Model.mergedEntrySettings({ id: SELF, showCount: true }, null, "id", "evil"),
+  Model.mergedEntrySettings({ showCount: true }, "id", "evil"),
   { showCount: true })
 
-// The second source, and why it exists. The host's layout snapshot goes stale
-// on a shell.json write that changed only inline settings -- the bar patches its
-// layout in place and never reassigns it, so the copy handed to plugins keeps
-// the old value -- while the widget's own injected `settings` is assigned
-// directly by that same path. Writing from the snapshot alone would resurrect
-// what the user had just edited away.
-const FRESH = Model.mergedEntrySettings(
-  { id: SELF, members: "old", showCount: true },
-  { members: "old", showCount: false, note: "added by hand" },
-  "members", "new")
-check("the live copy wins over a stale snapshot", FRESH.showCount, false)
-check("a key only the live copy has is still carried", FRESH.note, "added by hand")
-check("and the value being written still wins over both", FRESH.members, "new")
-check("a key only the snapshot has is not dropped",
-  Model.mergedEntrySettings({ id: SELF, older: 1 }, { members: "x" }, "members", "y").older, 1)
-
-// And the reason the live copy cannot simply BE the base: it is a writable
-// property in a scene every plugin shares. A key that disarms the entry is
-// refused from either source, so this plugin's own write cannot become the way
-// one arrives in the user's config.
+// The live copy is a writable property in a scene every plugin shares. A key
+// that disarms the entry is refused from it, so this plugin's own write cannot
+// become the way one arrives in the user's config.
 Model.reservedEntryKeys.forEach(word => {
-  const entry = { id: SELF }
-  entry[word] = "payload"
-  check(`a reserved key on the snapshot is refused: ${word}`,
-    word in Model.mergedEntrySettings(entry, null, "members", "a"), false)
   const live = {}
   live[word] = "payload"
   check(`a reserved key injected into settings is refused: ${word}`,
-    word in Model.mergedEntrySettings({ id: SELF }, live, "members", "a"), false)
+    word in Model.mergedEntrySettings(live, "members", "a"), false)
   check(`and it cannot be written as the value's own key: ${word}`,
-    word in Model.mergedEntrySettings({ id: SELF }, null, word, "a"), false)
+    word in Model.mergedEntrySettings({}, word, "a"), false)
 })
 
 // ------------------------------------------ a successful write changes one thing
@@ -1488,52 +1459,62 @@ function entrySettingsOf(entry) {
   return out
 }
 
-// writeMembers() as it runs on 4.0.3. `snapshot` is the facade's layout, a JSON
-// copy the host refreshes whenever it re-syncs its plugins -- which the delta
-// path for an inline-only edit does not do; `live` is the injected `settings`.
-function inlineWrite(config, region, value, snapshot, live) {
-  const entry = Model.layoutEntryFor(snapshot, region, SELF)
-  return hostInlineWrite(config, SELF, Model.mergedEntrySettings(entry, live, "members", value))
+// writeMembers() as it runs on 4.0.3: `live` is the injected `settings`, which
+// the host reassigns from the entry on every inline change. The layout snapshot
+// the facade also hands over is deliberately not an argument -- it is stale
+// after exactly the hand edits below, and docs/decisions/0019 has why.
+function inlineWrite(config, value, live) {
+  return hostInlineWrite(config, SELF, Model.mergedEntrySettings(live, "members", value))
 }
 
 onlyChange("an inline members write reports it changed the entry", shellFixture(),
-  c => inlineWrite(c, "right", NEW_MEMBERS, clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
   e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 onlyChange("an array-valued inline write reports it changed the entry", shellFixture(),
-  c => inlineWrite(c, "right", ["omaplug"], clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+  c => inlineWrite(c, ["omaplug"], entrySettingsOf(c.bar.layout.right[3])),
   e => { e.bar.layout.right[3].members = ["omaplug"] })
 {
   const config = shellFixture()
   config.bar.layout.right[3] = { id: SELF, showCount: true, note: "hand written" }
   onlyChange("a first inline members write reports it changed the entry", config,
-    c => inlineWrite(c, "right", "omaplug", clone(c.bar.layout), entrySettingsOf(c.bar.layout.right[3])),
+    c => inlineWrite(c, "omaplug", entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = "omaplug" })
 }
 
-// The window the second source exists for. A hand edit of an inline setting
-// takes the bar's delta path: `settings` is reassigned, the facade's copy of the
-// layout is not. The file and `live` hold the edit, the snapshot does not, and
-// the file must keep what the user wrote.
-//
-// Not held here, and both measured: a key the user DELETES by hand in that
-// window comes back, because the merge takes the snapshot as its base; and a
-// key the user inserts in the MIDDLE of the entry moves to its end, because the
-// snapshot's keys are laid down first. Both are gaps in mergedEntrySettings(),
-// not properties this suite can assert today. Tracked in #16.
+// The window #16 was about. A hand edit of an inline setting takes the bar's
+// delta path: `settings` is reassigned, the facade's copy of the layout is not.
+// The file and `live` hold the edit, and the write must keep what the user
+// wrote -- a changed value, a new key, a deleted key, and a key's position.
+// The last two were measured failing on a live 4.0.4 bar while the merge
+// started from the snapshot.
 {
   const config = shellFixture()
-  const snapshot = clone(config.bar.layout)
   config.bar.layout.right[3].showCount = false
-  onlyChange("an inline write over a stale snapshot keeps a hand-edited value", config,
-    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+  onlyChange("an inline write after a hand edit keeps the edited value", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 }
 {
   const config = shellFixture()
-  const snapshot = clone(config.bar.layout)
   config.bar.layout.right[3].added = 1
-  onlyChange("an inline write over a stale snapshot keeps a key added by hand", config,
-    c => inlineWrite(c, "right", NEW_MEMBERS, snapshot, entrySettingsOf(c.bar.layout.right[3])),
+  onlyChange("an inline write after a hand edit keeps a key added by hand", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+{
+  const config = shellFixture()
+  delete config.bar.layout.right[3].note
+  onlyChange("an inline write after a hand edit keeps a key deleted by hand deleted", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
+    e => { e.bar.layout.right[3].members = NEW_MEMBERS })
+}
+{
+  const config = shellFixture()
+  const old = config.bar.layout.right[3]
+  config.bar.layout.right[3] = { id: SELF, inserted: 1, members: old.members,
+                                 showCount: old.showCount, note: old.note }
+  onlyChange("an inline write after a hand edit keeps a key inserted mid-entry in place", config,
+    c => inlineWrite(c, NEW_MEMBERS, entrySettingsOf(c.bar.layout.right[3])),
     e => { e.bar.layout.right[3].members = NEW_MEMBERS })
 }
 

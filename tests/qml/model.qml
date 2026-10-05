@@ -102,10 +102,9 @@ QtObject {
     return out
   }
 
-  function inlineWrite(config, region, value, snapshot, live) {
-    var entry = Model.layoutEntryFor(snapshot, region, harness.selfId)
+  function inlineWrite(config, value, live) {
     return harness.hostInlineWrite(config, harness.selfId,
-                                   Model.mergedEntrySettings(entry, live, "members", value))
+                                   Model.mergedEntrySettings(live, "members", value))
   }
 
   function runWriteCases() {
@@ -168,48 +167,51 @@ QtObject {
         e.bar.layout.left = [l[0], l[2], l[1], l[3]]
       })
 
+    // The cases after the first three are the hand edits #16 was about; the
+    // last two failed in this engine while the merge started from the snapshot.
+    function liveOf(c) { return harness.entrySettingsOf(c.bar.layout.right[3]) }
+
     harness.onlyChange("V4 an inline members write reports it changed the entry",
       harness.shellFixture(),
-      function (c) {
-        return harness.inlineWrite(c, "right", value, harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
     harness.onlyChange("V4 an array-valued inline write reports it changed the entry",
       harness.shellFixture(),
-      function (c) {
-        return harness.inlineWrite(c, "right", ["omaplug"], harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, ["omaplug"], liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = ["omaplug"] })
 
     config = harness.shellFixture()
     config.bar.layout.right[3] = { id: self, showCount: true, note: "hand written" }
     harness.onlyChange("V4 a first inline members write reports it changed the entry", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", "omaplug", harness.clone(c.bar.layout),
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+      function (c) { return harness.inlineWrite(c, "omaplug", liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = "omaplug" })
 
     config = harness.shellFixture()
-    var stale = harness.clone(config.bar.layout)
     config.bar.layout.right[3].showCount = false
-    harness.onlyChange("V4 an inline write over a stale snapshot keeps a hand-edited value", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", value, stale,
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+    harness.onlyChange("V4 an inline write after a hand edit keeps the edited value", config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
 
     config = harness.shellFixture()
-    var staleToo = harness.clone(config.bar.layout)
     config.bar.layout.right[3].added = 1
-    harness.onlyChange("V4 an inline write over a stale snapshot keeps a key added by hand", config,
-      function (c) {
-        return harness.inlineWrite(c, "right", value, staleToo,
-                                   harness.entrySettingsOf(c.bar.layout.right[3]))
-      },
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key added by hand", config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
+      function (e) { e.bar.layout.right[3].members = value })
+
+    config = harness.shellFixture()
+    delete config.bar.layout.right[3].note
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key deleted by hand deleted",
+      config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
+      function (e) { e.bar.layout.right[3].members = value })
+
+    config = harness.shellFixture()
+    var old = config.bar.layout.right[3]
+    config.bar.layout.right[3] = { id: self, inserted: 1, members: old.members,
+                                   showCount: old.showCount, note: old.note }
+    harness.onlyChange("V4 an inline write after a hand edit keeps a key inserted mid-entry in place",
+      config,
+      function (c) { return harness.inlineWrite(c, value, liveOf(c)) },
       function (e) { e.bar.layout.right[3].members = value })
   }
 
