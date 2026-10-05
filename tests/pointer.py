@@ -191,11 +191,23 @@ def geometry():
     return json.loads(raw)
 
 
-def monitors():
+def monitors(screen=None):
+    """Every monitor, or only the one whose connector is `screen`.
+
+    By connector and never by model: two identical monitors share a model, and
+    the name Pocket keys its own state by is not rebuilt here either -- the
+    shell and hyprctl disagree on the serial number (docs/decisions/0021).
+    """
     raw = subprocess.run(["hyprctl", "-j", "monitors"], capture_output=True, text=True).stdout
     if not raw.strip():
         raise Unavailable("hyprctl reported no monitors")
-    return [(m["name"], m["x"], m["y"]) for m in json.loads(raw)]
+    found = [(m["name"], m["x"], m["y"]) for m in json.loads(raw)]
+    if screen is None:
+        return found
+    found = [m for m in found if m[0] == screen]
+    if not found:
+        raise Unavailable("no monitor on connector %s" % screen)
+    return found
 
 
 def by_occurrence(slots, index):
@@ -229,6 +241,36 @@ def members():
     return [x for x in raw if isinstance(x, str)]
 
 
+def members_face_away():
+    """Whether the members sit after the mark rather than before it.
+
+    The same rule as `membersLeadFromEnd` in BarWidget.qml, read from the other
+    side: only in `left` do the members follow the mark.
+    """
+    region, _ = entry()
+    return region == "left"
+
+
+def nearest_member():
+    """The member against the mark, read from the layout in the file.
+
+    Not from `members`, whose order a hand edit can change, and not from the
+    geometry, whose `x` is stale for a slot that is not drawn.
+    """
+    region, _ = entry()
+    wanted = members()
+    layout = ((json.load(open(CONFIG)).get("bar") or {}).get("layout") or {}).get(region) or []
+    ids = [item.get("id") if isinstance(item, dict) else item for item in layout]
+    if SELF not in ids:
+        return wanted[0] if members_face_away() else wanted[-1]
+    at = ids.index(SELF)
+    side = ids[at + 1:] if members_face_away() else list(reversed(ids[:at]))
+    for widget in side:
+        if widget in wanted:
+            return widget
+    return wanted[0] if members_face_away() else wanted[-1]
+
+
 def settle(reads=2, pause=0.35, tries=14):
     """Wait until the geometry stops changing.
 
@@ -251,30 +293,52 @@ def settle(reads=2, pause=0.35, tries=14):
     return last
 
 
-def open_pocket(pointer, wanted):
-    """Hover each candidate mark until one pocket is actually open.
+def open_pocket(pointer, wanted, screen=None):
+    """Hover each candidate mark until one pocket is actually OPENED by it.
 
     Returns (index, monitor name, origin x, origin y, slots). Tries every
     (surface, monitor) pair rather than trusting an order: see the module note.
+
+    Opened, not found open: the reading the pairs are judged against is taken
+    once, with the pointer parked, and a surface already drawing its members --
+    pinned, or still open -- cannot be identified by opening it. Accepting it
+    matched it on whichever monitor hyprctl listed first. With `screen`, only
+    that monitor is tried, and a pocket that stays shut there is reported,
+    because a lock looks exactly like that from outside.
     """
+    candidates = monitors(screen)
+    pointer.warp(candidates[0][1] + 400, candidates[0][2] + 400)
+    time.sleep(1.2)
     slots = settle()
     marks = [s for s in slots if s["id"] == SELF]
     if not marks:
         raise Unavailable("the pocket is configured but the bar has no slot for it")
 
+    already = []
     for index in range(len(marks)):
         surface = by_occurrence(slots, index)
         mark = surface.get(SELF)
         if not mark or mark["width"] <= 0:
             continue
-        for name, origin_x, origin_y in monitors():
+        # A member with no slot at all -- an uninstalled widget -- is never
+        # drawn, and waiting for it would identify nothing.
+        present = [i for i in wanted if i in surface]
+        if not present:
+            continue
+        if all(surface[i]["width"] > 0 for i in present):
+            already.append(index)
+            continue
+        for name, origin_x, origin_y in candidates:
             pointer.warp(origin_x + mark["x"] + mark["width"] // 2, origin_y + mark["y"] + 13)
             time.sleep(0.9)
             after = by_occurrence(settle(), index)
-            drawn = [i for i in wanted if after.get(i, {}).get("width", 0) > 0]
-            if len(drawn) == len(wanted):
+            if all(after.get(i, {}).get("width", 0) > 0 for i in present):
                 return index, name, origin_x, origin_y, after
-    raise Unavailable("no pocket opened under the pointer on any surface")
+    if already:
+        raise Unavailable("pocket already open on %d surface(s), pinned or not yet folded; "
+                          "nothing left to identify by opening" % len(already))
+    raise Unavailable("no pocket opened under the pointer%s (locked there? locked=%r)"
+                      % (" on " + screen if screen else " on any surface", entry()[1].get("locked")))
 
 
 def park(pointer, origin_x, origin_y):
@@ -334,10 +398,12 @@ def mark_gap(surface, origin_x, inner):
     mark's two edges mean opposite things: the far one takes a member out, the
     near one -- the side the group is on -- takes a widget in. Aiming at the
     middle of the mark would be aiming at the boundary between the two answers.
-    See docs/decisions/0008.
+    See docs/decisions/0008. The near edge is the left one, except in `left`,
+    where the members follow the mark (members_face_away()).
     """
     mark = surface[SELF]
-    return origin_x + (mark["x"] + 2 if inner else mark["x"] + mark["width"] - 2)
+    left_edge = inner != members_face_away()
+    return origin_x + (mark["x"] + 2 if left_edge else mark["x"] + mark["width"] - 2)
 
 
 def grab(surface, widget_id):
@@ -348,15 +414,26 @@ def grab(surface, widget_id):
 
 
 def main(argv):
+    screen = None
+    if "--screen" in argv:
+        at = argv.index("--screen")
+        if at + 1 >= len(argv):
+            print("--screen needs a connector, e.g. --screen DP-2", file=sys.stderr)
+            return SKIPPED
+        screen = argv[at + 1]
+        argv = argv[:at] + argv[at + 2:]
     if not argv:
-        print("usage: pointer.py <report|drag-out|drag-in> [widget-id]", file=sys.stderr)
+        print("usage: pointer.py <report|drag-out|drag-in> [widget-id] [--screen CONNECTOR]",
+              file=sys.stderr)
         return SKIPPED
 
     command = argv[0]
     try:
         if command == "report":
             region, _ = entry()
-            print("region=%s members=%s" % (region, ",".join(members())))
+            # `members` last: tests/live.sh reads everything after it.
+            print("region=%s nearest=%s members=%s"
+                  % (region, nearest_member() if members() else "", ",".join(members())))
             return OK
 
         wanted = members()
@@ -364,7 +441,7 @@ def main(argv):
             raise Unavailable("the pocket holds no members to drag")
 
         with Pointer() as pointer:
-            index, name, origin_x, origin_y, surface = open_pocket(pointer, wanted)
+            index, name, origin_x, origin_y, surface = open_pocket(pointer, wanted, screen)
             mark_x = surface[SELF]["x"]
             try:
                 if command == "drag-out":
@@ -372,7 +449,7 @@ def main(argv):
                     # "drag a member past the middle of the mark and it comes
                     # out". Defaults to the member nearest the mark, the one
                     # whose gap the drop rule is most easily wrong about.
-                    who = argv[1] if len(argv) > 1 else wanted[-1]
+                    who = argv[1] if len(argv) > 1 else nearest_member()
                     drag(pointer, origin_x, origin_y, index, grab(surface, who), mark_x,
                          lambda fresh: mark_gap(fresh, origin_x, inner=False))
                     print("dragged %s past the mark on %s" % (who, name))
