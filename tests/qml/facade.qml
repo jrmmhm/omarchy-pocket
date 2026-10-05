@@ -164,7 +164,15 @@ QtObject {
       width: 27
       height: 26
 
-      Item { id: memberItem; anchors.fill: parent }
+      // Keeps the host's panel contract, as Ui/Panel.qml does: a keybinding
+      // calls open() on it and `opened` follows.
+      Item {
+        id: memberItem
+        anchors.fill: parent
+        property bool opened: false
+        function open() { opened = true }
+        function close() { opened = false }
+      }
     }
 
     property var pocketItem: loaderA.item
@@ -203,7 +211,13 @@ QtObject {
       width: 27
       height: 26
 
-      Item { id: memberItem2; anchors.fill: parent }
+      Item {
+        id: memberItem2
+        anchors.fill: parent
+        property bool opened: false
+        function open() { opened = true }
+        function close() { opened = false }
+      }
     }
 
     property Pk.BarWidget pocket: pocketC
@@ -489,7 +503,9 @@ QtObject {
                                    harness.fakeShell.lastSettings.pinned])
           }, JSON.stringify([harness.key, ""]))
 
-    // A panel opened from a member holds it open through the lock.
+    // A panel opened from a member holds it open through the lock. Handed over
+    // as the object, which is what a host that publishes it does (≤4.0.2) and
+    // the facade never does; the facade's marker has its own case in step12.
     harness.button().triggerPress(Qt.RightButton)
     probe("unlocked again", function () { return p.locked }, false)
     harness.facade.activePopout = memberItem
@@ -709,6 +725,170 @@ QtObject {
     probe("a never-seen screen starts unlocked", function () { return c.locked }, false)
     probe("and unpinned", function () { return c.pinned }, false)
 
+    Qt.callLater(harness.step12)
+  }
+
+  // ------------------------------------------------ a panel by keybinding
+  //
+  // The facade never hands a member's popout over as the object: every popout
+  // Pocket does not own arrives as the facade's own `foreignPopoutMarker`
+  // (Bar.qml::syncPluginBarApiObjects). A keybinding opens the focused screen's
+  // copy of the member (BarModel.pickPanelSlot), and that copy reports
+  // `opened`. Only that screen's pocket may open, and a lock does not stop it
+  // (docs/decisions/0020, 0022).
+
+  function settleTwoScreens(bSettings, cSettings) {
+    var b = harness.pocket()
+    var c = win2.pocket
+    harness.facade.activePopout = null
+    harness.facade.layoutConfig = ({ left: [], center: [], right: [
+      { id: "omarchy.audio" }, { id: "jrmmhm.pocket", members: "omarchy.audio" }] })
+    harness.fakeShell.modelDelta = true
+    harness.fakeShell.refuse = false
+    b.screenKey = "eDP-1"
+    c.screenKey = "ASUS VG289"
+    b.settings = bSettings
+    c.settings = cSettings
+    memberSlot.hovered = false
+    memberSlot2.hovered = false
+    memberItem.opened = false
+    memberItem2.opened = false
+  }
+
+  // A new layout restarts each pocket's settling pass, which re-arms the
+  // overlay's hover 250 ms later — and offscreen that hover answers "on the
+  // bar". So the pointer is taken off the bar only after that pass has run.
+  function quiet() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    b.overlay.hovered = false
+    if (c.overlay) c.overlay.hovered = false
+    b.expanded = false
+    c.expanded = false
+  }
+
+  function step12() {
+    harness.settleTwoScreens(({ members: "omarchy.audio", locked: "eDP-1" }),
+                             ({ members: "omarchy.audio" }))
+    harness.afterFold(harness.step12b)
+  }
+
+  function step12b() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    harness.quiet()
+    probe("the first screen's pocket is locked", function () { return b.locked }, true)
+
+    memberItem.opened = true
+    probe("a member reporting `opened` with no popout live opens nothing",
+          function () { return b.expanded }, false)
+    harness.facade.activePopout = ({ owner: "another widget" })
+    probe("a popout handed over as an object is asked by identity alone, as before",
+          function () { return b.expanded }, false)
+    memberItem.opened = false
+
+    harness.facade.activePopout = harness.facade.foreignPopoutMarker
+    probe("a foreign panel alone opens no pocket",
+          function () { return b.expanded || c.expanded }, false)
+
+    var noop = function () { }
+    var halfPanels = [({ opened: true }), ({ opened: true, open: noop }), ({ opened: true, close: noop })]
+    for (var i = 0; i < halfPanels.length; i++) {
+      memberSlot.activeItem = halfPanels[i]
+      probe("a member with `opened` but not both of open() and close() does not count (" + i + ")",
+            function () { return b.expanded }, false)
+    }
+    memberSlot.activeItem = memberItem
+
+    memberItem.opened = true
+    probe("the member's panel summoned on the first screen opens its pocket, locked or not",
+          function () { return b.expanded }, true)
+    probe("and not the other screen's", function () { return c.expanded }, false)
+
+    memberItem.opened = false
+    harness.facade.activePopout = null
+    b.overlay.hovered = false
+    harness.afterFold(harness.step13)
+  }
+
+  function step13() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    probe("once the panel closes, the locked pocket folds", function () { return b.expanded }, false)
+
+    harness.facade.activePopout = harness.facade.foreignPopoutMarker
+    memberItem2.opened = true
+    probe("the member's panel summoned on the second screen opens that pocket",
+          function () { return c.expanded }, true)
+    probe("and leaves the first shut", function () { return b.expanded }, false)
+
+    // Another panel opens elsewhere: the host closes the member's panel and the
+    // marker stays. A member that does not keep the contract cannot tell its
+    // own panel from that one, so the pocket is held for it.
+    memberItem2.opened = false
+    memberSlot2.activeItem = ({ open: function () { }, close: function () { } })
+    if (c.overlay) c.overlay.hovered = false
+    harness.afterFold(harness.step13b)
+  }
+
+  function step13b() {
+    var c = win2.pocket
+    probe("a member without the contract holds an open pocket for any foreign panel",
+          function () { return c.expanded }, true)
+    // The member keeps the contract again, so nothing is left holding.
+    memberSlot2.activeItem = memberItem2
+    if (c.overlay) c.overlay.hovered = false
+    harness.afterFold(harness.step14)
+  }
+
+  function step14() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    probe("a panel open elsewhere does not hold a pocket whose members keep the contract",
+          function () { return c.expanded }, false)
+    harness.facade.activePopout = null
+
+    // ------------------------------------------------- identical twins
+    //
+    // Two monitors of one model with no serial number reaching Pocket get one
+    // name (docs/decisions/0021), and so one pin and one lock.
+    harness.settleTwoScreens(({ members: "omarchy.audio" }), ({ members: "omarchy.audio" }))
+    harness.afterFold(harness.step14b)
+  }
+
+  function step14b() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    harness.quiet()
+    b.screenKey = "VS248"
+    c.screenKey = "VS248"
+    var before = harness.fakeShell.inlineWrites
+    harness.buttonOf(b).triggerPress(Qt.LeftButton)
+    probe("a pin on one twin writes the shared name once",
+          function () { return harness.fakeShell.lastSettings.pinned }, "VS248")
+    probe("and pins both twins", function () { return b.pinned && c.pinned }, true)
+
+    harness.buttonOf(c).triggerPress(Qt.RightButton)
+    probe("a lock on the other twin is one write",
+          function () { return harness.fakeShell.inlineWrites - before }, 2)
+    probe("that locks the shared name and drops the shared pin",
+          function () {
+            return JSON.stringify([harness.fakeShell.lastSettings.locked,
+                                   harness.fakeShell.lastSettings.pinned])
+          }, JSON.stringify(["VS248", ""]))
+    probe("both twins read locked", function () { return b.locked && c.locked }, true)
+    b.overlay.hovered = false
+    if (c.overlay) c.overlay.hovered = false
+    harness.afterFold(harness.step15)
+  }
+
+  function step15() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    probe("and both twins fold", function () { return b.expanded || c.expanded }, false)
+    harness.buttonOf(b).triggerPress(Qt.RightButton)
+    probe("unlocking either twin unlocks both",
+          function () { return !b.locked && !c.locked && harness.fakeShell.lastSettings.locked === "" }, true)
     Qt.callLater(harness.finish)
   }
 
