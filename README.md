@@ -205,10 +205,10 @@ reaches Pocket. The tooltip does not show the name, but `shell.json` does once
 you have clicked. By hand, separate the names with commas — not
 spaces, because a model name has spaces in it — as in
 `omarchy bar set jrmmhm.pocket locked "eDP-1, ASUS VG289"`, or write a JSON
-array into the file. `omarchy bar set … --json` cannot carry an array of two or
-more names; that is the shell's command, and
+array into the file. Do not hand a list to `omarchy bar set … --json`: that is
+the shell's command, and
 [decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
-has what it does instead. A name no
+records what it did with one. A name no
 connected screen has does nothing, and a screen that is not named starts
 unpinned and unlocked. The file hot-reloads, so there is no restart after an
 edit.
@@ -351,17 +351,18 @@ Three things change your first hour with it:
   counted hover once for the whole shell, so there no pocket folded while the
   pointer was on *any* monitor's bar; it only delayed a fold.
 - **An open panel can hold pockets open on every screen.** A member whose
-  widget does not say whether its own panel is open — on the author's bar,
-  X-Ray — cannot be told apart from any other panel, so while any panel is open
+  widget does not say whether its own panel is open cannot be told apart from
+  any other panel, so while any panel is open
   anywhere, a pocket that is already open stays open, a locked one included. It
   closes when the panel does. Nothing opens because of it.
-- **Plugging a monitor out and back in keeps its pin and lock.** A monitor
-  Pocket has never seen starts unpinned and unlocked, and the other screens'
-  pockets are left alone either way.
+- **Plugging a monitor out and back in keeps its pin**, and its lock, which is
+  read from the same kind of list. A monitor Pocket has never seen starts
+  unpinned and unlocked, and the other screens' pockets are left alone either
+  way.
 - **Mirroring leaves one bar for the mirrored pair.** Hyprland drops the mirrored
   output from its monitor list, so the bar is drawn once, for the source, and a
-  click pins or locks the source. The mirrored screen's own pin and lock come
-  back with it when you extend again. This and the two points above were
+  click there pins the source. The mirrored screen keeps its own pin for when you
+  extend again. This and the two points above were
   measured on three monitors in
   [decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md).
 - **On overlapping outputs, a left click on one screen's bar can land on another

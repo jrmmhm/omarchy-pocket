@@ -45,9 +45,9 @@ Monitor layouts were changed only through `monitor-control`.
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | Hover opens; leaving onto another screen's bar folds; staying on the same bar holds | fold 6/6, hold 6/6 | fold 12/12, hold 42/42 | live |
 | 2 | Pin and lock per screen, two restarts, lock on a pinned screen drops only its pin | yes | yes | live |
-| 3 | Unplug and replug: the screen gets its state back, the others are untouched, a new screen is neutral | — | yes (VS248, same port) | live |
+| 3 | Unplug and replug: the screen gets its pin back, the others are untouched, a new screen is neutral | — | yes (VS248, same port) | live; the lock by restart only |
 | 4 | Identical twins share one name, pin and lock | — | — | test |
-| 5 | Mirror: surfaces, left click, pin and lock | — | yes | live |
+| 5 | Mirror: surfaces, left click, the pin of source and target | — | yes | live; the lock not tried |
 | 6 | Stacked arrangement: hover, fold, left click | — | yes | live |
 | 7 | Profile switch with a pinned, moving screen | — | yes | live |
 | 8 | Drag out, back in and reorder, left and right sections, on every monitor | — | yes | live |
@@ -72,7 +72,9 @@ The details per row follow.
    Its surface was gone about 1.8 s after the output, and the other two pockets
    stayed collapsed in every 30 ms sample. Replugged, it came back pinned, and
    the others stayed collapsed. Plugging VS248 in for the first time built a
-   neutral pocket.
+   neutral pocket. A replugged screen's lock was not tried; it is read from the
+   same kind of list as the pin, and row 2 shows it surviving a rebuild of the
+   surface by restart.
 4. **Twins.** No two identical monitors were available.
    `tests/qml/facade.qml` gives two pockets the same name:
    - a pin on one writes the name once and pins both;
@@ -212,7 +214,15 @@ Measured on three monitors. After a drop, the shell answered no IPC for 2.5 to
 On this machine the window cannot be reached with a real pointer. It stays
 named in 0021 for a faster machine or a smaller bar.
 
-## What this does not cover
+## Consequences
+
+The README's notes on more than one monitor now say what was measured here:
+each screen folds on its own, an open panel can hold pockets open, a replugged
+screen keeps its pin, mirroring leaves one bar. `tests/qml/facade.qml` holds
+the keybinding panel against the facade's own marker and the twins.
+`tests/live.sh --gesture` takes a connector and works in `left`.
+
+What this does not cover:
 
 - Outputs overlapped by hand, the only layout where 0007's contested left click
   remains possible.
@@ -221,10 +231,9 @@ named in 0021 for a faster machine or a smaller bar.
 - A host ≤4.0.2. The new term is gated on the facade's marker, and the identity
   case in `tests/qml/facade.qml` still passes.
 - Hover left latched across a remap, beyond the one observation above.
+- The lock across a replug and across mirroring.
 
-## Lessons
-
-**A click that lands nowhere reads exactly like a race that undoes it.** The
+**Lesson.** A click that lands nowhere reads exactly like a race that undoes it. The
 first ten "click right after a drop" runs counted 0 of 10 locks, and that
 looked like the 0021 race. Three instrument faults produced it:
 
@@ -238,6 +247,6 @@ A poller in a separate process settled it. It showed no write at all, so there
 was nothing to revert. Before blaming the host, watch the write path from
 outside the process that drives the pointer.
 
-**The facade hides whose panel is open, not that a panel is open.** When the
+A second one: the facade hides whose panel is open, not that a panel is open. When the
 host stops naming an object, ask the object's own state through the contract
 the host itself uses. Pocket already reads that surface's slots.

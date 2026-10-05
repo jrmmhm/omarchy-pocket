@@ -40,15 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pocket until it closes.
 - The README's notes on more than one monitor are corrected and extended: each
   screen's pocket folds on its own on 4.0.3+, mirroring leaves one bar, and a
-  monitor plugged back in keeps its pin and lock
+  monitor plugged back in keeps its pin
   ([decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)).
 
 ### Fixed
 
-- **A member's panel opened by keybinding opens the pocket again** on Omarchy
-  4.0.3 and later, on the screen the panel opens on, locked or not. The panel
-  used to hang from a hidden widget while the pocket stayed shut, on every
-  screen ([decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)).
+- **A member's panel opened by keybinding opens the pocket** on Omarchy 4.0.3
+  and later, on the screen the panel opens on, locked or not, as it already did
+  on older versions. On 4.0.3 and later the panel hung from a hidden widget
+  while the pocket stayed shut, on every screen ([decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)).
 
 - **A members write no longer undoes a hand edit to Pocket's own entry** on
   Omarchy 4.0.3 and later. After such an edit, the next write put a key you had

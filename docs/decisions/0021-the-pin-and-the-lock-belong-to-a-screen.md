@@ -174,11 +174,7 @@ case was added.
   current Omarchy takes: from 4.0.3 an installed bar widget's mutator refuses,
   and every write is inline. Only ≤4.0.2, whose mutator runs, is protected by
   reading the list inside the mutator.
-  *Corrected by 0022:* every new instance is injected at once and again from
-  one deferred batch, so the exposure is any inline write between the rebuild
-  and that batch — the automatic `repairMemberOrder()` included, because an
-  inline write carries the whole entry. Measured there: a real click cannot
-  reach the window, because the shell takes no input while it rebuilds.
+  *The mechanism is corrected, and the window measured, in 0022.*
 - *The latch was not seen to fail on a real monitor move*, which would have
   moved the owner's workspaces. Its rule is `Model.screenKeyAfter()`, held in
   both engines. A live mutant without the construction-time latch kept the
