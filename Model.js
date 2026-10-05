@@ -863,7 +863,7 @@ function onScreen(value, key) {
 function withScreen(value, key, on) {
   var want = String(key || "")
   var list = screenList(value).filter(function (k) { return k !== want })
-  if (on && want !== "") list.push(want)
+  if (on) list.push(want)
   return membersValue(list, value)
 }
 
