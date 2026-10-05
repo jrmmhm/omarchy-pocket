@@ -74,6 +74,9 @@ QtObject {
       inlineWrites++
       lastSettings = settings
       if (modelDelta) win.secondPocket.settings = JSON.parse(JSON.stringify(settings))
+      // The other screen's pocket, once it is in play: the delta path patches
+      // every instance of the entry, on every surface (Bar.qml::applySettingsDelta).
+      if (modelDelta && win2.pocket.bar) win2.pocket.settings = JSON.parse(JSON.stringify(settings))
       return true
     }
     // Present and refusing, exactly as the facade's is for a plugin that does
@@ -166,6 +169,44 @@ QtObject {
 
     property var pocketItem: loaderA.item
     property Pk.BarWidget secondPocket: pocketB
+  }
+
+  // A second bar surface, standing in for the second monitor: its own window,
+  // its own pocket and its own copy of the member, as the bar builds one per
+  // screen. Both pockets share the one layout entry and the one facade.
+  property FloatingWindow win2: FloatingWindow {
+    id: win2
+    visible: true
+
+    Item {
+      property string moduleName: "jrmmhm.pocket"
+      property string region: "right"
+      property var activeItem: pocketC
+      property bool hovered: false
+      property bool dragSource: false
+      width: 27
+      height: 26
+
+      Pk.BarWidget {
+        id: pocketC
+        settings: ({ members: "omarchy.audio" })
+      }
+    }
+
+    Item {
+      id: memberSlot2
+      property string moduleName: "omarchy.audio"
+      property string region: "right"
+      property var activeItem: memberItem2
+      property bool hovered: false
+      property bool dragSource: false
+      width: 27
+      height: 26
+
+      Item { id: memberItem2; anchors.fill: parent }
+    }
+
+    property Pk.BarWidget pocket: pocketC
   }
 
   property Timer starter: Timer {
@@ -530,6 +571,143 @@ QtObject {
     probe("and the inline writer is not asked as well",
           function () { return harness.fakeShell.inlineWrites }, writes)
     harness.fakeShell.mutatorConfig = null
+
+    Qt.callLater(harness.step9)
+  }
+
+  // ------------------------------------------------------ two screens
+  //
+  // The pin and the lock are per screen (docs/decisions/0021): one pocket on
+  // each of two surfaces, one shared entry, and every write handed back to
+  // both, the way the delta path does it. Each click must change its own
+  // screen and leave the other's state exactly where it was -- including when
+  // the writing pocket holds the stale list 0018 measured, and on the mutator
+  // path when its `settings` lag the file.
+
+  function buttonOf(pocket) { return pocket.children[0] }
+
+  function step9() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    c.bar = harness.facade
+    c.moduleName = "jrmmhm.pocket"
+    b.screenKey = "eDP-1"
+    c.screenKey = "ASUS VG289"
+    harness.facade.layoutConfig = ({ left: [], center: [], right: [
+      { id: "omarchy.audio" }, { id: "jrmmhm.pocket", members: "omarchy.audio" }] })
+    harness.fakeShell.modelDelta = true
+    b.settings = ({ members: "omarchy.audio" })
+    c.settings = ({ members: "omarchy.audio" })
+    Qt.callLater(harness.step10)
+  }
+
+  function step10() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    // Offscreen, an overlay reports the pointer on the bar; every fold below is
+    // about the screens, not about that.
+    if (c.overlay) c.overlay.hovered = false
+    b.overlay.hovered = false
+    b.expanded = false
+    c.expanded = false
+
+    probe("the second screen's pocket holds its own copy of the member",
+          function () { return c.resolution.slots.length === 1 && c.resolution.slots[0] === memberSlot2 }, true)
+
+    harness.buttonOf(b).triggerPress(Qt.RightButton)
+    probe("a lock on one screen names that screen",
+          function () { return harness.fakeShell.lastSettings.locked }, "eDP-1")
+    probe("and locks that screen's pocket", function () { return b.locked }, true)
+    probe("and not the other screen's", function () { return c.locked }, false)
+    // Asked through holdOpen rather than `expanded`: offscreen the pocket's own
+    // HoverHandler can already report a hover, and then nothing changes to
+    // open it.
+    memberSlot2.hovered = true
+    memberSlot.hovered = true
+    probe("the other screen's member still holds its pocket open on hover",
+          function () { return c.holdOpen }, true)
+    probe("while this screen's member no longer does", function () { return b.holdOpen }, false)
+    memberSlot2.hovered = false
+    memberSlot.hovered = false
+    c.expanded = false
+
+    harness.buttonOf(c).triggerPress(Qt.LeftButton)
+    probe("a pin on the other screen names that screen",
+          function () { return harness.fakeShell.lastSettings.pinned }, "ASUS VG289")
+    probe("and carries the first screen's lock unchanged",
+          function () { return harness.fakeShell.lastSettings.locked }, "eDP-1")
+    probe("the pinned screen is pinned", function () { return c.pinned }, true)
+    probe("the first screen is not", function () { return b.pinned }, false)
+
+    harness.buttonOf(c).triggerPress(Qt.RightButton)
+    probe("locking the pinned screen adds it to the lock and drops only its pin",
+          function () {
+            return JSON.stringify([harness.fakeShell.lastSettings.locked,
+                                   harness.fakeShell.lastSettings.pinned])
+          }, JSON.stringify(["eDP-1, ASUS VG289", ""]))
+    probe("both screens are locked now", function () { return b.locked && c.locked }, true)
+
+    harness.buttonOf(b).triggerPress(Qt.RightButton)
+    probe("unlocking one screen leaves the other locked",
+          function () { return harness.fakeShell.lastSettings.locked }, "ASUS VG289")
+    probe("so that one reads unlocked", function () { return b.locked }, false)
+    probe("and the other still locked", function () { return c.locked }, true)
+
+    // The stale list of 0018: this screen's pocket holds members in the old
+    // order. Its pin still carries the other screen's lock, and the members go
+    // out in the bar's order. Writes are not handed back from here, as in
+    // step7, or the order repair's own write would end the stale state.
+    harness.fakeShell.modelDelta = false
+    harness.facade.layoutConfig = ({ left: [], center: [], right: [
+      { id: "omarchy.network" }, { id: "omarchy.audio" },
+      { id: "jrmmhm.pocket", members: "omarchy.audio, omarchy.network" }] })
+    b.settings = ({ members: "omarchy.audio, omarchy.network", locked: "ASUS VG289" })
+    Qt.callLater(harness.step11)
+  }
+
+  function step11() {
+    var b = harness.pocket()
+    var c = win2.pocket
+    probe("the first screen's pocket holds the stale order", function () { return b.membersMisordered }, true)
+    harness.buttonOf(b).triggerPress(Qt.LeftButton)
+    probe("its pin carries the other screen's lock under a stale list",
+          function () {
+            var s = harness.fakeShell.lastSettings
+            return JSON.stringify([s.members, s.locked, s.pinned])
+          }, JSON.stringify(["omarchy.network, omarchy.audio", "ASUS VG289", "eDP-1"]))
+    probe("and the other screen is still locked and unpinned",
+          function () { return c.locked && !c.pinned }, true)
+
+    // The mutator path, with this pocket's `settings` behind the file: the file
+    // already holds the other screen's lock, the pocket does not know it yet.
+    // The list is read inside the mutator, so that lock survives.
+    harness.fakeShell.mutatorConfig = ({ bar: { layout: { left: [], center: [], right: [
+      { id: "omarchy.network" }, { id: "omarchy.audio" },
+      { id: "jrmmhm.pocket", members: "omarchy.network, omarchy.audio",
+        locked: "ASUS VG289", pinned: "eDP-1" }] } } })
+    b.settings = ({ members: "omarchy.network, omarchy.audio", pinned: "eDP-1" })
+    harness.buttonOf(b).triggerPress(Qt.RightButton)
+    probe("on the mutator path a lagging pocket's lock keeps the other screen's",
+          function () { return JSON.stringify(harness.fakeShell.mutatorConfig.bar.layout.right[2]) },
+          JSON.stringify({ id: "jrmmhm.pocket", members: "omarchy.network, omarchy.audio",
+                           locked: "ASUS VG289, eDP-1", pinned: "" }))
+    harness.fakeShell.mutatorConfig = null
+
+    // A second Pocket entry: Pocket may not write. A persisted pin is not read
+    // there, because no click could release it; a lock set by hand is, as it
+    // always was, because it is the user's to keep.
+    harness.facade.layoutConfig = ({ left: [], center: [], right: [
+      { id: "omarchy.audio" }, { id: "jrmmhm.pocket" }, { id: "jrmmhm.pocket" }] })
+    b.settings = ({ members: "omarchy.audio", pinned: "eDP-1", locked: "eDP-1" })
+    probe("with a second entry the pocket may not write", function () { return b.mayWriteMembers }, false)
+    probe("so a persisted pin is not read", function () { return b.pinned }, false)
+    probe("but a lock set by hand still holds", function () { return b.locked }, true)
+
+    // A screen the lists have never named starts unpinned and unlocked.
+    c.screenKey = "DELL U2720Q"
+    c.settings = ({ members: "omarchy.audio", locked: "eDP-1, ASUS VG289", pinned: "eDP-1, ASUS VG289" })
+    probe("a never-seen screen starts unlocked", function () { return c.locked }, false)
+    probe("and unpinned", function () { return c.pinned }, false)
 
     Qt.callLater(harness.finish)
   }
