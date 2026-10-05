@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A right click locks the pocket shut.** A locked pocket does not open when the
+  pointer passes over it, closes at once when you lock it, and dims its mark. A
+  left click still pins it open, and a member's panel opened by keybinding still
+  opens it. The lock is a setting, `locked`, on Pocket's own entry, so it
+  survives a restart and holds on every screen. Requested in #20;
+  [decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
+  owns the account.
+- **The tooltip says what both clicks do**, directly under its first line, and
+  what each would do next: pin or release, lock or unlock.
+
+### Changed
+
+- **A right click no longer pins.** It locks instead. The left and middle
+  clicks pin as before.
+- The tooltip's first line reads `Pocket pinned open` while pinned and
+  `Pocket locked shut — holding N widgets` while locked. The separate
+  `Pinned — click to release` line and the `click to keep it open` suffix are
+  gone; the click hints replace them.
+
+### Fixed
+
+- **A members write no longer undoes a hand edit to Pocket's own entry** on
+  Omarchy 4.0.3 and later. After such an edit, the next write put a key you had
+  deleted back and moved a key you had inserted to the end of the entry. Both
+  were measured on a live 4.0.4 bar. The write is now built from the settings
+  the host hands the running widget, which the edit has already updated (#16,
+  [decision 0019](docs/decisions/0019-the-inline-write-starts-from-the-injected-settings.md)).
+
 ## [0.4.1] — 2026-09-11
 
 A member reordered inside the pocket fanned out on its own on Omarchy 4.0.3,

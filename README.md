@@ -187,13 +187,15 @@ it by hand:
 | Setting | Type | Default | What it does |
 | :--- | :--- | :--- | :--- |
 | `members` | string or array | `""` | Ids of the bar widgets to tuck away |
+| `locked` | boolean | `false` | Keeps the pocket shut when the pointer passes over it — see [The mark](#the-mark) |
 
 `members` also accepts a JSON array, which is the nicer shape by hand. Pocket
 writes back whichever shape it finds, and never touches anything else on the
-entry. On Omarchy 4.0.3 that holds with one gap after a hand edit to that
-entry, tracked in [#16](https://github.com/jrmmhm/omarchy-pocket/issues/16),
-and on the assumption that no other plugin writes into Pocket's `settings` —
-`mergedEntrySettings()` in `Model.js` explains why. The manifest declares the
+entry — on Omarchy 4.0.3 on the assumption that no other plugin writes into
+Pocket's `settings`, which `mergedEntrySettings()` in `Model.js` explains.
+`locked` is normally set with a right click; by hand, `true` locks, and so does
+the string `"true"` that `omarchy bar set jrmmhm.pocket locked true` writes.
+Anything else leaves it unlocked. The manifest declares the
 setting as a string because Omarchy's settings form can only produce one; both
 shapes work when you edit the file yourself. The file hot-reloads, so there is
 no restart after an edit.
@@ -254,11 +256,16 @@ cascade. Deliberately not a chevron: the tray sits in the same section doing a
 visually similar thing, and two identical glyphs beside each other are two
 things nobody can tell apart.
 
-**Click the mark to pin it open**, click again to release. That is the way out
-of the cases where no leave event is ever coming — a workspace switch that
+The tooltip says what the two clicks do, directly under its first line, and
+what each would do *next* — `Left click: pin it open` becomes `Left click:
+release the pin` once it is pinned.
+
+**Left-click the mark to pin it open**, click again to release. That is the way
+out of the cases where no leave event is ever coming — a workspace switch that
 teleports the cursor, an application grabbing the pointer. A pinned mark stays
 lit for as long as it is pinned, in the same alert colour a drag uses; the
-tooltip is what tells the two apart, and it says `Pinned` in words.
+tooltip is what tells the two apart, and it says `Pocket pinned open` in words.
+The middle click pins too.
 
 The pin holds until you click it again or until the bar is rebuilt, and any
 change to the layout rebuilds it: a drop, a member being put back on the right
@@ -266,6 +273,20 @@ side, enabling any plugin at all. It is never written to disk either, because
 `shell.json` is shared by every bar surface and persisting it would make one
 screen's transient state everyone's. Treat it as a pointer aid for the next few
 seconds, not as a mode.
+
+**Right-click the mark to lock it shut**, right-click again to unlock. A locked
+pocket does not open when the pointer passes over it, and its mark is dimmed.
+Locking closes it at once, even with the pointer still on it. This one *is* a
+mode: it is the `locked` setting on Pocket's own entry, so it survives a
+restart and holds on every screen at once. Two things still open a locked
+pocket. A left click pins it open as usual, and once you release the pin it is
+locked again. A member's panel opened by keybinding opens it as well, because
+that panel hangs from a widget that has to be drawn. A right click on a pinned
+pocket drops the pin on that screen and locks. Where Pocket may not write — a
+second Pocket entry, for one — the right click does nothing, and the tooltip
+leaves it out.
+[Decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
+has why the two clicks are split this way.
 
 ## Good to know
 
@@ -396,7 +417,8 @@ Three things change your first hour with it:
   [decision 0011](docs/decisions/0011-the-tooltip-escapes-because-it-does-not-own-its-sink.md).
 - **The tooltip is a snapshot.** The bar reads a widget's tooltip once, when the
   pointer arrives, and does not update it while the pointer stays. So the lines
-  that describe a state your pointer just caused — "Pocket open", "Pinned" —
+  that describe a state your pointer just caused — "Pocket open", "Pocket
+  pinned open", "Pocket locked shut" and the click hints that go with them —
   appear the *next* time you point at the mark, not the moment they become true.
 
 </details>
@@ -458,7 +480,8 @@ would break on.
 `BarWidget.qml` keeps only what needs live objects. `tests/qml/` loads it in
 Quickshell and pins the drop steering — which fails silently in both directions
 it can fail — the membership a drag is decided against, the fan-out order when
-the member list it holds lags the bar, how the widget degrades
+the member list it holds lags the bar, what the two clicks do through the
+host's own button, how the widget degrades
 when the host stops publishing a symbol it reads, and that its copy of the bar's
 drop rule still agrees with the bar's own, swept pixel by pixel against the
 installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips
