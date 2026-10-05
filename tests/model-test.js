@@ -356,6 +356,75 @@ check("the string the bar CLI writes locks", Model.isLocked("true"), true)
 for (const value of [false, "false", undefined, null, "", 1, "yes", "TRUE ", {}]) {
   check(`${JSON.stringify(value)} does not lock`, Model.isLocked(value), false)
 }
+
+// ------------------------------------------------------ per-screen state
+
+// Which screen a pocket is on (docs/decisions/0021). The fields are the ones
+// Quickshell's ShellScreen carries; the values are the ones measured on the
+// author's laptop, where the serial number is empty.
+check("a laptop panel is named by its connector",
+  Model.screenKey({ name: "eDP-1", model: "0x9EA9", serialNumber: "" }), "eDP-1")
+check("so are the other internal connector kinds",
+  [Model.screenKey({ name: "LVDS-1", model: "x" }), Model.screenKey({ name: "DSI-2", model: "x" })],
+  ["LVDS-1", "DSI-2"])
+check("an external screen is named by its model, not its port",
+  Model.screenKey({ name: "HDMI-A-1", model: "ASUS VG289", serialNumber: "" }), "ASUS VG289")
+check("the same monitor on another port keeps its name",
+  Model.screenKey({ name: "DP-3", model: "ASUS VG289" }), "ASUS VG289")
+check("a serial number, where the stack delivers one, tells twins apart",
+  Model.screenKey({ name: "DP-2", model: "VS248", serialNumber: "J5LMQS157979" }), "VS248 J5LMQS157979")
+check("a screen without a model falls back to its connector",
+  Model.screenKey({ name: "DP-1", model: "", serialNumber: "" }), "DP-1")
+check("a model with a comma cannot split the list it is written into",
+  Model.screenKey({ name: "DP-1", model: "Acme, Inc  27\"" }), "Acme Inc 27\"")
+check("only the connector's start marks an internal panel",
+  Model.screenKey({ name: "HDMI-eDP-1", model: "TV" }), "TV")
+for (const screen of [null, undefined, {}, { name: "" }, { name: "  ", model: "X" }]) {
+  check(`no screen name means no key: ${JSON.stringify(screen)}`, Model.screenKey(screen), "")
+}
+check("missing fields read as empty, never as the word undefined",
+  Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
+
+// The list a per-screen setting holds. Split on commas only: a model name has
+// spaces in it, which is exactly what toList() splits `members` on.
+check("a comma string names its screens",
+  Model.screenList("eDP-1, ASUS VG289"), ["eDP-1", "ASUS VG289"])
+check("an array names its screens", Model.screenList(["ASUS VG289", "eDP-1"]), ["ASUS VG289", "eDP-1"])
+check("blanks and repeats are dropped",
+  Model.screenList(" eDP-1 ,, eDP-1, ,ASUS VG289 "), ["eDP-1", "ASUS VG289"])
+check("an array's non-strings are dropped", Model.screenList(["eDP-1", 5, null, { id: "x" }]), ["eDP-1"])
+// The shape a hand-written array reaches QML in fails Array.isArray().
+check("an array-like value is read like an array",
+  Model.screenList({ length: 2, 0: "eDP-1", 1: "ASUS VG289" }), ["eDP-1", "ASUS VG289"])
+// The unreleased boolean `locked` of 0020 names no screen.
+for (const value of [true, false, undefined, null, "", 1, {}]) {
+  check(`${JSON.stringify(value)} names no screen`, Model.screenList(value), [])
+}
+
+check("a listed screen is on", Model.onScreen("eDP-1, ASUS VG289", "ASUS VG289"), true)
+check("an unlisted screen is off", Model.onScreen("eDP-1", "ASUS VG289"), false)
+check("a never-seen screen is off", Model.onScreen(["eDP-1", "ASUS VG289"], "DELL U2720Q"), false)
+check("no key is never on, even against a blank entry", Model.onScreen(["", "eDP-1"], ""), false)
+check("the legacy boolean is on for no screen", Model.onScreen(true, "eDP-1"), false)
+check("a name is matched whole, not as a prefix", Model.onScreen("ASUS VG2", "ASUS VG289"), false)
+
+check("switching a screen on appends it and keeps the others",
+  Model.withScreen(["eDP-1"], "ASUS VG289", true), ["eDP-1", "ASUS VG289"])
+check("switching it off removes it and keeps the others",
+  Model.withScreen(["eDP-1", "ASUS VG289"], "eDP-1", false), ["ASUS VG289"])
+check("switching on twice lists it once",
+  Model.withScreen(["eDP-1"], "eDP-1", true), ["eDP-1"])
+check("switching off an unlisted screen changes nothing",
+  Model.withScreen("eDP-1", "ASUS VG289", false), "eDP-1")
+check("a comma string stays a comma string",
+  Model.withScreen("eDP-1", "ASUS VG289", true), "eDP-1, ASUS VG289")
+check("nothing to keep writes the string the manifest declares",
+  Model.withScreen("", "eDP-1", true), "eDP-1")
+check("the legacy boolean is replaced by a list of this screen",
+  Model.withScreen(true, "ASUS VG289", true), "ASUS VG289")
+check("an unlock over the legacy boolean writes an empty list",
+  Model.withScreen(true, "ASUS VG289", false), "")
+check("no key switches nothing on", Model.withScreen(["eDP-1"], "", true), ["eDP-1"])
 contains("missing members are named",
   Model.describe({ members: ["a"], missing: ["a"] }), "Not on this bar: a")
 contains("the center anchor refusal is named",
@@ -1353,6 +1422,21 @@ check("writing id is refused",
   Model.mergedEntrySettings({ showCount: true }, "id", "evil"),
   { showCount: true })
 
+// The function form a per-screen write uses: the new value is computed from the
+// value the live copy holds, in its own place, and nothing else moves.
+check("a function value is handed the live value",
+  Model.mergedEntrySettings({ members: "a", pinned: ["eDP-1"], note: "x" }, "pinned",
+    v => Model.withScreen(v, "ASUS VG289", true)),
+  { members: "a", pinned: ["eDP-1", "ASUS VG289"], note: "x" })
+check("and keeps the key's place in the entry",
+  Object.keys(Model.mergedEntrySettings({ locked: "", members: "a" }, "locked", v => v + "eDP-1")),
+  ["locked", "members"])
+check("a function value over a key the entry lacks is handed undefined",
+  Model.mergedEntrySettings({ members: "a" }, "locked", v => v === undefined ? "none" : "some"),
+  { members: "a", locked: "none" })
+check("a function value cannot write a refused key",
+  Model.mergedEntrySettings({ members: "a" }, "id", () => "evil"), { members: "a" })
+
 // The live copy is a writable property in a scene every plugin shares. A key
 // that disarms the entry is refused from it, so this plugin's own write cannot
 // become the way one arrives in the user's config.
@@ -1467,6 +1551,31 @@ onlyChange("a locked write reports it found the entry", shellFixture(),
   onlyChange("a bare string pocket entry is promoted by a locked write", config,
     c => Model.setEntrySetting(c, "right", SELF, "locked", true),
     e => { e.bar.layout.right[3] = { id: SELF, locked: true } })
+}
+
+// The per-screen write on the mutator path: computed inside the mutator from
+// the list the config holds, so a pocket whose `settings` lag cannot drop
+// another screen from it (docs/decisions/0021).
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].pinned = ["eDP-1"]
+  onlyChange("a per-screen write adds this screen to the list the file holds", config,
+    c => Model.setEntrySetting(c, "right", SELF, "pinned", v => Model.withScreen(v, "ASUS VG289", true)),
+    e => { e.bar.layout.right[3].pinned = ["eDP-1", "ASUS VG289"] })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].locked = "eDP-1, ASUS VG289"
+  onlyChange("a per-screen write removes only this screen", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", v => Model.withScreen(v, "eDP-1", false)),
+    e => { e.bar.layout.right[3].locked = "ASUS VG289" })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3] = SELF
+  onlyChange("a per-screen write promotes a bare string entry", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", v => Model.withScreen(v, "eDP-1", true)),
+    e => { e.bar.layout.right[3] = { id: SELF, locked: "eDP-1" } })
 }
 // A refused key leaves the whole file as it was, the way a refused entry does.
 // One case per word, so the guard is seen refusing each of them.

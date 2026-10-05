@@ -155,6 +155,33 @@ QtObject {
       function (c) { return Model.setEntrySetting(c, "right", self, "locked", true) },
       function (e) { e.bar.layout.right[3] = { id: self, locked: true } })
 
+    config = harness.shellFixture()
+    config.bar.layout.right[3].pinned = ["eDP-1"]
+    harness.onlyChange("V4 a per-screen write adds this screen to the list the file holds", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "pinned",
+          function (v) { return Model.withScreen(v, "ASUS VG289", true) })
+      },
+      function (e) { e.bar.layout.right[3].pinned = ["eDP-1", "ASUS VG289"] })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3].locked = "eDP-1, ASUS VG289"
+    harness.onlyChange("V4 a per-screen write removes only this screen", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "locked",
+          function (v) { return Model.withScreen(v, "eDP-1", false) })
+      },
+      function (e) { e.bar.layout.right[3].locked = "ASUS VG289" })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = self
+    harness.onlyChange("V4 a per-screen write promotes a bare string entry", config,
+      function (c) {
+        return Model.setEntrySetting(c, "right", self, "locked",
+          function (v) { return Model.withScreen(v, "eDP-1", true) })
+      },
+      function (e) { e.bar.layout.right[3] = { id: self, locked: "eDP-1" } })
+
     var refused = ["id", ""].concat(Model.RESERVED_ENTRY_KEYS)
     for (var w = 0; w < refused.length; w++) {
       config = harness.shellFixture()
@@ -325,6 +352,49 @@ QtObject {
     check("V4 does not lock on a missing setting", Model.isLocked(undefined), false)
     check("V4 does not lock on another string", Model.isLocked("yes"), false)
 
+    // Per-screen state, in the engine the bar runs. tests/model-test.js owns
+    // the reasoning per case; the lists here arrive as the sequence type a
+    // setting delivers, declared below.
+    check("V4 names a laptop panel by its connector",
+          Model.screenKey({ name: "eDP-1", model: "0x9EA9", serialNumber: "" }), "eDP-1")
+    check("V4 names an external screen by its model",
+          Model.screenKey({ name: "HDMI-A-1", model: "ASUS VG289", serialNumber: "" }), "ASUS VG289")
+    check("V4 adds a serial where there is one",
+          Model.screenKey({ name: "DP-2", model: "VS248", serialNumber: "J5LMQS157979" }),
+          "VS248 J5LMQS157979")
+    check("V4 falls back to the connector without a model",
+          Model.screenKey({ name: "DP-1", model: "" }), "DP-1")
+    check("V4 drops commas from a model", Model.screenKey({ name: "DP-1", model: "Acme, Inc" }),
+          "Acme Inc")
+    check("V4 reads missing fields as empty",
+          Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
+    check("V4 has no key without a screen", Model.screenKey(null), "")
+    check("V4 has no key without a name", Model.screenKey({ model: "X" }), "")
+    checkList("V4 splits a comma string on commas only",
+              Model.screenList("eDP-1, ASUS VG289"), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads the sequence type a setting delivers",
+              Model.screenList(harness.screensSetting), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads an array-like value like an array",
+              Model.screenList({ length: 2, 0: "eDP-1", 1: "ASUS VG289" }), ["eDP-1", "ASUS VG289"])
+    checkList("V4 reads the legacy boolean as no screen", Model.screenList(true), [])
+    check("V4 finds a listed screen in the sequence type",
+          Model.onScreen(harness.screensSetting, "ASUS VG289"), true)
+    check("V4 does not find a never-seen screen",
+          Model.onScreen(harness.screensSetting, "DELL U2720Q"), false)
+    check("V4 never finds the empty key", Model.onScreen(harness.screensSetting, ""), false)
+    checkList("V4 switches a screen off in the sequence type and keeps an array",
+              Model.withScreen(harness.screensSetting, "eDP-1", false), ["ASUS VG289"])
+    checkList("V4 switches a screen on once",
+              Model.withScreen(harness.screensSetting, "eDP-1", true), ["ASUS VG289", "eDP-1"])
+    check("V4 keeps a comma string a comma string",
+          Model.withScreen("eDP-1", "ASUS VG289", true), "eDP-1, ASUS VG289")
+    check("V4 replaces the legacy boolean with this screen",
+          Model.withScreen(true, "eDP-1", true), "eDP-1")
+    checkList("V4 hands a function value the live value",
+              Model.mergedEntrySettings({ members: "a", pinned: harness.screensSetting }, "pinned",
+                function (v) { return Model.withScreen(v, "eDP-1", false) }),
+              { members: "a", pinned: ["ASUS VG289"] })
+
     // Bounded on the other axis too, which the per-value cap does not cover.
     // Twice, because the harmless flood and the hostile one reach the caps by
     // different routes, and the hostile one is the shape that was measured
@@ -490,4 +560,8 @@ QtObject {
   property var cascadeLeft: ["jrmmhm.pocket", "omaplug", "ianswope.snapshots", "mehiel.darky",
                              "omarchy.tray"]
   property var cascadeMembers: ["ianswope.snapshots", "mehiel.darky", "omaplug"]
+
+  // A per-screen list as a hand-written array arrives, declared for the same
+  // reason as the fixtures above.
+  property var screensSetting: [" eDP-1", "ASUS VG289", "eDP-1", 5]
 }
