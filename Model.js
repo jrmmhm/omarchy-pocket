@@ -785,6 +785,17 @@ function cascadeRanks(ids, layoutIds, nearestAtEnd) {
   return ranks
 }
 
+// ------------------------------------------------------------------ lock
+
+// Whether the `locked` setting says the pocket is locked shut. The boolean is
+// what the host writes for a JSON `true`; the string is what `omarchy bar set
+// jrmmhm.pocket locked true` writes without `--json`, and a lock typed that way
+// must not silently do nothing. Anything else is unlocked — a lock that came
+// on by accident would hide widgets the user cannot find a reason for.
+function isLocked(value) {
+  return value === true || value === "true"
+}
+
 // ---------------------------------------------------------- tooltip text
 
 // The plugin's text boundary. Everything a value contributes to the tooltip
@@ -935,9 +946,10 @@ function tooltipList(values) {
   return rest > 0 ? line + ", +" + rest + " more" : line
 }
 
-// One tooltip line per condition, most actionable first. The pocket is the only
-// place these problems surface: a member that never appears produces no error
-// anywhere else in the shell.
+// One tooltip line per condition: what the pocket is doing, what the two
+// buttons would do, and then every problem, most actionable first. The pocket
+// is the only place these problems surface: a member that never appears
+// produces no error anywhere else in the shell.
 //
 // Every value it interpolates goes through tooltipList(), including the three
 // lists that can only hold ids the allowlist already accepted. That those are
@@ -989,13 +1001,28 @@ function describe(state) {
     lines.push("Pocket holding nothing — nothing in `members` could be used")
   } else if (held === 0) {
     lines.push("Pocket holding nothing — none of the widgets it names can be used")
+  } else if (s.pinned) {
+    // Ahead of the lock, because the pin wins: a pinned pocket is open whether
+    // or not it is locked, and this line describes what is on screen.
+    lines.push("Pocket pinned open")
+  } else if (s.locked) {
+    lines.push("Pocket locked shut — holding " + held + " widget" + (held === 1 ? "" : "s"))
   } else if (s.expanded) {
-    lines.push("Pocket open — click to keep it open")
+    lines.push("Pocket open")
   } else {
     lines.push("Pocket holding " + held + " widget" + (held === 1 ? "" : "s"))
   }
 
-  if (s.pinned) lines.push("Pinned — click to release")
+  // What the two buttons do, directly under the first line — the one thing on
+  // the mark nothing else explains. Each names what THIS click would do next,
+  // so the line changes with the state. Not on an empty pocket, where neither
+  // does anything worth saying, unless one of them is what is holding it. The
+  // right click is left out where it cannot write (`lockable`), because a hint
+  // for a click that does nothing is a hint that lies.
+  if (!unknown && (held > 0 || s.pinned || s.locked)) {
+    lines.push("Left click: " + (s.pinned ? "release the pin" : "pin it open"))
+    if (s.lockable !== false) lines.push("Right click: " + (s.locked ? "unlock" : "lock it shut"))
+  }
   // Ahead of the rejected line, because it is the earlier failure: these
   // entries never became an id at all, so nothing downstream had anything to
   // refuse. Positions rather than values, for the reason unreadableEntries()
@@ -1039,7 +1066,7 @@ if (typeof module !== "undefined" && module.exports) {
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
-                     mergedEntrySettings: mergedEntrySettings,
+                     mergedEntrySettings: mergedEntrySettings, isLocked: isLocked,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }
 }

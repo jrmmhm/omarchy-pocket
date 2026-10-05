@@ -19,7 +19,8 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "members": ""
+      "members": "",
+      "locked": false
     },
     "schema": [
       {
@@ -27,6 +28,12 @@
         "type": "string",
         "label": "Widget ids to tuck away, comma separated",
         "description": "Usually set by dragging widgets onto the pocket. Edit it here to name them by hand."
+      },
+      {
+        "key": "locked",
+        "type": "boolean",
+        "label": "Locked shut",
+        "description": "Keeps the pocket closed when the pointer passes over it. Usually set by right-clicking the pocket."
       }
     ]
   }

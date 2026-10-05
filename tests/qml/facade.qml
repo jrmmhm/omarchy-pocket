@@ -61,9 +61,18 @@ QtObject {
                                          right: [{ id: "jrmmhm.pocket" }] } })
     property int inlineWrites: 0
     property var lastSettings: null
+    // Off for the first steps, which predate it. When on, a write is handed back
+    // to the surviving pocket the way the host's delta path does it
+    // (Bar.qml::applySettingsDelta assigns the widget's `settings`), so the lock
+    // can be watched arriving rather than assumed.
+    property bool modelDelta: false
+    // A refusing writer, for the case where the click has to change nothing.
+    property bool refuse: false
     function updateEntryInline(id, settings) {
+      if (refuse) return false
       inlineWrites++
       lastSettings = settings
+      if (modelDelta) win.secondPocket.settings = JSON.parse(JSON.stringify(settings))
       return true
     }
     // Present and refusing, exactly as the facade's is for a plugin that does
@@ -130,6 +139,21 @@ QtObject {
       }
     }
 
+    // A member, for the lock: the pointer resting on it is what `memberHovered`
+    // reads, and its widget is what a panel opened by keybinding hangs from.
+    Item {
+      id: memberSlot
+      property string moduleName: "omarchy.audio"
+      property string region: "right"
+      property var activeItem: memberItem
+      property bool hovered: false
+      property bool dragSource: false
+      width: 27
+      height: 26
+
+      Item { id: memberItem; anchors.fill: parent }
+    }
+
     property var pocketItem: loaderA.item
     property Pk.BarWidget secondPocket: pocketB
   }
@@ -150,6 +174,14 @@ QtObject {
 
   function after(step) {
     harness.pending = step
+    later.interval = 100
+    later.restart()
+  }
+
+  // Long enough for the fold timer (120 ms a tick) to have had its say.
+  function afterFold(step) {
+    harness.pending = step
+    later.interval = 400
     later.restart()
   }
 
@@ -266,6 +298,156 @@ QtObject {
           function () { return win.secondPocket.overlay === harness.survivor }, true)
     probe("whose hover handler is still armed",
           function () { return harness.survivor.hoverHandler.enabled }, true)
+
+    Qt.callLater(harness.step5)
+  }
+
+  // ------------------------------------------------------------- the lock
+  //
+  // Driven through the widget's REAL button: triggerPress() is the host's own
+  // WidgetButton function, the one its MouseArea and the bar's click forwarding
+  // both call with the button that was pressed. What it reaches is the plugin's
+  // onPressed, and from there the write, over the real facade, to the inline
+  // writer — the whole path a right click takes on 4.0.3 and later, short of
+  // the pointer itself. See docs/decisions/0020.
+
+  function pocket() { return win.secondPocket }
+  function button() { return win.secondPocket.children[0] }
+  function tip() { return harness.button().tooltipText }
+
+  function step5() {
+    var p = harness.pocket()
+    harness.fakeShell.modelDelta = true
+    harness.fakeShell.inlineWrites = 0
+    p.settings = ({ members: "omarchy.audio" })
+
+    // Offscreen, the overlay's surface HoverHandler reports the pointer as on
+    // the bar, and the fold timer waits for it to leave for as long as it says
+    // so. Every fold below is about the lock, not about that, so the pointer is
+    // taken off the bar here and the pocket starts closed.
+    p.overlay.hovered = false
+    p.expanded = false
+    probe("the pointer is off the bar for these steps",
+          function () { return p.pointerOnBar }, false)
+
+    probe("the pocket holds its member", function () { return p.resolution.slots.length }, 1)
+    probe("its button is the host's, with the press the host calls",
+          function () { return typeof harness.button().triggerPress }, "function")
+    probe("the tooltip explains both clicks under the first line",
+          function () { return harness.tip().split("\n").slice(0, 3).join("|") },
+          "Pocket holding 1 widget|Left click: pin it open|Right click: lock it shut")
+
+    memberSlot.hovered = true
+    probe("unlocked, the pointer on a member opens it", function () { return p.expanded }, true)
+
+    // The pointer is still on the member when the right click lands -- that is
+    // where it is on a real bar -- and the fold must not wait for it to leave.
+    harness.button().triggerPress(Qt.RightButton)
+    probe("a right click writes the lock once", function () { return harness.fakeShell.inlineWrites }, 1)
+    probe("as true", function () { return harness.fakeShell.lastSettings.locked }, true)
+    probe("carrying members unchanged",
+          function () { return harness.fakeShell.lastSettings.members }, "omarchy.audio")
+    probe("and the pocket reads it back locked", function () { return p.locked }, true)
+    probe("locking folds at once, pointer or not", function () { return p.expanded }, false)
+    probe("the locked mark is dimmed", function () { return harness.button().dimmed }, true)
+    probe("the tooltip says it is locked and offers the unlock",
+          function () { return harness.tip().split("\n").slice(0, 3).join("|") },
+          "Pocket locked shut — holding 1 widget|Left click: pin it open|Right click: unlock")
+
+    memberSlot.hovered = false
+    memberSlot.hovered = true
+    probe("locked, the pointer arriving on a member does not open it",
+          function () { return p.expanded }, false)
+
+    harness.afterFold(harness.step6)
+  }
+
+  function step6() {
+    var p = harness.pocket()
+    probe("and it stays shut while the pointer rests there", function () { return p.expanded }, false)
+
+    // The left click pins, exactly as before, and leaves the lock alone.
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("a left click on a locked pocket pins it open", function () { return p.expanded }, true)
+    probe("and writes nothing", function () { return harness.fakeShell.inlineWrites }, 1)
+    probe("so it is still locked", function () { return p.locked }, true)
+    probe("a pinned mark is not dimmed", function () { return harness.button().dimmed }, false)
+    probe("the first line follows the pin, the right click still unlocks",
+          function () { return harness.tip().split("\n").slice(0, 3).join("|") },
+          "Pocket pinned open|Left click: release the pin|Right click: unlock")
+
+    harness.button().triggerPress(Qt.MiddleButton)
+    probe("a middle click is the left click, as it always was", function () { return p.pinned }, false)
+
+    // Unlocking with the pointer on a member opens the pocket under it.
+    harness.button().triggerPress(Qt.RightButton)
+    probe("a second right click writes the unlock",
+          function () { return harness.fakeShell.lastSettings.locked }, false)
+    probe("the pocket reads it back unlocked", function () { return p.locked }, false)
+    probe("and the pointer already on a member opens it", function () { return p.expanded }, true)
+
+    // A pinned pocket that is locked from this screen drops its pin and folds.
+    memberSlot.hovered = false
+    p.pinned = true
+    harness.button().triggerPress(Qt.RightButton)
+    probe("locking a pinned pocket drops the pin", function () { return p.pinned }, false)
+    probe("and folds it", function () { return p.expanded }, false)
+
+    // A panel opened from a member holds it open through the lock.
+    harness.button().triggerPress(Qt.RightButton)
+    probe("unlocked again", function () { return p.locked }, false)
+    harness.facade.activePopout = memberItem
+    probe("a member's panel opens the pocket", function () { return p.expanded }, true)
+    harness.button().triggerPress(Qt.RightButton)
+    probe("locking under a member's open panel locks", function () { return p.locked }, true)
+    probe("but does not fold away the widget the panel hangs from",
+          function () { return p.expanded }, true)
+    // The offscreen hover answers again whenever a slot changes visibility, so
+    // the pointer is taken off the bar once more before the fold is asked for.
+    p.overlay.hovered = false
+    harness.facade.activePopout = null
+
+    harness.afterFold(harness.step7)
+  }
+
+  function step7() {
+    var p = harness.pocket()
+    probe("once the panel closes, the locked pocket folds", function () { return p.expanded }, false)
+
+    // A refused write changes nothing at all: the pin the click dropped comes
+    // back, and the lock stays where it was.
+    harness.button().triggerPress(Qt.RightButton)
+    probe("unlocked for the refusal case", function () { return p.locked }, false)
+    p.pinned = true
+    harness.fakeShell.refuse = true
+    harness.button().triggerPress(Qt.RightButton)
+    probe("a refused lock leaves the pocket unlocked", function () { return p.locked }, false)
+    probe("and gives the pin back", function () { return p.pinned }, true)
+    harness.fakeShell.refuse = false
+    p.pinned = false
+
+    // The stale list decision 0018 measured: shell.json holds the new order and
+    // the running pocket the old one, because the host hands it back. Modelled
+    // by not handing writes back, so the order repair's own write never reaches
+    // `settings`. A lock written now must not carry the old order into the file.
+    harness.fakeShell.modelDelta = false
+    harness.facade.layoutConfig = ({ left: [], center: [], right: [
+      { id: "omarchy.network" }, { id: "omarchy.audio" }, { id: "jrmmhm.pocket" }] })
+    p.settings = ({ members: "omarchy.audio, omarchy.network" })
+
+    harness.after(harness.step8)
+  }
+
+  function step8() {
+    var p = harness.pocket()
+    probe("the running pocket still holds the old order",
+          function () { return p.membersMisordered }, true)
+    harness.button().triggerPress(Qt.RightButton)
+    probe("a lock written over a stale list is a lock",
+          function () { return harness.fakeShell.lastSettings.locked }, true)
+    probe("and carries members in the bar's order, not the stale one",
+          function () { return harness.fakeShell.lastSettings.members },
+          "omarchy.network, omarchy.audio")
 
     Qt.callLater(harness.finish)
   }

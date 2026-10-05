@@ -349,6 +349,11 @@ BarWidget {
   property bool expanded: false
   property bool pinned: false
 
+  // Locked shut: the pointer no longer opens the pocket. Unlike the pin this is
+  // a mode rather than a pointer aid, so it is a setting — it survives a restart
+  // and a rebuild, and holds on every screen at once. See docs/decisions/0020.
+  readonly property bool locked: Model.isLocked(setting("locked", false))
+
   // Every slot this pocket has currently taken over. Kept as its own list
   // rather than derived from `resolution`, because the restore has to reach
   // slots that have *left* the member list — and, on destruction, slots the
@@ -400,8 +405,12 @@ BarWidget {
   // the mouse grab, so every hover flag is frozen at whatever it last was.
   readonly property bool dragHoldsOpen: expanded && dragSource !== null
 
-  readonly property bool holdOpen: pinned || selfHovered || memberHovered || memberPanelOpen
-    || foreignPanelHold || dragHoldsOpen
+  // The lock takes away the pointer's two terms and nothing else. The pin still
+  // wins, because it is the click the user made last on this screen; a member's
+  // panel still opens it, because a panel summoned by keybinding is asked for
+  // and has to hang from a widget that is drawn.
+  readonly property bool holdOpen: pinned || (!locked && (selfHovered || memberHovered))
+    || memberPanelOpen || foreignPanelHold || dragHoldsOpen
 
   // Whether the pointer is still somewhere on this bar, which is what the fold
   // timer waits for. The host's own `barHovered` counts across every surface —
@@ -1372,6 +1381,25 @@ BarWidget {
 
   onHoldOpenChanged: if (holdOpen) expanded = true
 
+  // Locking folds at once, without waiting for the pointer to leave the bar the
+  // way the fold timer does — the pointer is on the mark, because that is where
+  // the right click was. Only when nothing else holds it: folding underneath a
+  // member's open panel, or on another screen whose pocket is pinned, would hide
+  // a widget something is still using, and `holdOpen` would never change again
+  // to bring it back.
+  //
+  // The terms are asked one by one rather than through `holdOpen`, because
+  // `holdOpen` depends on `locked` and this is `locked`'s own change handler: a
+  // binding that depends on the changing property has not necessarily been
+  // re-evaluated yet when the handler runs (the same ordering is
+  // omacom/omarchy#11505), and the stale answer would be the hover that held it
+  // a moment ago. None of these depends on `locked`.
+  onLockedChanged: {
+    if (!locked) return
+    if (pinned || memberPanelOpen || foreignPanelHold || dragHoldsOpen) return
+    expanded = false
+  }
+
   // A repeating tick rather than a one-shot restarted on hover-end. Omarchy's
   // own bar polls hover the same way for its tooltip, for the same reason: a
   // leave event is not something to build a state machine on. A one-shot can be
@@ -1411,6 +1439,10 @@ BarWidget {
     // all it means the pocket is pinned open — a state the user asked for by
     // clicking, and the tooltip names it in words.
     active: root.pinned || root.dropArmed || root.dropReleases
+    // Locked reads as switched off. Not while the mark is lit, though: dimming
+    // the light a drag answers with would weaken the one answer it gives before
+    // the button comes up, and a pinned pocket is open, not shut.
+    dimmed: root.locked && !root.pinned && !root.dropArmed && !root.dropReleases
     // Two answers, two colours, because they are opposite answers and the
     // difference is the whole gesture: taking a widget in keeps the colour the
     // bar gives an active widget, letting a member go borrows the colour
@@ -1441,6 +1473,7 @@ BarWidget {
     // markup. Nothing assigned here may depend on that decision.
     tooltipText: Model.describe({
       members: root.memberIds, expanded: root.expanded, pinned: root.pinned,
+      locked: root.locked, lockable: root.mayWriteMembers,
       rejected: root.rejectedIds, unreadable: root.unreadableAt,
       missing: root.resolution.missing,
       anchored: root.resolution.anchored, foreign: root.resolution.foreign,
@@ -1461,7 +1494,26 @@ BarWidget {
     // a pointer aid for the next few seconds and because shell.json is shared
     // by every bar surface — persisting it would make one screen's transient
     // state everyone's.
+    //
+    // The right click is the lock, and the only click that writes. It drops
+    // this screen's pin first, so the pocket the user just locked actually
+    // closes; another screen's pin is that screen's and stays. Every other
+    // button pins, exactly as before, and never touches the lock — a left
+    // click reaches the pocket through the bar's own hit test, which on
+    // overlapping outputs can pick another screen's pocket (docs/decisions/0007),
+    // and a click that landed there must not change a setting every screen
+    // shares. The host passes the button as `code`; see docs/decisions/0020.
     onPressed: function(code) {
+      if (code === Qt.RightButton) {
+        // Unpinned before the write, because the write can apply the lock
+        // synchronously and the fold has to find the pin already gone. A
+        // refused write gives the pin back: nothing was locked.
+        var lock = !root.locked
+        var wasPinned = root.pinned
+        if (lock) root.pinned = false
+        if (!root.writeSetting("locked", lock)) root.pinned = wasPinned
+        return
+      }
       root.pinned = !root.pinned
       if (root.pinned) root.expanded = true
     }

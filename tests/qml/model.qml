@@ -284,7 +284,28 @@ QtObject {
 
     var tooltip = Model.describe({ members: ["omarchy.audio"], rejected: rejected })
     check("V4 lets no markup character through", /[<>&]/.test(tooltip), false)
-    check("V4 lets a value forge no line", tooltip.split("\n").length, 2)
+    // Four of Pocket's own: the first line, the two click hints, the rejected ids.
+    check("V4 lets a value forge no line", tooltip.split("\n").length, 4)
+
+    // The click hints and the lock setting, in the engine the bar runs.
+    // tests/model-test.js owns the reasoning per case.
+    check("V4 explains both clicks",
+          Model.describe({ members: ["a", "b"] }),
+          "Pocket holding 2 widgets\nLeft click: pin it open\nRight click: lock it shut")
+    check("V4 describes a locked pocket",
+          Model.describe({ members: ["a", "b"], locked: true }),
+          "Pocket locked shut — holding 2 widgets\nLeft click: pin it open\nRight click: unlock")
+    check("V4 lets the pin win the first line and keeps the unlock",
+          Model.describe({ members: ["a"], expanded: true, pinned: true, locked: true }),
+          "Pocket pinned open\nLeft click: release the pin\nRight click: unlock")
+    check("V4 leaves the right click out where Pocket may not write",
+          Model.describe({ members: ["a"], lockable: false }),
+          "Pocket holding 1 widget\nLeft click: pin it open")
+    check("V4 locks on true", Model.isLocked(true), true)
+    check("V4 locks on the string the bar CLI writes", Model.isLocked("true"), true)
+    check("V4 does not lock on false", Model.isLocked(false), false)
+    check("V4 does not lock on a missing setting", Model.isLocked(undefined), false)
+    check("V4 does not lock on another string", Model.isLocked("yes"), false)
 
     // Bounded on the other axis too, which the per-value cap does not cover.
     // Twice, because the harmless flood and the hostile one reach the caps by

@@ -303,10 +303,59 @@ check("a configured but unusable pocket does not claim to be open",
 check("a member in another section still counts as held",
   Model.describe({ members: ["a", "b"], foreign: ["b"] }).split("\n")[0],
   "Pocket holding 2 widgets")
-contains("open pocket offers the pin",
-  Model.describe({ members: ["a"], expanded: true }), "click to keep it open")
-contains("pinned pocket offers the release",
-  Model.describe({ members: ["a"], pinned: true }), "click to release")
+// The two clicks, spelled out directly under the first line and verbatim,
+// because they are the only explanation of the mark anywhere on the bar. Each
+// line says what that click would do next, so the text follows the state.
+check("a collapsed pocket explains both clicks",
+  Model.describe({ members: ["a", "b"] }),
+  "Pocket holding 2 widgets\nLeft click: pin it open\nRight click: lock it shut")
+check("an open pocket offers the pin",
+  Model.describe({ members: ["a"], expanded: true }),
+  "Pocket open\nLeft click: pin it open\nRight click: lock it shut")
+check("a pinned pocket offers the release, and says it is pinned",
+  Model.describe({ members: ["a"], expanded: true, pinned: true }),
+  "Pocket pinned open\nLeft click: release the pin\nRight click: lock it shut")
+check("a locked pocket says so and offers the unlock",
+  Model.describe({ members: ["a", "b"], locked: true }),
+  "Pocket locked shut — holding 2 widgets\nLeft click: pin it open\nRight click: unlock")
+check("a locked pocket holding one widget is singular",
+  Model.describe({ members: ["a"], locked: true }).split("\n")[0],
+  "Pocket locked shut — holding 1 widget")
+// The pin wins over the lock on screen, so the first line follows the pin --
+// and the right click still has to say it would unlock, or the lock is
+// invisible for as long as the pin holds.
+check("a pinned locked pocket is described as pinned, and can still be unlocked",
+  Model.describe({ members: ["a"], expanded: true, pinned: true, locked: true }),
+  "Pocket pinned open\nLeft click: release the pin\nRight click: unlock")
+// A right click that cannot write does nothing, so it is not offered.
+check("the right click is not offered where Pocket may not write",
+  Model.describe({ members: ["a"], lockable: false }),
+  "Pocket holding 1 widget\nLeft click: pin it open")
+check("the hints come before every problem line",
+  Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4),
+  ["Left click: pin it open", "Right click: lock it shut", "Not on this bar: b"])
+// Neither click does anything worth saying on an empty pocket or one that can
+// use nothing -- unless one of them is what is holding it, which the user has
+// to be able to undo.
+check("an empty pocket offers no clicks",
+  Model.describe({ members: [] }).indexOf("click"), -1)
+check("an unusable pocket offers no clicks",
+  Model.describe({ members: ["a"], missing: ["a"] }).indexOf("click"), -1)
+contains("but a locked unusable pocket still offers the unlock",
+  Model.describe({ members: ["a"], missing: ["a"], locked: true }), "Right click: unlock")
+contains("and a pinned empty pocket the release",
+  Model.describe({ members: [], pinned: true }), "Left click: release the pin")
+check("a pocket that does not know its screen offers no clicks",
+  Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
+
+// The lock setting. A JSON true and the string `omarchy bar set` writes both
+// lock it; nothing else does, because a lock nobody meant hides widgets for no
+// reason the user can find.
+check("true locks", Model.isLocked(true), true)
+check("the string the bar CLI writes locks", Model.isLocked("true"), true)
+for (const value of [false, "false", undefined, null, "", 1, "yes", "TRUE ", {}]) {
+  check(`${JSON.stringify(value)} does not lock`, Model.isLocked(value), false)
+}
 contains("missing members are named",
   Model.describe({ members: ["a"], missing: ["a"] }), "Not on this bar: a")
 contains("the center anchor refusal is named",
@@ -424,8 +473,10 @@ check("missing goes through the boundary",
 check("anchored goes through the boundary",
   Model.describe({ members: ["a"], anchored: [SMUGGLED] }).split("\n")[1],
   "Refused, it is the center anchor: a\\u003cb")
+// Line 4 rather than 2: a member in another section is still held, so the two
+// click hints come first. The other two above hold nothing and print none.
 check("foreign goes through the boundary",
-  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[1],
+  Model.describe({ members: ["a"], foreign: [SMUGGLED] }).split("\n")[3],
   "In another section, so hiding it looks arbitrary: a\\u003cb")
 
 // The line the whole thing hangs on. mightBeRichText() reads no further than
@@ -441,8 +492,9 @@ check("and the first line in particular carries none",
   /[<>&]/.test(hostileTooltip.split("\n")[0]), false)
 
 // A value carrying a line break used to forge a whole tooltip line, and the
-// line it forged was one of Pocket's own warnings.
-check("a value cannot forge a line", hostileTooltip.split("\n").length, 2)
+// line it forged was one of Pocket's own warnings. Four lines are Pocket's
+// own: the first, the two click hints, and the one naming the rejected ids.
+check("a value cannot forge a line", hostileTooltip.split("\n").length, 4)
 check("nor smuggle the warning it forged",
   hostileTooltip.indexOf("\nA second Pocket entry exists"), -1)
 
