@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-05
+
+A right click now locks the pocket shut, and both the pin and the lock belong
+to the screen you click on and survive restarts. Tested on two and three
+monitors, side by side, stacked, mirrored and plugged in and out, which also
+found that a member's panel opened by keybinding left the pocket shut on
+Omarchy 4.0.3 and later; that is fixed.
+[Decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
+owns the multi-monitor account.
+
 ### Added
 
 - **A right click locks the pocket shut.** A locked pocket does not open when the
@@ -525,7 +535,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.5.0
 [0.4.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.0
 [0.3.3]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.3.3
