@@ -557,10 +557,19 @@ function setEntrySetting(config, region, id, key, value) {
   for (var i = 0; i < entries.length; i++) {
     if (entryIdOf(entries[i]) !== want) continue
     if (!isPlainObject(entries[i])) entries[i] = { id: want }
-    entries[i][name] = value
+    entries[i][name] = nextValue(value, entries[i][name])
     return true
   }
   return false
+}
+
+// A value to write is either the value, or a function of the value the entry
+// holds now. The function form exists for the per-screen lists: one screen's
+// write must change its own key and nothing else in a list every screen shares,
+// so it has to start from the freshest copy of that list the write path has —
+// the config inside the mutator, `settings` on the inline path.
+function nextValue(value, current) {
+  return typeof value === "function" ? value(current) : value
 }
 
 function setMembersOnEntry(config, region, id, value) {
@@ -618,7 +627,7 @@ function mergedEntrySettings(live, key, value) {
   }
 
   var name = String(key || "")
-  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = value
+  if (name !== "" && name !== "id" && !isReservedEntryKey(name)) out[name] = nextValue(value, out[name])
   return out
 }
 
@@ -794,6 +803,68 @@ function cascadeRanks(ids, layoutIds, nearestAtEnd) {
 // on by accident would hide widgets the user cannot find a reason for.
 function isLocked(value) {
   return value === true || value === "true"
+}
+
+// ------------------------------------------------------- per-screen state
+
+// Which screen a pocket is on, as a name that survives a restart and a replug.
+// The same split the author's monitor tool makes: a laptop panel by its
+// connector, because there is exactly one and its EDID description has been
+// seen to change under a disk swap; every other screen by what it is rather
+// than where it is plugged in, so it keeps its state on another port and a
+// different monitor on the same port starts fresh.
+//
+// "What it is" is the model and the serial number, the two fields Quickshell's
+// ShellScreen carries. Measured on quickshell 0.3.1 and Hyprland 0.56 the
+// serial is empty, so two identical monitors share one name and one state; the
+// connector cannot tell them apart reliably either, because a dock renumbers
+// it. A serial that starts arriving later renames every external screen once.
+// Commas are dropped because the setting is a comma-separated list by hand.
+// See docs/decisions/0021.
+var INTERNAL_OUTPUT = /^(eDP|LVDS|DSI)-/
+
+function screenKey(screen) {
+  if (!screen) return ""
+  var name = String(screen.name || "").trim()
+  if (name === "") return ""
+  if (INTERNAL_OUTPUT.test(name)) return name
+  var what = (String(screen.model || "") + " " + String(screen.serialNumber || ""))
+    .replace(/,/g, " ").replace(/\s+/g, " ").trim()
+  return what !== "" ? what : name
+}
+
+// The screens a per-screen setting (`pinned`, `locked`) names. A string is
+// split on commas only — a model name has spaces in it — and an array is
+// duck-typed for the reason toList() gives. Anything else names no screen,
+// which is what the unreleased boolean `locked` of 0020 now reads as: locked
+// nowhere, until the next right click writes a list.
+function screenList(value) {
+  if (value === null || value === undefined) return []
+  var raw = []
+  if (typeof value === "string") raw = value.split(",")
+  else if (typeof value === "object" && typeof value.length === "number") {
+    for (var i = 0; i < value.length; i++) if (typeof value[i] === "string") raw.push(value[i])
+  }
+  var out = []
+  for (var j = 0; j < raw.length; j++) {
+    var key = raw[j].trim()
+    if (key !== "" && out.indexOf(key) === -1) out.push(key)
+  }
+  return out
+}
+
+function onScreen(value, key) {
+  var want = String(key || "")
+  return want !== "" && screenList(value).indexOf(want) !== -1
+}
+
+// The list with this screen switched on or off and every other screen left
+// where it was, in the shape it was found in (membersValue() owns that rule).
+function withScreen(value, key, on) {
+  var want = String(key || "")
+  var list = screenList(value).filter(function (k) { return k !== want })
+  if (on && want !== "") list.push(want)
+  return membersValue(list, value)
 }
 
 // ---------------------------------------------------------- tooltip text
@@ -1067,6 +1138,8 @@ if (typeof module !== "undefined" && module.exports) {
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
                      mergedEntrySettings: mergedEntrySettings, isLocked: isLocked,
+                     screenKey: screenKey, screenList: screenList, onScreen: onScreen,
+                     withScreen: withScreen,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,
                      nearestDropTarget: nearestDropTarget }
 }
