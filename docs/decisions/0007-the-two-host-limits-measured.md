@@ -1,6 +1,9 @@
 # 7. The two host limits, measured
 
-- Status: accepted
+- Status: accepted; [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
+  measured that Hyprland's own mirroring builds one surface for the mirrored
+  pair, so the shared-origin case below needs outputs overlapped by hand; and
+  on 4.0.3+ the fold no longer waits on the shell-wide hover (0015)
 - Date: 2026-08-27
 - Corrects the `moduleClickTargetAt` paragraph of [0005](0005-a-pocket-drives-only-its-own-screens-slots.md)
 

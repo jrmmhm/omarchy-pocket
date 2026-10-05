@@ -1,6 +1,8 @@
 # 21. The pin and the lock belong to a screen
 
-- Status: accepted
+- Status: accepted; the residual write race and the unplug are measured in
+  [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md), which
+  corrects the race's mechanism below
 - Date: 2026-10-05
 - Supersedes the part of [0020](0020-a-right-click-locks-the-pocket-shut.md)
   that says where the lock lives and that it holds on every screen. What the
@@ -172,6 +174,11 @@ case was added.
   current Omarchy takes: from 4.0.3 an installed bar widget's mutator refuses,
   and every write is inline. Only ≤4.0.2, whose mutator runs, is protected by
   reading the list inside the mutator.
+  *Corrected by 0022:* every new instance is injected at once and again from
+  one deferred batch, so the exposure is any inline write between the rebuild
+  and that batch — the automatic `repairMemberOrder()` included, because an
+  inline write carries the whole entry. Measured there: a real click cannot
+  reach the window, because the shell takes no input while it rebuilds.
 - *The latch was not seen to fail on a real monitor move*, which would have
   moved the owner's workspaces. Its rule is `Model.screenKeyAfter()`, held in
   both engines. A live mutant without the construction-time latch kept the
@@ -188,7 +195,8 @@ case was added.
 - *Physically unplugging a monitor* was not done live, because switching an
   output off moves the owner's workspaces. A restart builds the surface anew
   under the same name, which is what a replug does to it. The never-seen case
-  is covered live and in `tests/qml`.
+  is covered live and in `tests/qml`. *Done in 0022:* a pinned monitor came
+  back pinned after a replug, and the others were untouched.
 
 **Lesson.** When two values are delivered in one assignment, a change handler
 for one of them can read the other before it has been updated, just like a

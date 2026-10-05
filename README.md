@@ -203,8 +203,12 @@ screen by its model as the compositor reports it (`ASUS VG289`; `hyprctl
 monitors` lists it as `model`), followed by its serial number where that
 reaches Pocket. The tooltip does not show the name, but `shell.json` does once
 you have clicked. By hand, separate the names with commas — not
-spaces, because a model name has spaces in it — or write a JSON array:
-`omarchy bar set jrmmhm.pocket locked "eDP-1, ASUS VG289"`. A name no
+spaces, because a model name has spaces in it — as in
+`omarchy bar set jrmmhm.pocket locked "eDP-1, ASUS VG289"`, or write a JSON
+array into the file. `omarchy bar set … --json` cannot carry an array of two or
+more names; that is the shell's command, and
+[decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
+has what it does instead. A name no
 connected screen has does nothing, and a screen that is not named starts
 unpinned and unlocked. The file hot-reloads, so there is no restart after an
 edit.
@@ -285,12 +289,14 @@ to be.
 
 **Right-click the mark to lock it shut**, right-click again to unlock. A locked
 pocket does not open when the pointer passes over it, and its mark is dimmed.
-Locking closes it at once, even with the pointer still on it. Like the pin, the
+Locking closes it at once, even with the pointer still on it — unless a panel is
+open that one of your members might own, in which case it closes when that
+panel does. Like the pin, the
 lock belongs to the screen you clicked on, and it survives restarts: it is the
 `locked` setting. Two things still open a locked pocket. A left click pins it
 open as usual, and once you release the pin it is locked again. A member's panel
-opened by keybinding opens it as well, because that panel hangs from a widget
-that has to be drawn. A right click on a pinned pocket drops the pin on that
+opened by keybinding opens it as well, on the screen the panel opens on, because
+that panel hangs from a widget that has to be drawn. A right click on a pinned pocket drops the pin on that
 screen and locks it, in one step. Where Pocket may not write, the right click
 does nothing, and the tooltip leaves it out.
 [Decision 0020](docs/decisions/0020-a-right-click-locks-the-pocket-shut.md)
@@ -340,20 +346,32 @@ Three things change your first hour with it:
 <details>
 <summary><b>On more than one monitor</b></summary>
 
-- **A pocket on another screen folds up late.** Omarchy counts bar hover once
-  for the whole shell rather than once per screen, so while your pointer is on
-  *any* monitor's bar, no pocket on any monitor folds. It only delays a fold —
-  nothing opens by itself, and everything closes as soon as the pointer leaves
-  the bar. The shared state is the host's own and predates any plugin: hover one
-  screen's centre section and the inactive indicators appear on every screen.
-  Reading it per screen is not available to a plugin.
+- **Each screen's pocket folds on its own.** Moving the pointer onto another
+  monitor's bar folds the pocket you left. On Omarchy 4.0.2 and older the bar
+  counted hover once for the whole shell, so there no pocket folded while the
+  pointer was on *any* monitor's bar; it only delayed a fold.
+- **An open panel can hold pockets open on every screen.** A member whose
+  widget does not say whether its own panel is open — on the author's bar,
+  X-Ray — cannot be told apart from any other panel, so while any panel is open
+  anywhere, a pocket that is already open stays open, a locked one included. It
+  closes when the panel does. Nothing opens because of it.
+- **Plugging a monitor out and back in keeps its pin and lock.** A monitor
+  Pocket has never seen starts unpinned and unlocked, and the other screens'
+  pockets are left alone either way.
+- **Mirroring leaves one bar for the mirrored pair.** Hyprland drops the mirrored
+  output from its monitor list, so the bar is drawn once, for the source, and a
+  click pins or locks the source. The mirrored screen's own pin and lock come
+  back with it when you extend again. This and the two points above were
+  measured on three monitors in
+  [decision 0022](docs/decisions/0022-every-screen-tested-and-the-panel-a-keybinding-opens.md).
 - **On overlapping outputs, a left click on one screen's bar can land on another
   screen's pocket.** The bar hit-tests a click against the click targets of
   every monitor without asking which screen they belong to. That only reaches
-  you where two outputs overlap in the compositor's layout — mirrored, or
-  positioned by hand so their rectangles intersect — and where they do, it is
+  you where two outputs overlap in the compositor's layout — positioned by hand
+  so their rectangles intersect; Hyprland's own mirroring does not, as above —
+  and where they do, it is
   every contested click rather than an occasional one. On monitors side by side
-  it was measured not to happen at all. What was measured, and the one condition
+  or stacked it was measured not to happen at all. What was measured, and the one condition
   that triggers it, are in
   [decision 0007](docs/decisions/0007-the-two-host-limits-measured.md). Since
   the pin is kept per screen, such a click pins the *other* screen's pocket and

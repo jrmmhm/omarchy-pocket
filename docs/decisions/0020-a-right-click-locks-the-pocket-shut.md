@@ -2,7 +2,10 @@
 
 - Status: accepted; where the lock lives and the pin's staying unwritten are
   superseded by [0021](0021-the-pin-and-the-lock-belong-to-a-screen.md): both
-  are per-screen settings now
+  are per-screen settings now. "A member's panel opened by keybinding" opened
+  nothing on Omarchy 4.0.3+ until
+  [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md), which
+  measured and fixed it
 - Date: 2026-10-05
 - Answers [#20](https://github.com/jrmmhm/omarchy-pocket/issues/20)
 - Gives the pin's reason for staying unwritten
