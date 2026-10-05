@@ -314,23 +314,23 @@ QtObject {
     // Four of Pocket's own: the first line, the two click hints, the rejected ids.
     check("V4 lets a value forge no line", tooltip.split("\n").length, 4)
 
-    // The click hints and the lock setting, in the engine the bar runs.
+    // The click hints, in the engine the bar runs.
     // tests/model-test.js owns the reasoning per case.
     check("V4 explains both clicks",
           Model.describe({ members: ["a", "b"] }),
-          "Pocket holding 2 widgets\nLeft click: pin it open\nRight click: lock it shut")
+          "Pocket holding 2 widgets\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
     check("V4 describes a locked pocket",
           Model.describe({ members: ["a", "b"], locked: true }),
-          "Pocket locked shut — holding 2 widgets\nLeft click: pin it open\nRight click: unlock")
+          "Pocket locked shut — holding 2 widgets\nLeft click: pin it open on this screen\nRight click: unlock")
     check("V4 lets the pin win the first line and keeps the unlock",
           Model.describe({ members: ["a"], expanded: true, pinned: true, locked: true }),
           "Pocket pinned open\nLeft click: release the pin\nRight click: unlock")
     check("V4 leaves the right click out where Pocket may not write",
           Model.describe({ members: ["a"], lockable: false }),
-          "Pocket holding 1 widget\nLeft click: pin it open")
+          "Pocket holding 1 widget\nLeft click: pin it open on this screen")
     check("V4 keeps the hints ahead of every problem line",
           Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4).join("|"),
-          "Left click: pin it open|Right click: lock it shut|Not on this bar: b")
+          "Left click: pin it open on this screen|Right click: lock it shut on this screen|Not on this bar: b")
     check("V4 says a locked pocket of one is singular",
           Model.describe({ members: ["a"], locked: true }).split("\n")[0],
           "Pocket locked shut — holding 1 widget")
@@ -346,11 +346,6 @@ QtObject {
           true)
     check("V4 offers no clicks without a known screen",
           Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
-    check("V4 locks on true", Model.isLocked(true), true)
-    check("V4 locks on the string the bar CLI writes", Model.isLocked("true"), true)
-    check("V4 does not lock on false", Model.isLocked(false), false)
-    check("V4 does not lock on a missing setting", Model.isLocked(undefined), false)
-    check("V4 does not lock on another string", Model.isLocked("yes"), false)
 
     // Per-screen state, in the engine the bar runs. tests/model-test.js owns
     // the reasoning per case; the lists here arrive as the sequence type a

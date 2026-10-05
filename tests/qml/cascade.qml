@@ -192,7 +192,7 @@ QtObject {
     // pocket on its next tick, with no pointer on this bar.
     var both = [harness.pocket, harness.facadePocket]
     for (var i = 0; i < both.length; i++) {
-      both[i].pinned = open
+      both[i].sessionPinned = open
       both[i].expanded = open
     }
   }

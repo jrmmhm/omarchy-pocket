@@ -3,6 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "plugin" as Pk
+import "plugin/Model.js" as Model
 
 // The real BarWidget.qml against the real facade — `Ui/PluginBarApi.qml` out of
 // the installed shell, not a hand-written stand-in.
@@ -320,6 +321,9 @@ QtObject {
   // writer — the whole path a right click takes on 4.0.3 and later, short of
   // the pointer itself. See docs/decisions/0020.
 
+  // The name the pocket under test reads off its real window's screen.
+  property string key: ""
+
   function pocket() { return win.secondPocket }
   function button() { return win.secondPocket.children[0] }
   function tip() { return harness.button().tooltipText }
@@ -340,11 +344,38 @@ QtObject {
           function () { return p.pointerOnBar }, false)
 
     probe("the pocket holds its member", function () { return p.resolution.slots.length }, 1)
+
+    // The screen name comes from the real window's real ShellScreen, through
+    // the same binding the bar runs. Offscreen that screen has no name at all
+    // (measured: QScreen name ""), which is the case of a pocket that cannot
+    // keep a per-screen state: no lock offered, the pin kept for the session.
+    probe("the pocket reads its screen off its real window",
+          function () { return p.liveScreenKey === Model.screenKey(win.screen) }, true)
+    probe("a screen without a name gives no key", function () { return p.screenKey }, "")
+    probe("so nothing per-screen is kept", function () { return p.persistsScreenState }, false)
+    probe("and the right click is not offered",
+          function () { return harness.tip().indexOf("Right click") }, -1)
+    harness.button().triggerPress(Qt.RightButton)
+    probe("nor does it write", function () { return harness.fakeShell.inlineWrites }, 0)
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("the left click pins for the session instead",
+          function () { return p.sessionPinned && harness.fakeShell.inlineWrites === 0 }, true)
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("and releases it", function () { return p.pinned }, false)
+    p.expanded = false
+
+    // From here on the pocket is on a named screen. A real bar names it; the
+    // live run in docs/decisions/0021 shows which names.
+    p.screenKey = "eDP-1"
+    harness.key = p.screenKey
+    probe("on a named screen it keeps a per-screen state",
+          function () { return p.persistsScreenState }, true)
     probe("its button is the host's, with the press the host calls",
           function () { return typeof harness.button().triggerPress }, "function")
     probe("the tooltip explains both clicks under the first line",
           function () { return harness.tip().split("\n").slice(0, 3).join("|") },
-          "Pocket holding 1 widget|Left click: pin it open|Right click: lock it shut")
+          "Pocket holding 1 widget|Left click: pin it open on this screen"
+          + "|Right click: lock it shut on this screen")
 
     memberSlot.hovered = true
     probe("unlocked, the pointer on a member opens it", function () { return p.expanded }, true)
@@ -353,7 +384,7 @@ QtObject {
     // where it is on a real bar -- and the fold must not wait for it to leave.
     harness.button().triggerPress(Qt.RightButton)
     probe("a right click writes the lock once", function () { return harness.fakeShell.inlineWrites }, 1)
-    probe("as true", function () { return harness.fakeShell.lastSettings.locked }, true)
+    probe("as this screen's name", function () { return harness.fakeShell.lastSettings.locked }, harness.key)
     probe("carrying members unchanged",
           function () { return harness.fakeShell.lastSettings.members }, "omarchy.audio")
     probe("and the pocket reads it back locked", function () { return p.locked }, true)
@@ -361,7 +392,7 @@ QtObject {
     probe("the locked mark is dimmed", function () { return harness.button().dimmed }, true)
     probe("the tooltip says it is locked and offers the unlock",
           function () { return harness.tip().split("\n").slice(0, 3).join("|") },
-          "Pocket locked shut — holding 1 widget|Left click: pin it open|Right click: unlock")
+          "Pocket locked shut — holding 1 widget|Left click: pin it open on this screen|Right click: unlock")
 
     memberSlot.hovered = false
     memberSlot.hovered = true
@@ -375,10 +406,15 @@ QtObject {
     var p = harness.pocket()
     probe("and it stays shut while the pointer rests there", function () { return p.expanded }, false)
 
-    // The left click pins, exactly as before, and leaves the lock alone.
+    // The left click pins and leaves the lock alone. The pin is this screen's
+    // name in `pinned`, written like the lock.
     harness.button().triggerPress(Qt.LeftButton)
     probe("a left click on a locked pocket pins it open", function () { return p.expanded }, true)
-    probe("and writes nothing", function () { return harness.fakeShell.inlineWrites }, 1)
+    probe("and writes the pin once", function () { return harness.fakeShell.inlineWrites }, 2)
+    probe("as this screen's name", function () { return harness.fakeShell.lastSettings.pinned }, harness.key)
+    probe("a persisted pin, not a session one", function () { return p.sessionPinned }, false)
+    probe("carrying the lock unchanged",
+          function () { return harness.fakeShell.lastSettings.locked }, harness.key)
     probe("so it is still locked", function () { return p.locked }, true)
     probe("a pinned mark is not dimmed", function () { return harness.button().dimmed }, false)
     probe("the first line follows the pin, the right click still unlocks",
@@ -387,20 +423,30 @@ QtObject {
 
     harness.button().triggerPress(Qt.MiddleButton)
     probe("a middle click is the left click, as it always was", function () { return p.pinned }, false)
+    probe("and writes the release", function () { return harness.fakeShell.lastSettings.pinned }, "")
 
     // Unlocking with the pointer on a member opens the pocket under it.
     harness.button().triggerPress(Qt.RightButton)
     probe("a second right click writes the unlock",
-          function () { return harness.fakeShell.lastSettings.locked }, false)
+          function () { return harness.fakeShell.lastSettings.locked }, "")
     probe("the pocket reads it back unlocked", function () { return p.locked }, false)
     probe("and the pointer already on a member opens it", function () { return p.expanded }, true)
 
-    // A pinned pocket that is locked from this screen drops its pin and folds.
+    // A pinned pocket that is locked from this screen drops its pin and folds,
+    // in ONE write: the lock and the dropped pin land together or not at all.
     memberSlot.hovered = false
-    p.pinned = true
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("pinned again", function () { return p.pinned }, true)
+    var before = harness.fakeShell.inlineWrites
     harness.button().triggerPress(Qt.RightButton)
     probe("locking a pinned pocket drops the pin", function () { return p.pinned }, false)
     probe("and folds it", function () { return p.expanded }, false)
+    probe("in one write", function () { return harness.fakeShell.inlineWrites - before }, 1)
+    probe("which carries both keys",
+          function () {
+            return JSON.stringify([harness.fakeShell.lastSettings.locked,
+                                   harness.fakeShell.lastSettings.pinned])
+          }, JSON.stringify([harness.key, ""]))
 
     // A panel opened from a member holds it open through the lock.
     harness.button().triggerPress(Qt.RightButton)
@@ -427,13 +473,16 @@ QtObject {
     // back, and the lock stays where it was.
     harness.button().triggerPress(Qt.RightButton)
     probe("unlocked for the refusal case", function () { return p.locked }, false)
-    p.pinned = true
     harness.fakeShell.refuse = true
+    // Where nothing can be written, the left click still pins, for the session.
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("a refused pin falls back to the session pin", function () { return p.sessionPinned }, true)
     harness.button().triggerPress(Qt.RightButton)
     probe("a refused lock leaves the pocket unlocked", function () { return p.locked }, false)
     probe("and gives the pin back", function () { return p.pinned }, true)
+    harness.button().triggerPress(Qt.LeftButton)
+    probe("the session pin is released without a write", function () { return p.pinned }, false)
     harness.fakeShell.refuse = false
-    p.pinned = false
 
     // The stale list decision 0018 measured: shell.json holds the new order and
     // the running pocket the old one, because the host hands it back. Modelled
@@ -457,7 +506,7 @@ QtObject {
           function () { return p.membersMisordered }, true)
     harness.button().triggerPress(Qt.RightButton)
     probe("a lock written over a stale list is a lock",
-          function () { return harness.fakeShell.lastSettings.locked }, true)
+          function () { return harness.fakeShell.lastSettings.locked }, harness.key)
     probe("and carries members in the bar's order, not the stale one",
           function () { return harness.fakeShell.lastSettings.members },
           "omarchy.network, omarchy.audio")
@@ -477,7 +526,7 @@ QtObject {
           function () { return JSON.stringify(harness.fakeShell.mutatorConfig.bar.layout.right) },
           JSON.stringify([{ id: "omarchy.network" },
                           { id: "jrmmhm.pocket", members: "omarchy.network, omarchy.audio",
-                            note: "x", locked: true }]))
+                            note: "x", locked: harness.key }]))
     probe("and the inline writer is not asked as well",
           function () { return harness.fakeShell.inlineWrites }, writes)
     harness.fakeShell.mutatorConfig = null

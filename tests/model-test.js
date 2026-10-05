@@ -308,16 +308,16 @@ check("a member in another section still counts as held",
 // line says what that click would do next, so the text follows the state.
 check("a collapsed pocket explains both clicks",
   Model.describe({ members: ["a", "b"] }),
-  "Pocket holding 2 widgets\nLeft click: pin it open\nRight click: lock it shut")
+  "Pocket holding 2 widgets\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
 check("an open pocket offers the pin",
   Model.describe({ members: ["a"], expanded: true }),
-  "Pocket open\nLeft click: pin it open\nRight click: lock it shut")
+  "Pocket open\nLeft click: pin it open on this screen\nRight click: lock it shut on this screen")
 check("a pinned pocket offers the release, and says it is pinned",
   Model.describe({ members: ["a"], expanded: true, pinned: true }),
-  "Pocket pinned open\nLeft click: release the pin\nRight click: lock it shut")
+  "Pocket pinned open\nLeft click: release the pin\nRight click: lock it shut on this screen")
 check("a locked pocket says so and offers the unlock",
   Model.describe({ members: ["a", "b"], locked: true }),
-  "Pocket locked shut — holding 2 widgets\nLeft click: pin it open\nRight click: unlock")
+  "Pocket locked shut — holding 2 widgets\nLeft click: pin it open on this screen\nRight click: unlock")
 check("a locked pocket holding one widget is singular",
   Model.describe({ members: ["a"], locked: true }).split("\n")[0],
   "Pocket locked shut — holding 1 widget")
@@ -330,10 +330,10 @@ check("a pinned locked pocket is described as pinned, and can still be unlocked"
 // A right click that cannot write does nothing, so it is not offered.
 check("the right click is not offered where Pocket may not write",
   Model.describe({ members: ["a"], lockable: false }),
-  "Pocket holding 1 widget\nLeft click: pin it open")
+  "Pocket holding 1 widget\nLeft click: pin it open on this screen")
 check("the hints come before every problem line",
   Model.describe({ members: ["a", "b"], missing: ["b"] }).split("\n").slice(1, 4),
-  ["Left click: pin it open", "Right click: lock it shut", "Not on this bar: b"])
+  ["Left click: pin it open on this screen", "Right click: lock it shut on this screen", "Not on this bar: b"])
 // Neither click does anything worth saying on an empty pocket or one that can
 // use nothing -- unless one of them is what is holding it, which the user has
 // to be able to undo.
@@ -347,15 +347,6 @@ contains("and a pinned empty pocket the release",
   Model.describe({ members: [], pinned: true }), "Left click: release the pin")
 check("a pocket that does not know its screen offers no clicks",
   Model.describe({ members: ["a"], surfaceUnknown: true, locked: true }).indexOf("click"), -1)
-
-// The lock setting. A JSON true and the string `omarchy bar set` writes both
-// lock it; nothing else does, because a lock nobody meant hides widgets for no
-// reason the user can find.
-check("true locks", Model.isLocked(true), true)
-check("the string the bar CLI writes locks", Model.isLocked("true"), true)
-for (const value of [false, "false", undefined, null, "", 1, "yes", "TRUE ", {}]) {
-  check(`${JSON.stringify(value)} does not lock`, Model.isLocked(value), false)
-}
 
 // ------------------------------------------------------ per-screen state
 

@@ -794,17 +794,6 @@ function cascadeRanks(ids, layoutIds, nearestAtEnd) {
   return ranks
 }
 
-// ------------------------------------------------------------------ lock
-
-// Whether the `locked` setting says the pocket is locked shut. The boolean is
-// what the host writes for a JSON `true`; the string is what `omarchy bar set
-// jrmmhm.pocket locked true` writes without `--json`, and a lock typed that way
-// must not silently do nothing. Anything else is unlocked — a lock that came
-// on by accident would hide widgets the user cannot find a reason for.
-function isLocked(value) {
-  return value === true || value === "true"
-}
-
 // ------------------------------------------------------- per-screen state
 
 // Which screen a pocket is on, as a name that survives a restart and a replug.
@@ -1089,10 +1078,12 @@ function describe(state) {
   // so the line changes with the state. Not on an empty pocket, where neither
   // does anything worth saying, unless one of them is what is holding it. The
   // right click is left out where it cannot write (`lockable`), because a hint
-  // for a click that does nothing is a hint that lies.
+  // for a click that does nothing is a hint that lies. Both say "on this
+  // screen", because that is all either of them reaches (docs/decisions/0021).
   if (!unknown && (held > 0 || s.pinned || s.locked)) {
-    lines.push("Left click: " + (s.pinned ? "release the pin" : "pin it open"))
-    if (s.lockable !== false) lines.push("Right click: " + (s.locked ? "unlock" : "lock it shut"))
+    lines.push("Left click: " + (s.pinned ? "release the pin" : "pin it open on this screen"))
+    if (s.lockable !== false)
+      lines.push("Right click: " + (s.locked ? "unlock" : "lock it shut on this screen"))
   }
   // Ahead of the rejected line, because it is the earlier failure: these
   // entries never became an id at all, so nothing downstream had anything to
@@ -1137,7 +1128,7 @@ if (typeof module !== "undefined" && module.exports) {
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
-                     mergedEntrySettings: mergedEntrySettings, isLocked: isLocked,
+                     mergedEntrySettings: mergedEntrySettings,
                      screenKey: screenKey, screenList: screenList, onScreen: onScreen,
                      withScreen: withScreen,
                      reservedEntryKeys: RESERVED_ENTRY_KEYS,

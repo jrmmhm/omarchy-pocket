@@ -20,7 +20,8 @@
     "defaultSection": "right",
     "defaults": {
       "members": "",
-      "locked": false
+      "pinned": "",
+      "locked": ""
     },
     "schema": [
       {
@@ -30,10 +31,16 @@
         "description": "Usually set by dragging widgets onto the pocket. Edit it here to name them by hand."
       },
       {
+        "key": "pinned",
+        "type": "string",
+        "label": "Screens it stays open on, comma separated",
+        "description": "Usually set by left-clicking the pocket on that screen. A laptop panel is named by its connector (eDP-1), any other screen by its model (ASUS VG289)."
+      },
+      {
         "key": "locked",
-        "type": "boolean",
-        "label": "Locked shut",
-        "description": "Keeps the pocket closed when the pointer passes over it. Usually set by right-clicking the pocket."
+        "type": "string",
+        "label": "Screens it stays shut on, comma separated",
+        "description": "Keeps the pocket closed there when the pointer passes over it. Usually set by right-clicking the pocket on that screen. Screens are named as for the setting above."
       }
     ]
   }
