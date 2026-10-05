@@ -1397,6 +1397,36 @@ onlyChange("an array-valued members write reports it found the entry", shellFixt
     e => { e.bar.layout.left[1].members = "omarchy.workspaces" })
 }
 
+// The lock is the second key Pocket writes, through the same function. It
+// lands after the keys already there, like a first `members` write.
+onlyChange("a locked write reports it found the entry", shellFixture(),
+  c => Model.setEntrySetting(c, "right", SELF, "locked", true),
+  e => { e.bar.layout.right[3].locked = true })
+{
+  const config = shellFixture()
+  config.bar.layout.right[3].locked = true
+  onlyChange("an unlock rewrites the key in its place", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", false),
+    e => { e.bar.layout.right[3].locked = false })
+}
+{
+  const config = shellFixture()
+  config.bar.layout.right[3] = SELF
+  onlyChange("a bare string pocket entry is promoted by a locked write", config,
+    c => Model.setEntrySetting(c, "right", SELF, "locked", true),
+    e => { e.bar.layout.right[3] = { id: SELF, locked: true } })
+}
+// A refused key leaves the whole file as it was, the way a refused entry does.
+// One case per word, so the guard is seen refusing each of them.
+untouched("writing the id itself is refused",
+  shellFixture(), c => Model.setEntrySetting(c, "right", SELF, "id", "evil"))
+untouched("an empty key is refused",
+  shellFixture(), c => Model.setEntrySetting(c, "right", SELF, "", "x"))
+for (const word of Model.reservedEntryKeys) {
+  untouched(`a key that disarms the entry is refused: ${word}`,
+    shellFixture(), c => Model.setEntrySetting(c, "right", SELF, word, "payload"))
+}
+
 // The placement repair moves one entry. Everything else in the file, the moved
 // entry's own keys and a bare string's shape included, comes out as it went in.
 onlyChange("a far-side member is moved against the pocket", shellFixture(),

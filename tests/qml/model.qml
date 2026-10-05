@@ -139,6 +139,32 @@ QtObject {
       function (c) { return Model.setMembersOnEntry(c, "left", self, "omarchy.workspaces") },
       function (e) { e.bar.layout.left[1].members = "omarchy.workspaces" })
 
+    harness.onlyChange("V4 a locked write reports it found the entry", harness.shellFixture(),
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", true) },
+      function (e) { e.bar.layout.right[3].locked = true })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3].locked = true
+    harness.onlyChange("V4 an unlock rewrites the key in its place", config,
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", false) },
+      function (e) { e.bar.layout.right[3].locked = false })
+
+    config = harness.shellFixture()
+    config.bar.layout.right[3] = self
+    harness.onlyChange("V4 a bare string pocket entry is promoted by a locked write", config,
+      function (c) { return Model.setEntrySetting(c, "right", self, "locked", true) },
+      function (e) { e.bar.layout.right[3] = { id: self, locked: true } })
+
+    var refused = ["id", ""].concat(Model.RESERVED_ENTRY_KEYS)
+    for (var w = 0; w < refused.length; w++) {
+      config = harness.shellFixture()
+      var before = JSON.stringify(config)
+      harness.check("V4 a refused key reports false: '" + refused[w] + "'",
+                    Model.setEntrySetting(config, "right", self, refused[w], "payload"), false)
+      harness.check("V4 a refused key leaves the file alone: '" + refused[w] + "'",
+                    JSON.stringify(config), before)
+    }
+
     harness.onlyChange("V4 a far-side member is moved against the pocket", harness.shellFixture(),
       function (c) { return Model.placeMemberBesideSelf(c, "right", "omarchy.bluetooth", self, true) },
       function (e) {
