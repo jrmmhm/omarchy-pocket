@@ -365,6 +365,12 @@ QtObject {
           Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
     check("V4 has no key without a screen", Model.screenKey(null), "")
     check("V4 has no key without a name", Model.screenKey({ model: "X" }), "")
+    check("V4 keeps the last name over a blank answer", Model.screenKeyAfter("ASUS VG289", ""),
+          "ASUS VG289")
+    check("V4 lets a new name replace the last", Model.screenKeyAfter("eDP-1", "ASUS VG289"),
+          "ASUS VG289")
+    check("V4 takes the first name", Model.screenKeyAfter("", "eDP-1"), "eDP-1")
+    check("V4 has no name from nothing", Model.screenKeyAfter(undefined, null), "")
     checkList("V4 splits a comma string on commas only",
               Model.screenList("eDP-1, ASUS VG289"), ["eDP-1", "ASUS VG289"])
     checkList("V4 reads the sequence type a setting delivers",

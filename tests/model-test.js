@@ -376,6 +376,14 @@ for (const screen of [null, undefined, {}, { name: "" }, { name: "  ", model: "X
 check("missing fields read as empty, never as the word undefined",
   Model.screenKey({ name: "HDMI-A-1", model: undefined, serialNumber: null }), "HDMI-A-1")
 
+// The latch: a blank answer is a surface unmapped for a moment, so the last
+// name holds; a real name always wins.
+check("a blank answer keeps the last name", Model.screenKeyAfter("ASUS VG289", ""), "ASUS VG289")
+check("a missing answer keeps the last name", Model.screenKeyAfter("eDP-1", undefined), "eDP-1")
+check("a new name replaces the last one", Model.screenKeyAfter("eDP-1", "ASUS VG289"), "ASUS VG289")
+check("the first name is taken", Model.screenKeyAfter("", "eDP-1"), "eDP-1")
+check("nothing before and nothing now is no name", Model.screenKeyAfter(undefined, ""), "")
+
 // The list a per-screen setting holds. Split on commas only: a model name has
 // spaces in it, which is exactly what toList() splits `members` on.
 check("a comma string names its screens",
