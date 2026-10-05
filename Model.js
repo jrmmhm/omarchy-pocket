@@ -537,13 +537,19 @@ function rawSection(config, region) {
   return Array.isArray(entries) ? entries : null
 }
 
-// Set `members` on this plugin's own entry inside a raw shell.json. The config
+// Set one key on this plugin's own entry inside a raw shell.json. The config
 // reaching a mutator is whatever the user's file holds, so entries may be bare
 // id strings. Every other key on the entry is left exactly as it was, and
-// nothing outside the entry is touched. Reports whether it was found at all.
-function setMembersOnEntry(config, region, id, value) {
+// nothing outside the entry is touched. Reports whether it was written at all.
+//
+// `id` and the keys that disarm an entry are refused before anything is looked
+// at, for the reason mergedEntrySettings() refuses them on the other path.
+function setEntrySetting(config, region, id, key, value) {
   var want = String(id || "").trim()
   if (want === "") return false
+
+  var name = String(key || "")
+  if (name === "" || name === "id" || isReservedEntryKey(name)) return false
 
   var entries = rawSection(config, region)
   if (entries === null) return false
@@ -551,10 +557,14 @@ function setMembersOnEntry(config, region, id, value) {
   for (var i = 0; i < entries.length; i++) {
     if (entryIdOf(entries[i]) !== want) continue
     if (!isPlainObject(entries[i])) entries[i] = { id: want }
-    entries[i].members = value
+    entries[i][name] = value
     return true
   }
   return false
+}
+
+function setMembersOnEntry(config, region, id, value) {
+  return setEntrySetting(config, region, id, "members", value)
 }
 
 // Settings keys that disarm a bar entry. `exec` means a command module,
@@ -1022,7 +1032,8 @@ if (typeof module !== "undefined" && module.exports) {
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,
                      membersValue: membersValue, dropDecision: dropDecision,
-                     setMembersOnEntry: setMembersOnEntry, countEntries: countEntries,
+                     setMembersOnEntry: setMembersOnEntry, setEntrySetting: setEntrySetting,
+                     countEntries: countEntries,
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,

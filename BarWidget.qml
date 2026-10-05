@@ -1062,7 +1062,10 @@ BarWidget {
   // is handed, so it is handed the whole entry (see Model.mergedEntrySettings).
   // It cannot match a bare id string, so a hand-written entry of that shape has
   // no write path left there at all — the tooltip is what says so.
-  function writeMembers(value) {
+  //
+  // Every key this plugin owns goes through here — `members`, and `locked` —
+  // under the same permission, so a second pocket entry refuses both.
+  function writeSetting(key, value) {
     if (!root.mayWriteMembers) return false
     if (!bar || !bar.shell) return false
 
@@ -1072,7 +1075,7 @@ BarWidget {
     if (typeof bar.shell.mutateShellConfig === "function") {
       var written = false
       bar.shell.mutateShellConfig(function (config) {
-        written = Model.setMembersOnEntry(config, region, selfId, value)
+        written = Model.setEntrySetting(config, region, selfId, key, value)
       })
       if (written) return true
     }
@@ -1080,8 +1083,25 @@ BarWidget {
     if (typeof bar.shell.updateEntryInline !== "function") return false
     // The injected `settings` and not the layout snapshot: the snapshot goes
     // stale on an inline-only config change (#16, docs/decisions/0019).
-    return bar.shell.updateEntryInline(selfId,
-      Model.mergedEntrySettings(root.settings, "members", value)) === true
+    var next = Model.mergedEntrySettings(root.settings, key, value)
+
+    // The one key `settings` is known to hold stale: after a reorder the host
+    // can hand a running pocket its old `members` back (docs/decisions/0018).
+    // Carried as it stands, a write of any other key would put that old order
+    // back into shell.json, and the order repair would not see it — the value
+    // it compares does not change. So it goes out in layout order, which is
+    // exactly what repairMemberOrder() would write, under the same guard.
+    if (key !== "members" && root.membersMisordered) {
+      var raw = root.setting("members", "")
+      next.members = Model.membersValue(
+        Model.orderMembers(Model.toList(raw), root.layoutIds(region)), raw)
+    }
+
+    return bar.shell.updateEntryInline(selfId, next) === true
+  }
+
+  function writeMembers(value) {
+    return root.writeSetting("members", value)
   }
 
   // Written synchronously, before the bar persists its own move. Deferring it
