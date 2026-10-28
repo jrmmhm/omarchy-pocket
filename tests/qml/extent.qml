@@ -20,6 +20,11 @@ import "plugin" as Pk
 // once fully out, the host's own sizing is back, so a member whose label grows
 // while the pocket is open grows with it.
 //
+// Then a third pocket, collapsed, is unloaded the way the host unloads a plugin
+// on a hot reload: its slots outlive it. The member it gave back must still
+// follow its own size afterwards. A size handed back as a binding made inside
+// the pocket stops with the pocket, and froze there (docs/decisions/0023).
+//
 // Needs a window: Model.ownsSlot() refuses every slot to an instance that does
 // not know its surface. tests/qml/run.sh runs this case offscreen.
 QtObject {
@@ -69,6 +74,8 @@ QtObject {
 
   property FakeBar rowBar: FakeBar { vertical: false }
   property FakeBar columnBar: FakeBar { vertical: true }
+  property FakeBar unloadedBar: FakeBar { vertical: false }
+  property var unloadedMember: null
 
   property FloatingWindow win: FloatingWindow {
     id: win
@@ -82,6 +89,16 @@ QtObject {
       parent: win.contentItem
       bar: harness.columnBar
       settings: ({ members: harness.memberId })
+    }
+    property Loader unloadable: Loader {
+      parent: win.contentItem
+      active: false
+      sourceComponent: Component {
+        Pk.BarWidget {
+          bar: harness.unloadedBar
+          settings: ({ members: harness.memberId })
+        }
+      }
     }
   }
 
@@ -218,6 +235,29 @@ QtObject {
       var c = harness.cases[i]
       harness.check(c[0] + ": closed, the member is tucked away again", harness.members[c[0]].visible, false)
     }
+
+    var made = []
+    for (var j = 0; j < harness.layoutIds.length; j++)
+      made.push(harness.slotComponent.createObject(win.contentItem, { moduleName: harness.layoutIds[j] }))
+    harness.unloadedBar.moduleSlots = made
+    harness.unloadedMember = made[1]
+    win.unloadable.active = true
+    made[2].activeItem = win.unloadable.item
+    harness.next(400)
+  }
+
+  function step5() {
+    // Precondition: the pocket is holding the member, or unloading it proves nothing.
+    harness.check("unloaded pocket: the member starts tucked away", harness.unloadedMember.visible, false)
+    win.unloadable.active = false
+    harness.next(100)
+  }
+
+  function step6() {
+    var slot = harness.unloadedMember
+    harness.check("unloaded pocket: the member is given back", slot.visible, true)
+    slot.implicitWidth = slot.implicitWidth + 10
+    harness.check("unloaded pocket: the member still follows its own size", slot.width, slot.implicitWidth)
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
