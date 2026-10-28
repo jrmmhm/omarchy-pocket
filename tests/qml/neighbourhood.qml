@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import qs.Commons
+import qs.Commons as Commons
 import "plugin" as Pk
 import "plugin/Model.js" as Model
 import "host/BarModel.js" as Host
@@ -468,7 +468,7 @@ QtObject {
     harness.check("the mark answers the way out as well",
       harness.pocket.dropReleases, true)
     harness.check("in the colour the bar draws its own insertion line in",
-      harness.markButton().activeColor, Color.accent)
+      harness.markButton().activeColor, Commons.Color.accent)
     harness.check("and it is lit, not merely intending to be",
       harness.markButton().active, true)
 
