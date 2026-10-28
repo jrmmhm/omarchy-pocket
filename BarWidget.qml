@@ -5,6 +5,10 @@ import QtQuick
 // screen's pocket would drive the other screen's widgets.
 import Quickshell
 import qs.Commons
+// Qualified, because QtQuick has a `Color` singleton of its own and on Qt 6.12
+// it shadows the shell's: a bare `Color.accent` reads undefined. The host's own
+// files import it the same way.
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -1576,8 +1580,8 @@ BarWidget {
     // renamed symbol, and assigning an undefined to a `color` leaves the button
     // painting whatever it painted last while warning once per evaluation.
     activeColor: root.dropReleases
-      ? Color.accent
-      : (root.bar && ("urgent" in root.bar) ? root.bar.urgent : Color.urgent)
+      ? Commons.Color.accent
+      : (root.bar && ("urgent" in root.bar) ? root.bar.urgent : Commons.Color.urgent)
     // Deliberately not the stock tray's chevron: the tray sits in the same
     // section doing a visually similar thing, and two identical glyphs side by
     // side are two things a user cannot tell apart. Dots read as "there is more
