@@ -67,7 +67,8 @@ first and compared byte for byte after every run that could write it.
 
 Row 8 is the race a reviewer raised: motion past the threshold and the release
 in one batch of events, so that the release runs before the deferred refusal.
-It did not happen in the six flicks tried. Row 10: while the ghost is mapped its
+It did not happen in the six flicks tried, but nothing rules it out: a refusal
+that finds the drag already over does nothing, and the drop stands. Row 10: while the ghost is mapped its
 image has not been captured yet, so nothing is drawn in it.
 
 ## Found on the way: the theme colours read as nothing on Qt 6.12
@@ -103,4 +104,10 @@ What this does not cover:
   applies on those hosts as well.
 - Members that all hide themselves still count as a run: the mark cannot be
   dragged while none of them is drawn.
+- A mark already apart from its members may be dragged, so it can still be
+  dropped between them from there.
+- Two configurations the tooltip already reports as mistakes: with a second
+  pocket entry in the same section, `Model.hasRun()` judges the first entry for
+  both; and a `centerAnchor` widget listed as a member, standing against the
+  mark, counts as a run although it is never hidden.
 - Touch input.

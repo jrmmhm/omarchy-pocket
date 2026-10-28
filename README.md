@@ -422,7 +422,8 @@ Three things change your first hour with it:
   else, and one dropped between them would split the run — and on Omarchy
   4.0.3 and later Pocket could repair neither. So while a member stands against
   the mark, dragging the mark does nothing: it lets go as soon as the drag
-  starts. To move the whole group, drag the members out, move the mark, and
+  starts. (A flick so fast that the button comes up in the same instant can
+  still get through; one drag puts the mark back.) To move the whole group, drag the members out, move the mark, and
   drag them back in, or use `omarchy bar move` for each. An empty mark, or one
   that already stands apart from its members, moves as usual; see
   [decision 0024](docs/decisions/0024-the-mark-stays-with-its-run.md).
