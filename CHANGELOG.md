@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-28
+
+The widgets beside the pocket now slide out of the way and back instead of
+jumping, a contribution by @D3m0nZOnFire. The mark can no longer be dragged
+away from its members or in between them, and the colour that answers a drag
+taking a member out works again on Qt 6.12. Tested live on one and two
+monitors;
+[decision 0023](docs/decisions/0023-the-neighbours-slide-with-the-reveal.md)
+and [decision 0024](docs/decisions/0024-the-mark-stays-with-its-run.md) own
+the measurements.
+
 ### Changed
 
 - **The widgets beside the pocket slide instead of jumping.** The members used
@@ -567,7 +578,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.5.0
 [0.4.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.0
