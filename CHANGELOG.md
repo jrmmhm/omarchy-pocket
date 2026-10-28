@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The widgets beside the pocket slide instead of jumping.** The members used
+  to fade and grow in place while the room they take on the bar appeared in one
+  frame when the pocket opened and vanished in one frame when it closed, so
+  everything next to the run (the tray's chevron, typically) jumped by the
+  run's whole length. Each member's width now rides its own share of the
+  reveal, out and back, at the same pace and curve as the fade; on a vertical
+  bar it is the height. Once a member is fully out the bar sizes it again, so a
+  label that grows while the pocket is open still has room, and that holds
+  after the pocket is hot-reloaded too. One limit: a click on a member while it
+  is still sliding out can start a drag.
+  [Decision 0023](docs/decisions/0023-the-neighbours-slide-with-the-reveal.md)
+  owns the measurements.
+
 ### Fixed
 
 - **Letting a member go lights the mark in its own colour again.** The mark
