@@ -667,6 +667,22 @@ function firstMisplacedMember(layoutIds, selfId, memberIds, nearestAtEnd) {
   return ""
 }
 
+// Whether a member sits directly against the pocket, on the side its members
+// fan out from: whether there is a run for the mark to be dragged away from.
+// Only the neighbour counts, so a mark that already stands apart from its
+// members can still be dragged back to them. See docs/decisions/0024.
+function hasRun(layoutIds, selfId, memberIds, nearestAtEnd) {
+  var ids = layoutIds || []
+  var self = String(selfId || "").trim()
+  if (self === "") return false
+
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i]).trim() !== self) continue
+    return memberOfRunAt(ids, nearestAtEnd ? i - 1 : i + 1, i, memberIds, nearestAtEnd)
+  }
+  return false
+}
+
 // Move one entry so it sits directly against the pocket, on the side the
 // members fan out towards. Reports whether it moved: a member already on the
 // correct side is left exactly where the user put it, which is what keeps
@@ -1131,6 +1147,7 @@ if (typeof module !== "undefined" && module.exports) {
                      setMembersOnEntry: setMembersOnEntry, setEntrySetting: setEntrySetting,
                      countEntries: countEntries,
                      mayWrite: mayWrite, firstMisplacedMember: firstMisplacedMember,
+                     hasRun: hasRun,
                      placeMemberBesideSelf: placeMemberBesideSelf,
                      steerDropAfter: steerDropAfter, sameMarkerRect: sameMarkerRect,
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
