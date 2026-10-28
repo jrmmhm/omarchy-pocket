@@ -761,6 +761,19 @@ function revealFraction(progress, index, count, maxStagger) {
   return Math.max(0, Math.min(1, (p - stagger * i) / span))
 }
 
+// The room a member's slot takes along the bar at its share of the reveal: its
+// width, or its height on a vertical bar. The bar lays its slots out in a Row
+// (a Column when vertical), so that extent is the only thing that moves the
+// neighbours: driving it with the same fraction as the fade slides them along
+// with the members instead of jumping them when `visible` flips.
+function revealExtent(fullExtent, fraction) {
+  var e = Number(fullExtent)
+  if (!isFinite(e) || e <= 0) return 0
+  var f = Number(fraction)
+  if (!isFinite(f)) return 0
+  return Math.round(e * Math.max(0, Math.min(1, f)))
+}
+
 // Each member's place in the cascade, 0 leading, for the members in the order
 // they are handed over. revealFraction() takes this as its `index`.
 //
@@ -1139,7 +1152,8 @@ function describe(state) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { isWidgetId: isWidgetId, toList: toList, parseMembers: parseMembers,
                      rejectedMembers: rejectedMembers, unreadableEntries: unreadableEntries,
-                     revealFraction: revealFraction, cascadeRanks: cascadeRanks,
+                     revealFraction: revealFraction, revealExtent: revealExtent,
+                     cascadeRanks: cascadeRanks,
                      tooltipSafe: tooltipSafe, tooltipList: tooltipList,
                      describe: describe, entryIdOf: entryIdOf, orderMembers: orderMembers,
                      withoutMember: withoutMember, nextMembers: nextMembers,
