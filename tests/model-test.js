@@ -1204,6 +1204,29 @@ check("a pocket that is not in the region reports nothing",
 check("no members, nothing misplaced",
   Model.firstMisplacedMember(RIGHT_IDS, SELF, [], true), "")
 
+// --------------------------------------------------------------- the run
+
+// What decides whether the mark may be dragged: a member right beside it, on
+// the side the members fan out from. docs/decisions/0024.
+check("a member against the mark is a run",
+  Model.hasRun(RIGHT_IDS, SELF, ["mehiel.darky", "omaplug"], true), true)
+check("members further out but not against the mark are no run",
+  Model.hasRun(RIGHT_IDS, SELF, ["mehiel.darky"], true), false)
+check("a member only on the far side is no run",
+  Model.hasRun(RIGHT_IDS, SELF, ["jerome.focus"], true), false)
+check("in a left section the run is after the mark",
+  Model.hasRun(RIGHT_IDS, SELF, ["jerome.focus"], false), true)
+check("and a member before it is no run there",
+  Model.hasRun(RIGHT_IDS, SELF, ["omaplug"], false), false)
+check("a member in another section is no run",
+  Model.hasRun(RIGHT_IDS, SELF, ["omarchy.clock"], true), false)
+check("a mark at the edge of its section has no neighbour to be a run",
+  Model.hasRun([SELF, "a"], SELF, ["a"], true), false)
+check("a pocket the region does not hold has no run",
+  Model.hasRun(["a", "b"], SELF, ["a"], true), false)
+check("no members, no run",
+  Model.hasRun(RIGHT_IDS, SELF, [], true), false)
+
 // The startup guarantee, and the other half of "an empty layout leaves
 // everything where it was" above. Both standing invariants run on sight, and
 // at the moment a bar surface is built the host has not necessarily handed the

@@ -1016,6 +1016,36 @@ BarWidget {
     root.pendingId = root.dragSourceId
   }
 
+  // The mark stays with its run. The bar moves only the entry that is dragged,
+  // so a mark dragged away leaves its members where they were, fanning out
+  // apart from it, and a mark dropped between them splits the run. Neither can
+  // be repaired afterwards: from 4.0.3 on the host lets a plugin write no other
+  // widget's entry. So the drag is refused instead, while a member stands
+  // against the mark; a mark already apart from its members, or an empty one,
+  // still moves. docs/decisions/0024.
+  readonly property bool draggingSelf: !!root.dragSource && root.dragSource === root.ownSlot
+
+  onDraggingSelfChanged: {
+    if (!root.draggingSelf) return
+    if (!Model.hasRun(root.layoutIds(root.ownRegion), root.moduleName, root.memberIds,
+                      root.membersLeadFromEnd)) return
+    // Not from here. This runs inside Bar.qml's position handler, at the line
+    // that names the drag source, and the handler goes on to set `dragging`
+    // after it: cancelled now, that flag would outlive the grab, and the next
+    // press on the mark would drop it wherever the pointer went.
+    Qt.callLater(root.refuseSelfDrag)
+  }
+
+  // Disabling an item takes the pointer grab from everything in it, so the
+  // bar's MouseArea gets `canceled` instead of `released` and drops nothing.
+  // Asked again, because the button may have come up in the meantime.
+  function refuseSelfDrag() {
+    var slot = root.ownSlot
+    if (!slot || !root.draggingSelf) return
+    slot.enabled = false
+    slot.enabled = true
+  }
+
   onDragSourceChanged: {
     if (root.dragSource) {
       root.dragSeen = true

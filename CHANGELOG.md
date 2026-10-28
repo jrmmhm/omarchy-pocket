@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The mark stays with its members.** Dragging the mark moved only the mark:
+  dragged away, it left its members fanning out somewhere else, and dropped
+  between them it split the run, and on Omarchy 4.0.3 and later neither could
+  be repaired. While a member stands against the mark, a drag of the mark is
+  now refused; an empty mark, or one already apart from its members, still
+  moves
+  ([decision 0024](docs/decisions/0024-the-mark-stays-with-its-run.md)).
 - **Letting a member go lights the mark in its own colour again.** The mark
   answers a drag in two colours, one for taking a widget in and one for letting
   a member go. On Qt 6.12 QtQuick's own `Color` singleton shadows the shell's,

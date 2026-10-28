@@ -427,8 +427,16 @@ Three things change your first hour with it:
   [decision 0002](docs/decisions/0002-members-belong-on-one-side.md), the reason
   `left` is the exception in
   [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).
-- **Dragging the pocket itself** does not take its members along; they stay
-  where they were.
+- **The mark does not leave its members.** The bar moves only the widget you
+  drag, so a mark dragged away would leave its members fanning out somewhere
+  else, and one dropped between them would split the run — and on Omarchy
+  4.0.3 and later Pocket could repair neither. So while a member stands against
+  the mark, dragging the mark does nothing: it lets go as soon as the drag
+  starts. (A flick so fast that the button comes up in the same instant can
+  still get through; one drag puts the mark back.) To move the whole group, drag the members out, move the mark, and
+  drag them back in, or use `omarchy bar move` for each. An empty mark, or one
+  that already stands apart from its members, moves as usual; see
+  [decision 0024](docs/decisions/0024-the-mark-stays-with-its-run.md).
 
 </details>
 
@@ -528,8 +536,10 @@ would break on.
 `BarWidget.qml` keeps only what needs live objects. `tests/qml/` loads it in
 Quickshell and pins the drop steering — which fails silently in both directions
 it can fail — the membership a drag is decided against, the fan-out order when
-the member list it holds lags the bar, what the two clicks do through the
-host's own button, how the widget degrades
+the member list it holds lags the bar, the room the neighbours slide by and
+that a member gets its own size back even after the pocket is unloaded, that
+the mark refuses its own drag while a member stands against it, what the two
+clicks do through the host's own button, how the widget degrades
 when the host stops publishing a symbol it reads, and that its copy of the bar's
 drop rule still agrees with the bar's own, swept pixel by pixel against the
 installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips
