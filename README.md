@@ -417,8 +417,15 @@ Three things change your first hour with it:
   [decision 0002](docs/decisions/0002-members-belong-on-one-side.md), the reason
   `left` is the exception in
   [decision 0003](docs/decisions/0003-steering-the-bar-s-own-drop-marker.md).
-- **Dragging the pocket itself** does not take its members along; they stay
-  where they were.
+- **The mark does not leave its members.** The bar moves only the widget you
+  drag, so a mark dragged away would leave its members fanning out somewhere
+  else, and one dropped between them would split the run — and on Omarchy
+  4.0.3 and later Pocket could repair neither. So while a member stands against
+  the mark, dragging the mark does nothing: it lets go as soon as the drag
+  starts. To move the whole group, drag the members out, move the mark, and
+  drag them back in, or use `omarchy bar move` for each. An empty mark, or one
+  that already stands apart from its members, moves as usual; see
+  [decision 0024](docs/decisions/0024-the-mark-stays-with-its-run.md).
 
 </details>
 
