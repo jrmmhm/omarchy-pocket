@@ -16,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run's whole length. Each member's width now rides its own share of the
   reveal, out and back, at the same 600 ms and curve as the fade; on a vertical
   bar it is the height. Once a member is fully out the bar sizes it again, so a
-  label that grows while the pocket is open still has room.
+  label that grows while the pocket is open still has room, and that holds
+  after the pocket is hot-reloaded too. One limit: a click on a member while it
+  is still sliding out can start a drag.
+  [Decision 0023](docs/decisions/0023-the-neighbours-slide-with-the-reveal.md)
+  owns the measurements.
 
 ## [0.5.0] — 2026-10-05
 

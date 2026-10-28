@@ -247,7 +247,9 @@ no longer is, is *on the bar*, and that split is where things come apart:
 module slots, built by the bar itself. Pocket flips `visible` on those slots,
 and a Qt `Row` does not lay out an invisible child — so the space closes up
 while the entry never moves: `inBar` still finds it, `findPanelWidget` still
-finds it, and its settings still live on its own entry.
+finds it, and its settings still live on its own entry. While it opens and
+closes it also narrows those slots, so the widgets beside them slide instead of
+jumping, and hands the width back to the slot once a member is out.
 
 Not every grouping widget moves them, and this section is a comparison with the
 common kind rather than with all of them. Three were read: two move the entries
@@ -409,6 +411,14 @@ Three things change your first hour with it:
   when that happened, the placement rule then moves it across to join the run;
   if it was already on the members' side, it stays where it is. One drag undoes
   either.
+- **A click on a member that is still sliding out can start a drag.** The bar
+  measures a drag inside the widget you pressed, so a widget moving under a
+  still pointer reads as the pointer moving. Click in the first moment after
+  the pocket starts to open and the widget can land somewhere else, out of the
+  pocket even. A click once the members have arrived is a click. One drag
+  undoes it;
+  [decision 0023](docs/decisions/0023-the-neighbours-slide-with-the-reveal.md)
+  has the timings.
 - **In the `left` section, dropping a widget in from the far side takes about
   twice as long.** Any widget reorder makes Omarchy rebuild every widget on
   every monitor, and putting a far-side arrival back where it belongs costs a
@@ -491,8 +501,9 @@ omarchy plugin remove jrmmhm.pocket
 ```
 
 Every hidden widget comes back. The hidden state is never written anywhere, so
-removing Pocket, disabling it, hot-reloading it or killing the shell all have
-the same effect: the slots are rebuilt visible and nothing stays lost.
+removing Pocket, disabling it or killing the shell rebuilds the slots visible,
+and hot-reloading it hands every widget back, at its own size, before the new
+copy takes over. Nothing stays lost.
 
 What does not come back is the `members` list. Removing a plugin disables it
 first, and disabling a bar widget deletes its layout entry — and `members` lives
