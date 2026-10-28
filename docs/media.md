@@ -6,6 +6,10 @@ property of *that* session, and a capture taken on a different output, scale or
 theme will not line up with the ones in the repository. This file is what makes
 a re-shoot possible without guessing.
 
+They have already aged once: both predate the slide of
+[decision 0023](decisions/0023-the-neighbours-slide-with-the-reveal.md), so in
+the hover recording the tray still jumps when the pocket opens and closes.
+
 ## The session
 
 | | |
