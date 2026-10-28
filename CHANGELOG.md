@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Decision 0023](docs/decisions/0023-the-neighbours-slide-with-the-reveal.md)
   owns the measurements.
 
+### Fixed
+
+- **Letting a member go lights the mark in its own colour again.** The mark
+  answers a drag in two colours, one for taking a widget in and one for letting
+  a member go. On Qt 6.12 QtQuick's own `Color` singleton shadows the shell's,
+  so the theme colours read as nothing, the second colour was never applied,
+  and both answers looked the same. The colours are now read through a
+  qualified import, as the host's own files do, and the QML harness that had
+  failed on this since Qt 6.12 passes again.
+
 ## [0.5.0] — 2026-10-05
 
 A right click now locks the pocket shut, and both the pin and the lock belong
