@@ -83,6 +83,12 @@ already reset changes nothing.
 | 11 | Shell CPU over 20 open/fold cycles, three runs each | `main` 2.00–2.06 s, the PR 2.81–2.87 s, the fix 2.79–2.85 s |
 | 12 | A press on a member while it slides | **`main` 0 of 20, the slide 5 of 20** — see the next section |
 
+Row 8: in a trace logged from inside the pocket over eight reloads of the PR,
+the old pocket released every member before the new one was created, every
+time. That
+order is what lets the README promise that a reload hands every widget back
+before the new copy takes over.
+
 Row 11: the slide relayouts the bar on every frame of the animation, about
 20 ms of CPU per open or fold on this machine. The fix costs the same as the
 PR.
