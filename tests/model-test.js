@@ -270,6 +270,20 @@ check("progress below zero is clamped", rf(-5, 0, 4), 0)
 check("garbage progress reads as rest", rf("nonsense", 0, 4), 0)
 check("an index past the end is the last member", rf(1, 99, 4), rf(1, 3, 4))
 
+// The room a member's slot takes along the bar while it fans out (its width,
+// or its height on a vertical bar), which is what slides its neighbours instead
+// of moving them in one frame.
+const re = Model.revealExtent
+
+check("a member at rest takes no room", re(40, 0), 0)
+check("a revealed member takes its full extent", re(40, 1), 40)
+check("a member halfway out takes half its extent, rounded", re(41, 0.5), 21)
+check("a fraction past the end is clamped to the full extent", re(40, 1.5), 40)
+check("a fraction before the start is clamped to nothing", re(40, -0.2), 0)
+check("an unreadable extent takes no room", re(undefined, 0.5), 0)
+check("a negative extent takes no room", re(-10, 0.5), 0)
+check("an unreadable fraction takes no room", re(40, NaN), 0)
+
 // -------------------------------------------------------------- tooltip
 
 // Pinned verbatim, not by substring. This line is the only thing an empty

@@ -1401,10 +1401,11 @@ BarWidget {
       root.setSlotProperty(list[i], "transformOrigin", root.growthOrigin)
       root.setSlotProperty(list[i], "opacity", f)
       root.setSlotProperty(list[i], "scale", 0.6 + 0.4 * f)
+      root.setSlotExtent(list[i], f)
     }
 
-    // Space is only given back once the members have gone, so the neighbours
-    // slide in behind them rather than through them.
+    // The extent has already shrunk to nothing by now; hiding the members only
+    // takes them out of the bar's hit testing and geometry reports.
     if (!root.expanded && root.revealProgress <= 0.001) root.hideDriven()
   }
 
@@ -1416,6 +1417,46 @@ BarWidget {
   }
 
   function setSlotVisible(slot, value) { setSlotProperty(slot, "visible", value) }
+
+  // The bar's Row (Column when vertical) moves a slot's neighbours by the
+  // slot's extent along it alone, so that extent rides the member's share of
+  // the reveal and the neighbours slide with the fade. Clipped while it is
+  // shorter than what it paints. Fully out, the host's own sizing goes back, so
+  // a widget whose label changes while the pocket is open still sizes itself.
+  function setSlotExtent(slot, fraction) {
+    if (!slot) return
+    if (fraction >= 1) {
+      root.restoreSlotExtent(slot)
+      return
+    }
+    var along = root.vertical ? "height" : "width"
+    var across = root.vertical ? "width" : "height"
+    // A slot that does not size itself from an implicit size is not the host's
+    // ModuleSlot; there is no size of its own to give back, so it keeps its own.
+    if (!(root.implicitOf(along) in slot)) return
+    // Only off when the bar turned while this member was held short; not
+    // rebound every frame for nothing.
+    if (slot[across] !== slot[root.implicitOf(across)]) root.restoreSlotSize(slot, across)
+    root.setSlotProperty(slot, "clip", true)
+    root.setSlotProperty(slot, along, Model.revealExtent(slot[root.implicitOf(along)], fraction))
+  }
+
+  // Both, not just the one in use: the bar can turn vertical while the
+  // pocket is open, and the extent driven before then must not stay pinned.
+  function restoreSlotExtent(slot) {
+    if (!slot) return
+    root.restoreSlotSize(slot, "width")
+    root.restoreSlotSize(slot, "height")
+    root.setSlotProperty(slot, "clip", false)
+  }
+
+  function restoreSlotSize(slot, name) {
+    var implicit = root.implicitOf(name)
+    if (!(implicit in slot)) return
+    root.setSlotProperty(slot, name, Qt.binding(function () { return slot[implicit] }))
+  }
+
+  function implicitOf(name) { return name === "width" ? "implicitWidth" : "implicitHeight" }
 
   function hideDriven() {
     for (var i = 0; i < root.driven.length; i++) {
@@ -1450,6 +1491,7 @@ BarWidget {
     root.setSlotProperty(slot, "opacity", 1)
     root.setSlotProperty(slot, "scale", 1)
     root.setSlotProperty(slot, "transformOrigin", Item.Center)
+    root.restoreSlotExtent(slot)
     root.setSlotVisible(slot, true)
   }
 

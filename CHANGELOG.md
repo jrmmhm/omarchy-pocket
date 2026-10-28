@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The widgets beside the pocket slide instead of jumping.** The members used
+  to fade and grow in place while the room they take on the bar appeared in one
+  frame when the pocket opened and vanished in one frame when it closed, so
+  everything next to the run (the tray's chevron, typically) jumped by the
+  run's whole length. Each member's width now rides its own share of the
+  reveal, out and back, at the same 600 ms and curve as the fade; on a vertical
+  bar it is the height. Once a member is fully out the bar sizes it again, so a
+  label that grows while the pocket is open still has room.
+
 ## [0.5.0] — 2026-10-05
 
 A right click now locks the pocket shut, and both the pin and the lock belong
