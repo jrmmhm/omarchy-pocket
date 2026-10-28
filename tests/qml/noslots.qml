@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import qs.Commons
+import qs.Commons as Commons
 import "plugin" as Pk
 
 // The real BarWidget.qml against a bar that is missing two of the symbols it
@@ -145,7 +145,7 @@ QtObject {
     // to the theme's own colour rather than be handed an undefined.
     probe("the mark keeps a real colour",
           function () { return p.children[0].activeColor.toString() },
-          Color.urgent.toString())
+          Commons.Color.urgent.toString())
 
     // The third, and the one that did not throw but latched. `dragHoldsOpen`
     // asks `dragSource !== null`, and an undefined is not null: a host that
