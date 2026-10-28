@@ -12,10 +12,12 @@ import "Model.js" as Model
 //
 // It never moves a widget. The members stay exactly where the user put them in
 // `bar.layout`, in their own module slots, built by the bar itself — the pocket
-// only flips `visible` on those slots, and a Row does not lay out an invisible
-// child. That is the whole mechanism, and it is the reason every Omarchy tool
-// keeps telling the truth about a tucked-away widget: `inBar` still finds it,
-// `findPanelWidget` still finds it, its settings still live on its own entry.
+// flips `visible` on those slots, and a Row does not lay out an invisible child.
+// On the way in and out it also drives their opacity, scale and extent, and
+// hands the extent back to the slot once they are out. That is the whole
+// mechanism, and it is the reason every Omarchy tool keeps telling the truth
+// about a tucked-away widget: `inBar` still finds it, `findPanelWidget` still
+// finds it, its settings still live on its own entry.
 //
 // Membership can be changed by dragging, and that is what the pocket writes:
 // its own `members` key, on its own layout entry, through the host's own config
@@ -1424,39 +1426,33 @@ BarWidget {
   // shorter than what it paints. Fully out, the host's own sizing goes back, so
   // a widget whose label changes while the pocket is open still sizes itself.
   function setSlotExtent(slot, fraction) {
-    if (!slot) return
     if (fraction >= 1) {
       root.restoreSlotExtent(slot)
       return
     }
+    if (!root.isSizedSlot(slot)) return
     var along = root.vertical ? "height" : "width"
-    var across = root.vertical ? "width" : "height"
-    // A slot that does not size itself from an implicit size is not the host's
-    // ModuleSlot; there is no size of its own to give back, so it keeps its own.
-    if (!(root.implicitOf(along) in slot)) return
-    // Only off when the bar turned while this member was held short; not
-    // rebound every frame for nothing.
-    if (slot[across] !== slot[root.implicitOf(across)]) root.restoreSlotSize(slot, across)
+    var implicit = root.vertical ? "implicitHeight" : "implicitWidth"
     root.setSlotProperty(slot, "clip", true)
-    root.setSlotProperty(slot, along, Model.revealExtent(slot[root.implicitOf(along)], fraction))
+    root.setSlotProperty(slot, along, Model.revealExtent(slot[implicit], fraction))
   }
 
-  // Both, not just the one in use: the bar can turn vertical while the
-  // pocket is open, and the extent driven before then must not stay pinned.
+  // A reset, not a binding: `undefined` hands the size back to the slot, which
+  // then follows its implicit size natively, in nobody's context. A binding made
+  // here would belong to this instance and stop with it, and a hot reload would
+  // leave a released member frozen at the width it had at that moment
+  // (docs/decisions/0023). Both axes, because resetting one that was never
+  // driven changes nothing.
   function restoreSlotExtent(slot) {
-    if (!slot) return
-    root.restoreSlotSize(slot, "width")
-    root.restoreSlotSize(slot, "height")
+    if (!root.isSizedSlot(slot)) return
+    root.setSlotProperty(slot, "width", undefined)
+    root.setSlotProperty(slot, "height", undefined)
     root.setSlotProperty(slot, "clip", false)
   }
 
-  function restoreSlotSize(slot, name) {
-    var implicit = root.implicitOf(name)
-    if (!(implicit in slot)) return
-    root.setSlotProperty(slot, name, Qt.binding(function () { return slot[implicit] }))
-  }
-
-  function implicitOf(name) { return name === "width" ? "implicitWidth" : "implicitHeight" }
+  // Every Item has an implicit size; only the QtObject stand-ins in tests/qml
+  // do not, and they have no extent to drive.
+  function isSizedSlot(slot) { return !!slot && "implicitWidth" in slot }
 
   function hideDriven() {
     for (var i = 0; i < root.driven.length; i++) {
@@ -1478,8 +1474,8 @@ BarWidget {
 
     root.driven = wanted.slice()
 
-    // Room is made up front so the members have somewhere to grow into;
-    // taking it back waits for them to finish leaving, in applyReveal().
+    // Shown up front, with no room yet: applyReveal() grows the room with the
+    // reveal, and hides them again only once it has shrunk back to nothing.
     if (root.expanded) {
       for (var j = 0; j < wanted.length; j++) root.setSlotVisible(wanted[j], true)
     }
