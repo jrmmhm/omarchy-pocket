@@ -76,7 +76,9 @@ Pocket stops hiding and says so in its tooltip, and the preferred path is
 already asked first.
 
 It also imports the shell's own `qs.Commons` and `qs.Ui` modules. A renamed
-module is the one failure with no graceful half.
+module is the one failure with no graceful half. And it reads its own entry
+from `~/.config/omarchy/shell.json` after a reload; a shell that keeps the file
+elsewhere only loses that repair.
 
 [Decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md) has
 the whole table, what each fallback cost, and what is not recoverable.
@@ -218,7 +220,11 @@ in `bar.layout` and `members` mirrors it, both in that one file, written by the
 host atomically — so a reboot is just a restart, and `omarchy plugin update`
 pulls a new version and rebuilds the widgets without touching the file at all. A
 member whose widget fails to load after an update keeps its place, because the
-place is read from the file rather than from what is running.
+place is read from the file rather than from what is running. The same goes for
+the pocket's own entry: the shell hands a reloaded widget its settings as they
+were at the last restart, so the pocket reads its members, pins and locks back
+from the file
+([decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)).
 
 ## Why this one keeps your setup honest
 
