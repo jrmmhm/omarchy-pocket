@@ -11,7 +11,7 @@
 
 </div>
 
-![The pocket opening as the pointer arrives, the widgets beside it sliding aside, and folding up again when it leaves](docs/pocket-demo.gif)
+![The pocket opening as the pointer arrives, the tray beside it sliding aside, and folding up again when it leaves](docs/pocket-demo.gif)
 
 ## What this is
 

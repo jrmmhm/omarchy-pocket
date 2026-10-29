@@ -123,18 +123,22 @@ it is the only animated one GitHub gives a play/pause control and honours
 `prefers-reduced-motion` for, and because a file in the repository still works
 in a clone, a fork and a tarball.
 
-`docs/bar-states.png` is two frames of the hover recording — 2.0 s in, before
-the pointer arrives, and 5.0 s in, with the pointer on the mark — cropped
-identically to the bar (`crop=780:43:56:0`) and stacked with a 6 px gap, so the
-two states are the same pixels of the same bar rather than two photographs that
-nearly line up. `preview.png` is those two strips at 1000 px wide on a dark
-1280×640 ground, under the title in Noto Sans Bold 70 and the tagline in Noto
-Sans 24; the community directory generates its card from a root `preview.png` if
-one is there.
+`docs/bar-states.png` is two frames of the raw hover recording — 2.0 s into
+`/tmp/hover-raw.mp4`, before the pointer arrives, and 5.0 s into it, with the
+pointer on the mark — cropped identically to the bar (`crop=780:42:56:0`: ffmpeg
+rounds a crop of these yuv420 frames to an even height, and asking for 43 gave
+42, which also keeps out the bar's last row, already blended with the wallpaper)
+and stacked with a 6 px gap, so the two states are the same pixels of the same
+bar rather than two photographs that nearly line up. `preview.png` is those two
+strips at 1000 px wide on a dark 1280×640 ground, under the title in Noto Sans
+Bold 70 and the tagline in Noto Sans 24; the community directory generates its
+card from a root `preview.png` if one is there.
 
 ## Driving the pointer
 
-Both recordings are machine-driven.
+Both recordings are machine-driven, by two short scripts written for the
+session and not kept in the repository; what they did is below, close enough to
+rewrite them.
 
 The hover take is a warp per frame through Hyprland's cursor dispatcher
 (`hl.dsp.cursor.move`), at 60 Hz and eased in and out, so the movement reads as
@@ -143,19 +147,29 @@ the mark, 2.8 s on it, 0.7 s back out, 2.6 s for the fold. Relative motion
 through `uinput` would be run through libinput's pointer acceleration and land
 somewhere different every take.
 
-The drag take moves the other way round: warps only *before* the press, and
-real relative motion from the virtual `uinput` pointer of `tests/pointer.py` for
-everything while the button is held — steps of at most 4 px every 22 ms,
-corrected against `hyprctl cursorpos` after each one, then 1.0 s at rest on the
-target before the release. That records the drop. The mark is lit going in and
-coming out, and `shell.json` was byte-identical after the in-and-out pair. The
-first set could not be shot this way: there the grab was moved by compositor
-warps, and it did not survive the pointer coming to rest, so what it recorded
-was the *cancelled* drag Pocket documents rather than the drop
-([decision 0010](decisions/0010-the-publication-review-changes-documentation-not-code.md)).
+The drag take moves the other way round: warps only *before* the press, and real
+relative motion for everything while the button is held. It reuses
+`tests/pointer.py` — `Pointer`, `open_pocket()` to find the screen's surface,
+`nudge_by()` for the 30 px that start the drag — and replaces `glide_to()` with
+a slower copy: steps of at most 4 px every 22 ms instead of 8 px every 20 ms,
+still corrected against `hyprctl cursorpos` after each one. The target is read
+from `debugBarGeometry` during the drag: two px inside the mark's left edge
+going in, one px inside the left edge of the widget that had followed it (the
+monitor widget) going out. Then 1.0 s at rest on the target before the release.
+That records the drop. The mark is lit going in and coming out, and `shell.json`
+was byte-identical after the in-and-out pair. The first set could not be shot
+this way: there the grab was moved by compositor warps, and it did not survive
+the pointer coming to rest, so what it recorded was the *cancelled* drag Pocket
+documents rather than the drop ([decision
+0010](decisions/0010-the-publication-review-changes-documentation-not-code.md)).
 Do not warp while the button is held.
 
 The widget going in is grabbed at its right edge rather than its middle. The
 dragged image hangs off the pointer by where it was pressed, so a widget pressed
 in the middle covers the mark at the very moment it lights; pressed at its right
 edge, the image trails to the left of the pointer and the mark stays in view.
+
+After each drop the bar rebuilds every widget, so the drag recording shows the
+section jump and the agents widget blink out for a few frames right after the
+release. That is the host's rebuild, not the slide; the slide belongs to opening
+and folding.
