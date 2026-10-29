@@ -45,12 +45,17 @@ these hold:
   on every load of the file and on every change of `settings`, so a late
   injection of the frozen copy is answered again.
 
+The file is asked only once the pocket has found its own slot, since the
+frozen copy is the slot's; a walk can find it late, after a monitor move
+unmapped the surface, and finding it starts the quiet period again.
+
 The order repair (0018) waits until the file has been asked about the
 `settings` the pocket holds. It is the one write the pocket makes on its own
 from `settings`, and a reorder leaves the frozen copy's `members` out of layout
 order, so a turn after the reload it wrote that copy back, and the host's
 answer to that write then read as current. The fresh-context review of this
-change found it; `tests/qml/reload.qml` reproduces it.
+change found it, and a second review found the same write for a slot found
+late; `tests/qml/reload.qml` reproduces both.
 
 `Model.ownEntrySettings()` reads the file. It returns the entry minus `id`, in
 the file's key order, which is the shape the host injects
@@ -89,8 +94,9 @@ first and restored byte-identically after every run.
 | 3 | Shell started with the eDP-1 pin, the pin dropped after the start, reload | not run | folded, 6 of 6 |
 | 4 | `tests/live.sh --gesture eDP-1`: a member dragged out and back in | not run | passed, 6 of 6; with the order repair waiting, 17 of 18 |
 
-Rows 1 and 2 were run again once the order repair waited, 6 of 6 each; row 3
-was not. The one failure in row 4 was a drag out that left the member in; it
+Rows 1 and 2 were run again once the order repair waited, 6 of 6 each, and
+row 1 once more on the final build, which also waits for the slot, 6 of 6;
+row 3 was not. The one failure in row 4 was a drag out that left the member in; it
 did not come back in the twelve runs after it, six of them at the same pace,
 and its cause is not known.
 
@@ -112,8 +118,8 @@ period, and with the order repair not waiting.
 ## Accepted limit: the first second after a reload
 
 Until the file has been quiet for a second, the pocket runs on the frozen copy.
-Nothing writes on its own in that second; a pin click or a drop by hand does,
-and writes the frozen copy back, as before this change. A hand is slower than
+Nothing writes `settings` back on its own in that second; a pin click or a
+drop by hand does, and writes the frozen copy back, as before this change. A hand is slower than
 that after a reload, and the reload itself is rare. The order repair, and so
 the reorder after a drop, now runs a second later than before.
 
