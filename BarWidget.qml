@@ -4,6 +4,7 @@ import QtQuick
 // module, and without it the lookup silently yields null — at which point one
 // screen's pocket would drive the other screen's widgets.
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 // Qualified, because QtQuick has a `Color` singleton of its own and on Qt 6.12
 // it shadows the shell's: a bare `Color.accent` reads undefined. The host's own
@@ -47,6 +48,64 @@ BarWidget {
   // this a `members` list made only of them left the tooltip reporting an empty
   // pocket to someone who had configured four widgets.
   readonly property var unreadableAt: Model.unreadableEntries(setting("members", ""))
+
+  // A hot reload can hand this pocket settings older than shell.json. The host
+  // patches an inline change into the running widget but not into its slot's
+  // entry, and a reload injects that entry again (omacom/omarchy#7691). The
+  // next pin or drag would then put the old members and pins back, because the
+  // inline write rebuilds the entry from `settings` (0019). So the pocket reads
+  // its own entry from the file, and while the host is still handing it the
+  // slot's frozen copy, takes the file's instead. docs/decisions/0025.
+  property string configPath: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+
+  // The file's copy once it has been taken over, or null.
+  property var adoptedSettings: null
+
+  // Set once the host has delivered settings that are neither the frozen copy
+  // nor the file's: the host is current from then on, and the file is left be.
+  property bool hostSettingsCurrent: false
+
+  function sameSettings(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+
+  // Only `settings` the host gave from the slot's frozen entry, or the copy
+  // taken over from the file, are replaced. Anything else came from the host's
+  // delta path and is newer than both.
+  //
+  // Asked only once the file has been quiet for a second: the file lags the
+  // host's own config (the host sets it first and writes the file after), and
+  // a pocket the bar rebuilt after a drag is born before that write lands.
+  function reconcileSettings() {
+    if (root.hostSettingsCurrent) return
+    var slot = root.ownSlot
+    if (!slot || !("moduleSettings" in slot)) return
+    var current = root.settings
+    if (!root.sameSettings(current, slot.moduleSettings)
+        && !root.sameSettings(current, root.adoptedSettings)) {
+      root.hostSettingsCurrent = true
+      return
+    }
+    var onDisk = Model.ownEntrySettings(configFile.text(), root.moduleName)
+    if (onDisk === null || root.sameSettings(onDisk, current)) return
+    root.adoptedSettings = onDisk
+    root.settings = onDisk
+  }
+
+  FileView {
+    id: configFile
+    path: root.configPath
+    blockLoading: true
+    watchChanges: !root.hostSettingsCurrent
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: reconcileTimer.restart()
+  }
+
+  Timer {
+    id: reconcileTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.reconcileSettings()
+  }
 
   // ------------------------------------------------------------- identity
 
@@ -327,7 +386,12 @@ BarWidget {
     var glass = root.overlay
     if (glass && typeof glass.rearmHover === "function") glass.rearmHover()
   }
-  onSettingsChanged: refreshWalk()
+  onSettingsChanged: {
+    refreshWalk()
+    // The host injects the frozen copy more than once, the last time a turn
+    // after the widget is built, so a copy taken over earlier can be overwritten.
+    reconcileTimer.restart()
+  }
 
   // The settling pass after any change that rebuilds the bar. It redoes both
   // things a rebuild can leave behind — a walk taken before the later slots
