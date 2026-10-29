@@ -1,6 +1,7 @@
 # 25. A reload reads the entry from the file
 
-- Status: accepted
+- Status: accepted, revised the same day after the review of 0.6.1 (last
+  section)
 - Date: 2026-10-29
 - Closes the defect [0023](0023-the-neighbours-slide-with-the-reveal.md)
   found and left open ("a reload forgets inline settings")
@@ -32,30 +33,33 @@ logical) and HDMI-A-1 (ASUS VG289, 1600×900 logical) beside it.
 
 ## Decision
 
-The pocket reads its own entry from `$HOME/.config/omarchy/shell.json` with a
-watched `FileView`, and replaces `settings` with the file's copy when both of
-these hold:
+The pocket reads its own entry from `shell.json`, at the path `configPath` in
+`BarWidget.qml` names, and replaces `settings` with the file's copy when
+`settings` is the slot's `moduleSettings` object itself, or the copy taken from
+the file earlier. Anything else came from the host's delta path, which is
+newer than both. The two are told apart by identity: the host injects the
+slot's own object, and a delta is always a new one, even one equal in value.
 
-- `settings` is the slot's `moduleSettings`, or the copy taken from the file
-  earlier. Anything else came from the host's delta path, which is newer than
-  both; from then on the file is no longer read.
-- The file has been quiet for one second. The file lags the host: the shell
-  sets its config first and writes the file after, and a pocket the bar
-  rebuilt after a drag is born before the move is on disk. The timer restarts
-  on every load of the file and on every change of `settings`, so a late
-  injection of the frozen copy is answered again.
+The file is read fresh, synchronously, and only at these points:
 
-The file is asked only once the pocket has found its own slot, since the
-frozen copy is the slot's; a walk can find it late, after a monitor move
-unmapped the surface, and finding it starts the quiet period again.
+- A moment after the pocket is born, after the slot's copy is injected again,
+  and after the pocket finds its own slot (`reconcileTimer` owns the length).
+  The moment is there for the rebuild a drop causes: the shell sets its config
+  first and writes the file after, so a pocket the bar rebuilt is born before
+  the move is on disk.
+- Before a click on the mark, a write, or a drag of the mark is decided, if
+  that moment has not come yet. So none of them acts on the frozen copy.
 
-The order repair (0018) waits until the file has been asked about the
-`settings` the pocket holds. It is the one write the pocket makes on its own
-from `settings`, and a reorder leaves the frozen copy's `members` out of layout
-order, so a turn after the reload it wrote that copy back, and the host's
-answer to that write then read as current. The fresh-context review of this
-change found it, and a second review found the same write for a slot found
-late; `tests/qml/reload.qml` reproduces both.
+It is not read before the pocket has found its slot, since the frozen copy is
+the slot's; a walk can find it late, after a monitor move unmapped the
+surface. And it is never read again once the slot's `moduleSettings` changes:
+a host whose slots follow their entry, which is what #7692 does, injects no
+frozen copy.
+
+The order repair (0018) waits until the file has been asked. It is the one
+write the pocket makes on its own from `settings`, and a reorder leaves the
+frozen copy's `members` out of layout order, so a turn after the reload it
+wrote that copy back.
 
 `Model.ownEntrySettings()` reads the file. It returns the entry minus `id`, in
 the file's key order, which is the shape the host injects
@@ -74,60 +78,63 @@ Considered and rejected:
 - **Reading the file once, at load.** The second and third injections overwrite
   it, and a pocket rebuilt after a drag would read the file before the move is
   written.
-- **Waiting for #7692.** It fixes the cause, and once it ships `moduleSettings`
-  and the file agree, so this code changes nothing there. Until then every
-  reload loses state.
+- **A watched file and a quiet period.** The first version, shipped in 0.6.1;
+  the last section has why it went.
+- **Waiting for #7692.** It fixes the cause. Until it ships every reload loses
+  state.
 
 ## What was measured
 
-The same script against `main` (45fef50) and against this change, the plugin
-symlink pointed at each checkout and the shell restarted first, so the frozen
-copy was the snapshot's. Each run edited the pocket's entry in `shell.json` by
-hand, which takes the host's inline path exactly as the pocket's own writes and
-a drag onto the mark do, then ran `rescanPlugins`. `shell.json` was snapshotted
-first and restored byte-identically after every run.
+The same script against `main` (45fef50) and against each build of this
+change, the plugin symlink pointed at each checkout and the shell restarted
+first, so the frozen copy was the snapshot's. Each run edited the pocket's
+entry in `shell.json` by hand, which takes the host's inline path exactly as
+the pocket's own writes and a drag onto the mark do, then ran
+`rescanPlugins`. `shell.json` was snapshotted first and restored
+byte-identically after every run. Every run was on eDP-1, with HDMI-A-1
+attached.
 
-| # | Scenario | `main` | This change |
-| :--- | :--- | :--- | :--- |
-| 1 | `omarchy.tailscale` dropped from `members` after the start, reload, a pin click on the eDP-1 mark | **the member came back, 2 of 2** | the member stayed out, the pin was written, 6 of 6 |
-| 2 | The eDP-1 pin set after the start, reload | not run | open, 6 of 6 |
-| 3 | Shell started with the eDP-1 pin, the pin dropped after the start, reload | not run | folded, 6 of 6 |
-| 4 | `tests/live.sh --gesture eDP-1`: a member dragged out and back in | not run | passed, 6 of 6; with the order repair waiting, 17 of 18 |
-
-Rows 1 and 2 were run again once the order repair waited, 6 of 6 each, and
-row 1 once more on the final build, which also waits for the slot, 6 of 6;
-row 3 was not. The one failure in row 4 was a drag out that left the member in; it
-did not come back in the twelve runs after it, six of them at the same pace,
-and its cause is not known.
+| # | Scenario | `main` | 0.6.1 and the builds before it | Revised |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | `omarchy.tailscale` dropped from `members` after the start, reload, a pin click on the eDP-1 mark | **the member came back, 2 of 2** | the member stayed out and the pin was written, 6 of 6 three times | the member stayed out 12 of 12; the pin was written 11 of 12 |
+| 2 | The eDP-1 pin set after the start, reload | not run | open, 6 of 6 twice | open, 6 of 6 |
+| 3 | Shell started with the eDP-1 pin, the pin dropped after the start, reload | not run | folded, 6 of 6 | folded, 6 of 6 |
+| 4 | `tests/live.sh --gesture eDP-1`: a member dragged out and back in | not run | 23 of 24 | 6 of 6 |
 
 Rows 2 and 3 were not run against `main` with this script; 0023 measured the
 same two states there by its own procedure, with the pin by click: a pin set
 was lost 3 of 3, a pin released came back 2 of 2.
 
+Row 1, revised: in the one run without a pin the member had stayed out, and
+the click wrote nothing; the logs held no error, and the next six runs passed.
+Row 4, 0.6.1: the one failure was a drag out that left the member in; its
+cause is not known. Neither came back.
+
 Row 4 is there for the rebuild a drop causes: the rebuilt pocket must not take
 over the file before the move is on disk. It never did.
 
-`tests/qml/reload.qml` plays the host's three injections against a slot with a
-frozen `moduleSettings`. Against `main` (with the `configPath` it sets on one
-pocket removed) it fails: the order repair wrote the frozen copy a turn after
-the reload, and the next write carried no lock where the file held one. It
-also fails without the timer restart on a change
-of `settings`, without the stop once the host is current, with no quiet
-period, and with the order repair not waiting.
+`tests/qml/reload.qml` plays the host's three injections against slots with a
+frozen `moduleSettings`, four pockets, one per case. Against 0.6.1 it fails five
+assertions: the file is never taken over while another entry keeps rewriting
+it, and a write before the timer carries the frozen copy. It also fails with
+`settings` compared by value, without the write asking the file first, without
+the slot's change turning the file off, without the restart when the slot is
+found late, and with a file read from cache.
 
-## Accepted limit: the first second after a reload
+## Accepted limit
 
-Until the file has been quiet for a second, the pocket runs on the frozen copy.
-Nothing writes `settings` back on its own in that second; a pin click or a
-drop by hand does, and writes the frozen copy back, as before this change. A hand is slower than
-that after a reload, and the reload itself is rare. The order repair, and so
-the reorder after a drop, now runs a second later than before.
+A pocket the bar rebuilt after a drop reads the file a moment after it is born.
+If the move took longer than that to reach the disk, it would take over the
+older file. Never seen: the move is written within the same turn.
+
+The order repair, and so the reorder after a drop, runs that moment later
+than before 0.6.1.
 
 ## Consequences
 
 The pocket reads one file it does not own, at the path the shell uses for it.
 A shell that keeps its config somewhere else gets no file and nothing changes.
-All QML cases now run with an empty home of their own (`tests/qml/run.sh`), so
+All QML cases run with an empty home of their own (`tests/qml/run.sh`), so
 none of them reads the user's real `shell.json`.
 
 What this does not cover:
@@ -135,4 +142,25 @@ What this does not cover:
 - A reload while a second pocket entry exists. Neither pocket writes then
   anyway (`Model.mayWrite()`).
 - Settings the host keeps in memory but has not written, if a write ever
-  fails. The pocket would take the older file. Not seen.
+  fails. The pocket would take the older file once, at the next read. Not seen.
+
+## Revised after the review of 0.6.1
+
+Two fresh-context reviews of everything since 0.5.0, one adversarial, one
+against the stated goals, found the first version's mechanism wrong in three
+ways:
+
+- **A busy file starved it.** It watched the file and restarted its quiet
+  period on every load, whoever wrote it. A file rewritten more often than
+  that, by another plugin or an editor's autosave, kept the frozen copy in
+  place for as long as the writing went on. Reproduced offscreen.
+- **A click in the first second wrote the frozen copy.** It was documented as
+  accepted, but the pocket knows exactly when it still holds that copy.
+- **Value equality.** A host delta equal in value to the frozen copy, a pin
+  toggled back, read as the frozen copy and could be overwritten by an older
+  file. And the stop once the host was current had no test that failed
+  without it.
+
+Revised: the file is read on demand and fresh instead of watched, the frozen
+copy is told by identity, a click, write or drag asks the file first, and a
+slot whose `moduleSettings` change turns the file off.
