@@ -4,6 +4,7 @@ import QtQuick
 // module, and without it the lookup silently yields null — at which point one
 // screen's pocket would drive the other screen's widgets.
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 // Qualified, because QtQuick has a `Color` singleton of its own and on Qt 6.12
 // it shadows the shell's: a bare `Color.accent` reads undefined. The host's own
@@ -47,6 +48,79 @@ BarWidget {
   // this a `members` list made only of them left the tooltip reporting an empty
   // pocket to someone who had configured four widgets.
   readonly property var unreadableAt: Model.unreadableEntries(setting("members", ""))
+
+  // A hot reload can hand this pocket settings older than shell.json. The host
+  // patches an inline change into the running widget but not into its slot's
+  // entry, and a reload injects that entry again (omacom/omarchy#7691). The
+  // next pin or drag would then put the old members and pins back, because the
+  // inline write rebuilds the entry from `settings` (0019). So the pocket reads
+  // its own entry from the file, and while the host is still handing it the
+  // slot's frozen copy, takes the file's instead. docs/decisions/0025.
+  property string configPath: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+
+  // The file's copy once it has been taken over, or null.
+  property var adoptedSettings: null
+
+  // Set once the host has delivered settings that are neither the frozen copy
+  // nor the file's: the host is current from then on, and the file is left be.
+  property bool hostSettingsCurrent: false
+
+  // Whether the file has been asked about the `settings` held now. The order
+  // repair writes on its own, from `settings`, so it waits for this: run on
+  // the frozen copy it would put that copy back into the file a turn after a
+  // reload.
+  property bool settingsChecked: false
+
+  function sameSettings(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+
+  // Not before this pocket has found its slot: the frozen copy is the slot's,
+  // and a walk can find it late. Asked again the moment it does.
+  function reconcileSettings() {
+    if (!root.ownSlot && !root.hostSettingsCurrent) return
+    root.adoptFileSettings()
+    root.settingsChecked = true
+  }
+
+  onOwnSlotChanged: reconcileTimer.restart()
+
+  // Only `settings` the host gave from the slot's frozen entry, or the copy
+  // taken over from the file, are replaced. Anything else came from the host's
+  // delta path and is newer than both.
+  //
+  // Asked only once the file has been quiet for a while, because the file lags
+  // the host's own config (0025).
+  function adoptFileSettings() {
+    if (root.hostSettingsCurrent) return
+    var slot = root.ownSlot
+    if (!slot || !("moduleSettings" in slot)) return
+    var current = root.settings
+    if (!root.sameSettings(current, slot.moduleSettings)
+        && !root.sameSettings(current, root.adoptedSettings)) {
+      root.hostSettingsCurrent = true
+      return
+    }
+    var onDisk = Model.ownEntrySettings(configFile.text(), root.moduleName)
+    if (onDisk === null || root.sameSettings(onDisk, current)) return
+    root.adoptedSettings = onDisk
+    root.settings = onDisk
+  }
+
+  FileView {
+    id: configFile
+    path: root.configPath
+    blockLoading: true
+    watchChanges: !root.hostSettingsCurrent
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: reconcileTimer.restart()
+  }
+
+  Timer {
+    id: reconcileTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.reconcileSettings()
+  }
 
   // ------------------------------------------------------------- identity
 
@@ -327,7 +401,12 @@ BarWidget {
     var glass = root.overlay
     if (glass && typeof glass.rearmHover === "function") glass.rearmHover()
   }
-  onSettingsChanged: refreshWalk()
+  onSettingsChanged: {
+    refreshWalk()
+    // The host can inject the frozen copy again after it was taken over (0025).
+    if (!root.hostSettingsCurrent) root.settingsChecked = false
+    reconcileTimer.restart()
+  }
 
   // The settling pass after any change that rebuilds the bar. It redoes both
   // things a rebuild can leave behind — a walk taken before the later slots
@@ -1375,6 +1454,7 @@ BarWidget {
   function repairMemberOrder() {
     if (!root.membersMisordered) return
     if (!root.mayWriteMembers) return
+    if (!root.settingsChecked) return
 
     var raw = root.setting("members", "")
     var value = Model.membersValue(
@@ -1384,6 +1464,7 @@ BarWidget {
   }
 
   onMembersMisorderedChanged: scheduleReorder()
+  onSettingsCheckedChanged: scheduleReorder()
 
   // ------------------------------------------------------------ animation
 
@@ -1552,6 +1633,9 @@ BarWidget {
     // build; the timer catches a build that outlives it.
     Qt.callLater(root.refreshWalk)
     settle.restart()
+    // Also for a pocket whose `settings` never change after this, which the
+    // order repair would otherwise wait for forever.
+    reconcileTimer.restart()
 
     if (holdOpen) expanded = true
     apply()

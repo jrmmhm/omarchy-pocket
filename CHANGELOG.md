@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A hot reload no longer forgets what changed since the last restart.**
+  After `omarchy plugin update` or a plugin rescan the pocket came back with its
+  settings as they were when the shell started: a pin set or released, or a
+  member taken in or let go, since then was lost, and the next pin or drag
+  wrote the old state back into `shell.json`. The cause is the host's
+  ([omacom/omarchy#7691](https://github.com/omacom/omarchy/issues/7691)); the
+  reloaded pocket now reads its own entry from `shell.json` instead. For a
+  moment right after a reload it still runs on the old copy.
+  [Decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)
+  owns the measurements.
+
 ### Documentation
 
 - The README's recordings and the stills cut from them are re-shot on 0.6.0, so

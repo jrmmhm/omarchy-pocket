@@ -1485,6 +1485,50 @@ Model.reservedEntryKeys.forEach(word => {
     word in Model.mergedEntrySettings({}, word, "a"), false)
 })
 
+// ------------------------------------------------------- the entry on disk
+
+// What a reloaded pocket compares its injected settings with
+// (docs/decisions/0025). The shape has to be the host's own, the entry minus
+// `id` in the file's key order, or a pocket whose settings are current would
+// read as stale and adopt a copy that only differs in shape.
+function onDisk(layout, version) {
+  return JSON.stringify({ version: version === undefined ? 1 : version, bar: { layout: layout } })
+}
+
+check("the entry minus id, in the file's key order",
+  Object.keys(Model.ownEntrySettings(onDisk({ right: [
+    { note: "x", id: SELF, members: "omaplug", pinned: ["eDP-1"] }] }), SELF)),
+  ["note", "members", "pinned"])
+check("its values as written",
+  Model.ownEntrySettings(onDisk({ left: [{ id: SELF, members: ["a", "b"] }] }), SELF),
+  { members: ["a", "b"] })
+check("found in any section",
+  Model.ownEntrySettings(onDisk({ center: ["omaplug", { id: SELF, members: "a" }] }), SELF),
+  { members: "a" })
+check("a bare id string is an entry with no settings",
+  Model.ownEntrySettings(onDisk({ right: [SELF] }), SELF), {})
+check("other entries are not read",
+  Model.ownEntrySettings(onDisk({ right: [{ id: "omaplug", members: "x" }, { id: SELF }] }), SELF), {})
+
+// Anything that does not name exactly one entry is no evidence.
+check("two entries name none",
+  Model.ownEntrySettings(onDisk({ left: [{ id: SELF, members: "a" }], right: [{ id: SELF }] }), SELF), null)
+check("no entry is none",
+  Model.ownEntrySettings(onDisk({ right: [{ id: "omaplug" }] }), SELF), null)
+check("another version is not read",
+  Model.ownEntrySettings(onDisk({ right: [{ id: SELF, members: "a" }] }, 2), SELF), null)
+check("a config without a version is not read",
+  Model.ownEntrySettings(JSON.stringify({ bar: { layout: { right: [{ id: SELF }] } } }), SELF), null)
+check("a half-written file is not read",
+  Model.ownEntrySettings(onDisk({ right: [{ id: SELF }] }).slice(0, -3), SELF), null)
+check("an empty file is not read", Model.ownEntrySettings("", SELF), null)
+check("no text at all is not read", Model.ownEntrySettings(undefined, SELF), null)
+check("a JSON value that is not a config is not read", Model.ownEntrySettings("[1]", SELF), null)
+check("no layout is not read",
+  Model.ownEntrySettings(JSON.stringify({ version: 1, bar: {} }), SELF), null)
+check("an empty id reads nothing",
+  Model.ownEntrySettings(onDisk({ right: [{ id: SELF }] }), ""), null)
+
 // ------------------------------------------ a successful write changes one thing
 
 // untouched() above holds a refused write to "nothing moved". This holds a

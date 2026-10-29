@@ -631,6 +631,47 @@ function mergedEntrySettings(live, key, value) {
   return out
 }
 
+// This pocket's entry settings as shell.json holds them, in the shape the host
+// injects as `settings` (BarModel.js::entrySettings): the entry minus `id`, in
+// the file's key order. Null when the text is not a version-1 config or does not
+// hold exactly one entry for `selfId`: with two pockets there is no telling
+// which entry is this one, and anything unreadable is no evidence at all.
+//
+// It exists because the host can hand a reloaded pocket settings older than
+// the file (omacom/omarchy#7691, docs/decisions/0025).
+function ownEntrySettings(text, selfId) {
+  var want = String(selfId || "").trim()
+  if (want === "") return null
+
+  var config
+  try {
+    config = JSON.parse(String(text || ""))
+  } catch (e) {
+    return null
+  }
+  if (!isPlainObject(config) || config.version !== 1) return null
+
+  var found = null
+  var total = 0
+  var regions = ["left", "center", "right"]
+  for (var r = 0; r < regions.length; r++) {
+    var entries = rawSection(config, regions[r])
+    if (entries === null) continue
+    for (var i = 0; i < entries.length; i++) {
+      if (entryIdOf(entries[i]) !== want) continue
+      total++
+      found = entries[i]
+    }
+  }
+  if (total !== 1) return null
+
+  var out = {}
+  if (isPlainObject(found)) {
+    for (var k in found) if (k !== "id") out[k] = found[k]
+  }
+  return out
+}
+
 // The first member sitting on the wrong side of the pocket, or "" if the run
 // is intact. Members belong on one side — the side the pocket fans them out
 // towards — and a member that is not there fans out alone on the wrong side of
@@ -1167,6 +1208,7 @@ if (typeof module !== "undefined" && module.exports) {
                      gapTouchesMember: gapTouchesMember, ownsSlot: ownsSlot,
                      membersInLayoutOrder: membersInLayoutOrder,
                      mergedEntrySettings: mergedEntrySettings,
+                     ownEntrySettings: ownEntrySettings,
                      screenKey: screenKey, screenKeyAfter: screenKeyAfter,
                      screenList: screenList, onScreen: onScreen,
                      withScreen: withScreen,

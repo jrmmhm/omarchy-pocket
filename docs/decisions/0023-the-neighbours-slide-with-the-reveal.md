@@ -127,6 +127,10 @@ in after it is drawn while the pocket is closed. `main` behaves the same way in
 every run: a pin set 3 of 3, a pin released 2 of 2, a member dragged in 1 of 1.
 It is left for a separate change.
 
+> **Resolved 2026-10-29 by [0025](0025-a-reload-reads-the-entry-from-the-file.md).**
+> The cause is the host's (omacom/omarchy#7691); the reloaded pocket now takes
+> its entry from `shell.json`.
+
 ## Consequences
 
 The README says the slots are narrowed as well as hidden, names the press
