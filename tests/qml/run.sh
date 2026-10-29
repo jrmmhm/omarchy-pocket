@@ -45,16 +45,20 @@ ln -s "$ROOT" "$WORK/plugin"
 # reason the plugin is: neighbourhood.qml asserts what THIS host answers, and a
 # copy would go on passing after the host changed its mind.
 ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
+# The pocket reads its own entry from $HOME/.config/omarchy/shell.json
+# (docs/decisions/0025). Every case gets an empty home of its own instead, so no
+# case reads the user's real config, and reload.qml writes the file it needs.
+mkdir -p "$WORK/home/.config/omarchy"
 
 # `model` is listed in both branches on purpose. It needs nothing from the host
 # at all -- it runs Model.js in Qt's V4 engine and asserts against it -- so a
 # shell that costs us the neighbourhood sweep must not silently cost us this one
 # too. A case that quietly stops running is the kind of green tests/run.sh warns
 # about in its own header.
-CASES="model steer steer-readonly noslots neighbourhood facade cascade extent selfdrag"
+CASES="model steer steer-readonly noslots neighbourhood facade cascade extent selfdrag reload"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="model steer steer-readonly noslots facade cascade extent selfdrag"
+  CASES="model steer steer-readonly noslots facade cascade extent selfdrag reload"
 fi
 
 # The facade case loads the host's own Ui/PluginBarApi.qml rather than a
@@ -78,10 +82,11 @@ for name in $CASES; do
   #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
   if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ] \
-      || [ "$name" = "cascade" ] || [ "$name" = "extent" ] || [ "$name" = "selfdrag" ]; then
-    output="$(QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
+      || [ "$name" = "cascade" ] || [ "$name" = "extent" ] || [ "$name" = "selfdrag" ] \
+      || [ "$name" = "reload" ]; then
+    output="$(HOME="$WORK/home" QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
-    output="$(timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
+    output="$(HOME="$WORK/home" timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   fi
 
   if printf '%s\n' "$output" | grep -q "Binding loop"; then
