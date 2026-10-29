@@ -73,10 +73,15 @@ BarWidget {
 
   function sameSettings(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
 
+  // Not before this pocket has found its slot: the frozen copy is the slot's,
+  // and a walk can find it late. Asked again the moment it does.
   function reconcileSettings() {
+    if (!root.ownSlot && !root.hostSettingsCurrent) return
     root.adoptFileSettings()
     root.settingsChecked = true
   }
+
+  onOwnSlotChanged: reconcileTimer.restart()
 
   // Only `settings` the host gave from the slot's frozen entry, or the copy
   // taken over from the file, are replaced. Anything else came from the host's
