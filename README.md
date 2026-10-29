@@ -11,7 +11,7 @@
 
 </div>
 
-![The pocket opening as the pointer arrives, and folding up again when it leaves](docs/pocket-demo.gif)
+![The pocket opening as the pointer arrives, the tray beside it sliding aside, and folding up again when it leaves](docs/pocket-demo.gif)
 
 ## What this is
 
@@ -32,7 +32,7 @@ desktop can tell that they are hidden; the one thing that can is
 
 ![The same bar twice: collapsed behind one mark, and fanned back out with the pointer on it](docs/bar-states.png)
 
-<sup>The same bar a moment apart. Four widgets sit behind the three dots; the
+<sup>The same bar a moment apart. Six widgets sit behind the three dots; the
 pointer is what brings them back. Everything to the right of the mark stays
 exactly where it was.</sup>
 
