@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- The README's recordings and the stills cut from them are re-shot on 0.6.0, so
+  the tray beside the pocket now slides in them instead of jumping. The drag
+  take is machine-driven this time, with real relative motion while the button
+  is held, and grabs the widget at its edge so the mark stays in view while it
+  lights. `docs/media.md` records the new session, regions and encoder settings.
+
 ## [0.6.0] — 2026-10-28
 
 The widgets beside the pocket now slide out of the way and back instead of
