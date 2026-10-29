@@ -119,6 +119,32 @@ QtObject {
     property Loader loader: reloadedLoader
   }
 
+  // A third pocket whose walk finds its slot only after the quiet period, the
+  // way a surface a monitor move unmapped comes back: injected like the
+  // others, but its slot names it as the active item late (step3).
+  property FloatingWindow lateWin: FloatingWindow {
+    visible: true
+    Slot { moduleName: "omarchy.tray" }
+    Slot { moduleName: "omaplug" }
+    Slot { moduleName: "mehiel.darky" }
+    Slot {
+      id: lateSlot
+      moduleName: harness.selfId
+      moduleSettings: harness.frozen
+      Loader {
+        id: lateLoader
+        active: false
+        sourceComponent: Component { Pk.BarWidget { bar: harness.facade } }
+        onLoaded: {
+          item.settings = lateSlot.moduleSettings
+          Qt.callLater(function () { item.settings = lateSlot.moduleSettings })
+        }
+      }
+    }
+    property Item slot: lateSlot
+    property Loader loader: lateLoader
+  }
+
   property FloatingWindow rebuiltWin: FloatingWindow {
     visible: true
     Slot { moduleName: "omarchy.tray" }
@@ -143,6 +169,7 @@ QtObject {
 
   readonly property var reloaded: reloadedWin.loader.item
   readonly property var rebuilt: rebuiltWin.loader.item
+  readonly property var late: lateWin.loader.item
 
   property int failures: 0
 
@@ -171,6 +198,7 @@ QtObject {
     harness.configWriter.setText(harness.configText(harness.current))
     harness.rebuiltWriter.setText(harness.configText(harness.frozen))
     reloadedWin.loader.active = true
+    lateWin.loader.active = true
     rebuiltWin.loader.active = true
     harness.next(300)
   }
@@ -202,14 +230,20 @@ QtObject {
     harness.check("rebuilt: the older file was never taken over",
                   harness.rebuilt.adoptedSettings, null)
 
-    // The host injects the frozen copy once more.
+    harness.check("late: no slot yet, so the file has not been asked", harness.late.settingsChecked, false)
+
+    // The host injects the frozen copy once more, and the late pocket's walk
+    // finds its slot.
     harness.reloaded.settings = reloadedWin.slot.moduleSettings
+    lateWin.slot.activeItem = harness.late
     harness.next(1500)
   }
 
   function step4() {
     harness.check("reloaded: taken over again after a late injection",
                   JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.current))
+    harness.check("late: the file's entry is taken over once the slot is found",
+                  JSON.stringify(harness.late.settings), JSON.stringify(harness.current))
     harness.check("reloaded: and still nothing written from the frozen copy", harness.writes.length, 0)
 
     // The defect itself: the next write rebuilds the entry from `settings`.
