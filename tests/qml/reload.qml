@@ -26,9 +26,12 @@ import "plugin" as Pk
 //   taken over once the file is quiet, again after a late injection of the
 //   frozen copy, and carried by the next write; once the host delivers settings
 //   of its own, the file is left be.
+//   The frozen copy's members are out of layout order, so the order repair
+//   would write it back on its own a turn after the reload; nothing may be
+//   written before the file has been asked.
 // - `rebuilt`: the slot is current and the file lags it, the way a pocket the
 //   bar rebuilt after a drag is born before the move is on disk. Asserted: the
-//   older file is never taken over.
+//   older file is never taken over, and the order repair still writes.
 QtObject {
   id: harness
 
@@ -36,8 +39,10 @@ QtObject {
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
   readonly property string rebuiltPath: Quickshell.env("HOME") + "/.config/omarchy/rebuilt.json"
 
-  // What the slots were built with when the shell last started.
-  readonly property var frozen: ({ members: "omaplug" })
+  // What the slots were built with when the shell last started, in the order a
+  // reorder since then has left behind (0018): the order repair writes on its
+  // own as soon as it sees the list disagree with the bar.
+  readonly property var frozen: ({ members: "mehiel.darky, omaplug" })
   // What shell.json holds since: a member taken in and a lock set.
   readonly property var current: ({ members: "omaplug, mehiel.darky", locked: "eDP-1" })
 
@@ -197,6 +202,7 @@ QtObject {
                   JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.current))
     harness.check("reloaded: and read as it says",
                   JSON.stringify(harness.reloaded.memberIds), JSON.stringify(["omaplug", "mehiel.darky"]))
+    harness.check("reloaded: nothing was written from the frozen copy", harness.writes.length, 0)
 
     harness.check("rebuilt: the slot's current entry stands",
                   JSON.stringify(harness.rebuilt.settings), JSON.stringify(harness.current))
@@ -211,6 +217,7 @@ QtObject {
   function step4() {
     harness.check("reloaded: taken over again after a late injection",
                   JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.current))
+    harness.check("reloaded: and still nothing written from the frozen copy", harness.writes.length, 0)
 
     // The defect itself: the next write rebuilds the entry from `settings`.
     var before = harness.writes.length
@@ -231,6 +238,18 @@ QtObject {
     harness.check("reloaded: once the host is current, the file is left be",
                   JSON.stringify(harness.reloaded.settings),
                   JSON.stringify({ members: "omaplug", note: "from the host" }))
+
+    // The order repair waits for the file, and still runs after it: the host
+    // hands the rebuilt pocket the old order back (0018).
+    harness.writes = []
+    harness.rebuilt.settings = ({ members: "mehiel.darky, omaplug", locked: "eDP-1" })
+    harness.next(1500)
+  }
+
+  function step6() {
+    var sent = harness.writes.length > 0 ? harness.writes[harness.writes.length - 1].next : {}
+    harness.check("rebuilt: the order repair still writes, once the file was asked",
+                  JSON.stringify(sent), JSON.stringify({ members: "omaplug, mehiel.darky", locked: "eDP-1" }))
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
