@@ -65,7 +65,18 @@ BarWidget {
   // nor the file's: the host is current from then on, and the file is left be.
   property bool hostSettingsCurrent: false
 
+  // Whether the file has been asked about the `settings` held now. The order
+  // repair writes on its own, from `settings`, so it waits for this: run on
+  // the frozen copy it would put that copy back into the file a turn after a
+  // reload.
+  property bool settingsChecked: false
+
   function sameSettings(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+
+  function reconcileSettings() {
+    root.adoptFileSettings()
+    root.settingsChecked = true
+  }
 
   // Only `settings` the host gave from the slot's frozen entry, or the copy
   // taken over from the file, are replaced. Anything else came from the host's
@@ -74,7 +85,7 @@ BarWidget {
   // Asked only once the file has been quiet for a second: the file lags the
   // host's own config (the host sets it first and writes the file after), and
   // a pocket the bar rebuilt after a drag is born before that write lands.
-  function reconcileSettings() {
+  function adoptFileSettings() {
     if (root.hostSettingsCurrent) return
     var slot = root.ownSlot
     if (!slot || !("moduleSettings" in slot)) return
@@ -390,6 +401,7 @@ BarWidget {
     refreshWalk()
     // The host injects the frozen copy more than once, the last time a turn
     // after the widget is built, so a copy taken over earlier can be overwritten.
+    if (!root.hostSettingsCurrent) root.settingsChecked = false
     reconcileTimer.restart()
   }
 
@@ -1439,6 +1451,7 @@ BarWidget {
   function repairMemberOrder() {
     if (!root.membersMisordered) return
     if (!root.mayWriteMembers) return
+    if (!root.settingsChecked) return
 
     var raw = root.setting("members", "")
     var value = Model.membersValue(
@@ -1448,6 +1461,7 @@ BarWidget {
   }
 
   onMembersMisorderedChanged: scheduleReorder()
+  onSettingsCheckedChanged: scheduleReorder()
 
   // ------------------------------------------------------------ animation
 
@@ -1616,6 +1630,9 @@ BarWidget {
     // build; the timer catches a build that outlives it.
     Qt.callLater(root.refreshWalk)
     settle.restart()
+    // Also for a pocket whose `settings` never change after this, which the
+    // order repair would otherwise wait for forever.
+    reconcileTimer.restart()
 
     if (holdOpen) expanded = true
     apply()
