@@ -61,9 +61,10 @@ BarWidget {
   // The file's copy once it has been taken over, or null.
   property var adoptedSettings: null
 
-  // Set once the host has delivered settings that are neither the frozen copy
-  // nor the file's: the host is current from then on, and the file is left be.
-  property bool hostSettingsCurrent: false
+  // Set when the slot's own `moduleSettings` changes. A host whose slots follow
+  // their entry (the fix in omacom/omarchy#7692) never injects a frozen copy,
+  // and the file is left be.
+  property bool slotTracksEntry: false
 
   // Whether the file has been asked about the `settings` held now. The order
   // repair writes on its own, from `settings`, so it waits for this: run on
@@ -71,48 +72,54 @@ BarWidget {
   // reload.
   property bool settingsChecked: false
 
-  function sameSettings(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
-
   // Not before this pocket has found its slot: the frozen copy is the slot's,
   // and a walk can find it late. Asked again the moment it does.
   function reconcileSettings() {
-    if (!root.ownSlot && !root.hostSettingsCurrent) return
+    if (!root.ownSlot) return
     root.adoptFileSettings()
     root.settingsChecked = true
   }
 
+  // A pin, a drop or a drag of the mark that comes before the timer asks the
+  // file first, so none of them acts on the frozen copy.
+  function settleSettings() {
+    if (!root.settingsChecked) root.reconcileSettings()
+  }
+
   onOwnSlotChanged: reconcileTimer.restart()
 
-  // Only `settings` the host gave from the slot's frozen entry, or the copy
-  // taken over from the file, are replaced. Anything else came from the host's
-  // delta path and is newer than both.
+  // Only `settings` the host injected from the slot's entry, or the copy taken
+  // over from the file, are replaced. Anything else came from the host's delta
+  // path and is newer than both. Told apart by identity: the host injects the
+  // slot's own object, and a delta is always a new one, even one equal in value.
   //
-  // Asked only once the file has been quiet for a while, because the file lags
-  // the host's own config (0025).
+  // The file is read here and nowhere else, fresh, a moment after the pocket is
+  // born or finds its slot: the file lags the host's own config (0025).
   function adoptFileSettings() {
-    if (root.hostSettingsCurrent) return
     var slot = root.ownSlot
-    if (!slot || !("moduleSettings" in slot)) return
+    if (root.slotTracksEntry || !("moduleSettings" in slot)) return
     var current = root.settings
-    if (!root.sameSettings(current, slot.moduleSettings)
-        && !root.sameSettings(current, root.adoptedSettings)) {
-      root.hostSettingsCurrent = true
-      return
-    }
+    if (current !== slot.moduleSettings && current !== root.adoptedSettings) return
+    configFile.reload()
     var onDisk = Model.ownEntrySettings(configFile.text(), root.moduleName)
-    if (onDisk === null || root.sameSettings(onDisk, current)) return
+    if (onDisk === null || JSON.stringify(onDisk) === JSON.stringify(current)) return
     root.adoptedSettings = onDisk
     root.settings = onDisk
+  }
+
+  Connections {
+    target: root.ownSlot
+    ignoreUnknownSignals: true
+    function onModuleSettingsChanged() { root.slotTracksEntry = true }
   }
 
   FileView {
     id: configFile
     path: root.configPath
-    blockLoading: true
-    watchChanges: !root.hostSettingsCurrent
+    // Read on demand only, and then at once: reload() blocks with this.
+    preload: false
+    blockAllReads: true
     printErrors: false
-    onFileChanged: reload()
-    onLoaded: reconcileTimer.restart()
   }
 
   Timer {
@@ -404,8 +411,10 @@ BarWidget {
   onSettingsChanged: {
     refreshWalk()
     // The host can inject the frozen copy again after it was taken over (0025).
-    if (!root.hostSettingsCurrent) root.settingsChecked = false
-    reconcileTimer.restart()
+    if (root.ownSlot && root.settings === root.ownSlot.moduleSettings && !root.slotTracksEntry) {
+      root.settingsChecked = false
+      reconcileTimer.restart()
+    }
   }
 
   // The settling pass after any change that rebuilds the bar. It redoes both
@@ -1106,6 +1115,7 @@ BarWidget {
 
   onDraggingSelfChanged: {
     if (!root.draggingSelf) return
+    root.settleSettings()
     if (!Model.hasRun(root.layoutIds(root.ownRegion), root.moduleName, root.memberIds,
                       root.membersLeadFromEnd)) return
     // Not from here. This runs inside Bar.qml's position handler, at the line
@@ -1292,6 +1302,7 @@ BarWidget {
   function writeSettings(changes) {
     if (!root.mayWriteMembers) return false
     if (!bar || !bar.shell) return false
+    root.settleSettings()
 
     var region = root.ownRegion
     var selfId = root.moduleName
@@ -1776,6 +1787,9 @@ BarWidget {
     // click bypasses that hit test. The host passes the button as `code`; see
     // docs/decisions/0020.
     onPressed: function(code) {
+      // Before `pinned` and `locked` are read, so the click answers what the
+      // file holds rather than a frozen copy (0025).
+      root.settleSettings()
       if (code === Qt.RightButton) {
         root.toggleLock()
         return
