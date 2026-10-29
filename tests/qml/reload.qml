@@ -16,17 +16,23 @@ import "plugin" as Pk
 // its window for slots, as on 4.0.3 and later. The file is written to the home
 // tests/qml/run.sh gives this case.
 //
-// Two pockets in two windows:
+// Four pockets in four windows:
 // - `reloaded`: the file is newer than the slot. Asserted: the file's entry is
-//   taken over once the file is quiet, again after a late injection of the
-//   frozen copy, and carried by the next write; once the host delivers settings
-//   of its own, the file is left be.
+//   taken over a moment after the reload, while another widget's entry keeps
+//   rewriting the file; again after a late injection of the frozen copy; and
+//   carried by the next write. A host delta equal in value to the frozen copy
+//   is the host's and is kept.
 //   The frozen copy's members are out of layout order, so the order repair
 //   would write it back on its own a turn after the reload; nothing may be
-//   written before the file has been asked.
+//   written from the frozen copy at any point.
+// - `early`: as `reloaded`, but written to before the timer: the write asks
+//   the file first.
+// - `late`: its slot is found only after the timer, as when a monitor move
+//   unmapped the surface.
 // - `rebuilt`: the slot is current and the file lags it, the way a pocket the
 //   bar rebuilt after a drag is born before the move is on disk. Asserted: the
-//   older file is never taken over, and the order repair still writes.
+//   older file is never taken over, the order repair still writes, and a slot
+//   whose `moduleSettings` follow its entry turns the file off.
 QtObject {
   id: harness
 
@@ -46,15 +52,33 @@ QtObject {
       { id: "mehiel.darky" }, { id: harness.selfId }] }
   }
 
-  function configText(settings) {
+  function configText(settings, tick) {
     var config = { version: 1, bar: { layout: harness.layout() } }
     var entry = { id: harness.selfId }
     for (var k in settings) entry[k] = settings[k]
     config.bar.layout.right[3] = entry
+    if (tick !== undefined) config.bar.layout.right[0].tick = tick
     return JSON.stringify(config, null, 2) + "\n"
   }
 
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+
+  // Writes whose members are the frozen copy's: the defect, whoever made it.
+  function frozenWrites() {
+    var n = 0
+    for (var i = 0; i < harness.writes.length; i++)
+      if (harness.writes[i].next.members === harness.frozen.members) n++
+    return n
+  }
+
+  // Another widget's entry rewritten faster than any quiet period, as an
+  // editor's autosave or a chatty plugin would.
+  property Timer churn: Timer {
+    interval: 300
+    repeat: true
+    property int tick: 0
+    onTriggered: harness.configWriter.setText(harness.configText(harness.current, ++tick))
+  }
 
   property var writes: []
   property QtObject fakeShell: QtObject {
@@ -119,9 +143,27 @@ QtObject {
     property Loader loader: reloadedLoader
   }
 
-  // A third pocket whose walk finds its slot only after the quiet period, the
-  // way a surface a monitor move unmapped comes back: injected like the
-  // others, but its slot names it as the active item late (step3).
+  property FloatingWindow earlyWin: FloatingWindow {
+    visible: true
+    Slot { moduleName: "omarchy.tray" }
+    Slot { moduleName: "omaplug" }
+    Slot { moduleName: "mehiel.darky" }
+    Slot {
+      id: earlySlot
+      moduleName: harness.selfId
+      moduleSettings: harness.frozen
+      Loader {
+        id: earlyLoader
+        active: false
+        sourceComponent: Component { Pk.BarWidget { bar: harness.facade } }
+        onLoaded: harness.inject(earlySlot, item)
+      }
+    }
+    property Loader loader: earlyLoader
+  }
+
+  // Injected like the others, but its slot names it as the active item late
+  // (step3).
   property FloatingWindow lateWin: FloatingWindow {
     visible: true
     Slot { moduleName: "omarchy.tray" }
@@ -170,6 +212,7 @@ QtObject {
   readonly property var reloaded: reloadedWin.loader.item
   readonly property var rebuilt: rebuiltWin.loader.item
   readonly property var late: lateWin.loader.item
+  readonly property var early: earlyWin.loader.item
 
   property int failures: 0
 
@@ -198,8 +241,10 @@ QtObject {
     harness.configWriter.setText(harness.configText(harness.current))
     harness.rebuiltWriter.setText(harness.configText(harness.frozen))
     reloadedWin.loader.active = true
+    earlyWin.loader.active = true
     lateWin.loader.active = true
     rebuiltWin.loader.active = true
+    harness.churn.start()
     harness.next(300)
   }
 
@@ -213,17 +258,25 @@ QtObject {
     harness.check("rebuilt: the pocket finds its own slot",
                   harness.rebuilt.ownSlot === rebuiltWin.slot, true)
 
+    // A pin clicked before the timer: the write asks the file first.
+    harness.check("early: not asked yet", harness.early.settingsChecked, false)
+    harness.check("early: a write goes out", harness.early.writeSettings({ pinned: "eDP-1" }), true)
+    var sent = harness.writes.length > 0 ? harness.writes[harness.writes.length - 1].next : {}
+    harness.check("early: it carries what the file holds",
+                  JSON.stringify(sent), JSON.stringify({ members: "omaplug, mehiel.darky", locked: "eDP-1", pinned: "eDP-1" }))
+
     // The move lands on disk after the rebuilt pocket was born.
     harness.rebuiltWriter.setText(harness.configText(harness.current))
     harness.next(1500)
   }
 
   function step3() {
-    harness.check("reloaded: the file's entry is taken over",
+    harness.churn.stop()
+    harness.check("reloaded: the file's entry is taken over, though the file kept changing",
                   JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.current))
     harness.check("reloaded: and read as it says",
                   JSON.stringify(harness.reloaded.memberIds), JSON.stringify(["omaplug", "mehiel.darky"]))
-    harness.check("reloaded: nothing was written from the frozen copy", harness.writes.length, 0)
+    harness.check("nothing was written from the frozen copy", harness.frozenWrites(), 0)
 
     harness.check("rebuilt: the slot's current entry stands",
                   JSON.stringify(harness.rebuilt.settings), JSON.stringify(harness.current))
@@ -244,7 +297,7 @@ QtObject {
                   JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.current))
     harness.check("late: the file's entry is taken over once the slot is found",
                   JSON.stringify(harness.late.settings), JSON.stringify(harness.current))
-    harness.check("reloaded: and still nothing written from the frozen copy", harness.writes.length, 0)
+    harness.check("still nothing written from the frozen copy", harness.frozenWrites(), 0)
 
     // The defect itself: the next write rebuilds the entry from `settings`.
     var before = harness.writes.length
@@ -254,17 +307,16 @@ QtObject {
                   sent.members, harness.current.members)
     harness.check("reloaded: and the lock", sent.locked, harness.current.locked)
 
-    // The host's delta path delivers settings of its own, then the file
-    // changes behind it.
-    harness.reloaded.settings = ({ members: "omaplug", note: "from the host" })
-    harness.configWriter.setText(harness.configText({ members: "" }))
+    // The host's delta path delivers settings equal in value to the frozen
+    // copy, a pin toggled back, while the file still holds the older write.
+    // A delta is a new object: it is the host's, and the file is not asked.
+    harness.reloaded.settings = JSON.parse(JSON.stringify(harness.frozen))
     harness.next(1500)
   }
 
   function step5() {
-    harness.check("reloaded: once the host is current, the file is left be",
-                  JSON.stringify(harness.reloaded.settings),
-                  JSON.stringify({ members: "omaplug", note: "from the host" }))
+    harness.check("reloaded: a host delta equal to the frozen copy is kept",
+                  JSON.stringify(harness.reloaded.settings), JSON.stringify(harness.frozen))
 
     // The order repair waits for the file, and still runs after it: the host
     // hands the rebuilt pocket the old order back (0018).
@@ -277,6 +329,21 @@ QtObject {
     var sent = harness.writes.length > 0 ? harness.writes[harness.writes.length - 1].next : {}
     harness.check("rebuilt: the order repair still writes, once the file was asked",
                   JSON.stringify(sent), JSON.stringify({ members: "omaplug, mehiel.darky", locked: "eDP-1" }))
+
+    // A host whose slots follow their entry (omacom/omarchy#7692): the slot's
+    // own copy changes and is injected, while the file says something older.
+    harness.rebuiltWriter.setText(harness.configText({ members: "omaplug" }))
+    rebuiltWin.slot.moduleSettings = ({ members: "omaplug, mehiel.darky", pinned: "eDP-1" })
+    harness.rebuilt.settings = rebuiltWin.slot.moduleSettings
+    harness.next(1500)
+  }
+
+  function step7() {
+    harness.check("rebuilt: a slot that follows its entry turns the file off",
+                  harness.rebuilt.slotTracksEntry, true)
+    harness.check("rebuilt: and its copy stands",
+                  JSON.stringify(harness.rebuilt.settings),
+                  JSON.stringify({ members: "omaplug, mehiel.darky", pinned: "eDP-1" }))
 
     console.warn(harness.failures === 0 ? "QML OK" : "QML FAILURES " + harness.failures)
     Qt.exit(harness.failures === 0 ? 0 : 1)
