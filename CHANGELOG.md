@@ -13,8 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moment.** It waited for `shell.json` to go quiet, so a file another plugin
   or an editor kept rewriting kept the old copy in place, and a click right
   after a reload still wrote the old state back. The pocket now reads its
-  entry fresh when it needs it, and a click, a drop or a drag of the mark
-  reads it first. A change the host makes that happens to restore the old
+  entry fresh when it needs it, and a click, a drag or a drop reads it first. A change the host makes that happens to restore the old
   value is no longer mistaken for the old copy.
   [Decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)
   owns the measurements.

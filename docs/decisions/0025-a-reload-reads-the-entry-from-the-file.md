@@ -47,14 +47,17 @@ The file is read fresh, synchronously, and only at these points:
   The moment is there for the rebuild a drop causes: the shell sets its config
   first and writes the file after, so a pocket the bar rebuilt is born before
   the move is on disk.
-- Before a click on the mark, a write, or a drag of the mark is decided, if
+- Before a click on the mark, the start of any drag, a drop, or a write, if
   that moment has not come yet. So none of them acts on the frozen copy.
 
 It is not read before the pocket has found its slot, since the frozen copy is
 the slot's; a walk can find it late, after a monitor move unmapped the
 surface. And it is never read again once the slot's `moduleSettings` changes:
 a host whose slots follow their entry, which is what #7692 does, injects no
-frozen copy.
+frozen copy. On 4.0.6 that also happens to a pocket set as the
+`centerAnchor`, whose slot is kept across a layout rebuild and handed the new
+entry; the slot's copy is current then, and a reload makes a new pocket that
+starts over.
 
 The order repair (0018) waits until the file has been asked. It is the one
 write the pocket makes on its own from `settings`, and a reorder leaves the
@@ -110,23 +113,35 @@ the click wrote nothing. The owner had moved the mouse during that run; the
 logs held no error, and the next six runs passed.
 Row 4, 0.6.1: the one failure was a drag out that left the member in; its
 cause is not known, and it did not come back.
+Rows 1 and 4 were run once more after the third review's fix, which asks the
+file at the start of a drag and before a drop: 6 of 6 each.
 
 Row 4 is there for the rebuild a drop causes: the rebuilt pocket must not take
 over the file before the move is on disk. It never did.
 
 `tests/qml/reload.qml` plays the host's three injections against slots with a
-frozen `moduleSettings`, four pockets, one per case. Against 0.6.1 it fails five
-assertions: the file is never taken over while another entry keeps rewriting
-it, and a write before the timer carries the frozen copy. It also fails with
-`settings` compared by value, without the write asking the file first, without
-the slot's change turning the file off, without the restart when the slot is
-found late, and with a file read from cache.
+frozen `moduleSettings`, six pockets, one per case. The frozen copy lacks a
+member the file holds and has no lock, so any write built from it shows.
+Against 0.6.1 it fails seven assertions, among them the file never taken over
+while another entry keeps rewriting it, and a write and a drop before the
+timer carrying the frozen copy. It also fails with each of these taken out on
+its own: the file asked before a write, before a drop, and at the start of a
+drag; the fresh read; the restart when the slot is found late or the frozen
+copy injected again; the slot's change turning the file off; and the order
+repair waiting. Compared by value instead of identity, it fails only with both
+places changed: either one alone costs a read, not a wrong answer. The file
+asked on a click and on a drag of the mark is not held by a test; the second is
+also covered by the start of the drag, whose handler may run first or second.
 
 ## Accepted limit
 
 A pocket the bar rebuilt after a drop reads the file a moment after it is born.
 If the move took longer than that to reach the disk, it would take over the
-older file. Never seen: the move is written within the same turn.
+older file. Never seen: the shell queues the write in the same turn.
+
+A file that cannot be read at that moment, half written by an editor that
+does not write atomically, counts as asked: the pocket keeps the frozen copy,
+and the order repair may then write it. The shell itself writes atomically.
 
 The order repair, and so the reorder after a drop, runs that moment later
 than before 0.6.1.
@@ -163,5 +178,8 @@ ways:
   without it.
 
 Revised: the file is read on demand and fresh instead of watched, the frozen
-copy is told by identity, a click, write or drag asks the file first, and a
-slot whose `moduleSettings` change turns the file off.
+copy is told by identity, a click, a drag, a drop or a write asks the file
+first, and a slot whose `moduleSettings` change turns the file off. A third
+review, of the revision, found that a drop read its members before asking the
+file, and that the test meant to catch any write from the frozen copy could
+not see one; both are fixed.
