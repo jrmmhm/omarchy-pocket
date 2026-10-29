@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-29
+
+The reload fix of 0.6.1, made to hold. Three fresh-context reviews of
+everything since 0.5.0 found it could be starved by a busy `shell.json` and
+still wrote the old state on a click, a drag or a drop right after a reload.
+Tested live on eDP-1 with a second monitor attached;
+[decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)
+owns the measurements.
+
 ### Fixed
 
 - **The reload fix of 0.6.1 holds when the file is busy and in its first
@@ -619,7 +628,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.2
 [0.6.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.1
 [0.6.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.5.0
