@@ -45,6 +45,13 @@ these hold:
   on every load of the file and on every change of `settings`, so a late
   injection of the frozen copy is answered again.
 
+The order repair (0018) waits until the file has been asked about the
+`settings` the pocket holds. It is the one write the pocket makes on its own
+from `settings`, and a reorder leaves the frozen copy's `members` out of layout
+order, so a turn after the reload it wrote that copy back, and the host's
+answer to that write then read as current. The fresh-context review of this
+change found it; `tests/qml/reload.qml` reproduces it.
+
 `Model.ownEntrySettings()` reads the file. It returns the entry minus `id`, in
 the file's key order, which is the shape the host injects
 (`BarModel.js::entrySettings`), and the shape matters: a copy that differed only
@@ -90,17 +97,20 @@ Row 4 is there for the rebuild a drop causes: the rebuilt pocket must not take
 over the file before the move is on disk. It never did.
 
 `tests/qml/reload.qml` plays the host's three injections against a slot with a
-frozen `moduleSettings`. Against `main` it fails six assertions, among them
-the write: it carried `members: "omaplug"` where the file held
-`"omaplug, mehiel.darky"`. It also fails without the timer restart on a change
-of `settings`, without the stop once the host is current, and with no quiet
-period.
+frozen `moduleSettings`. Against `main` (with the `configPath` it sets on one
+pocket removed) it fails: the order repair wrote the frozen copy a turn after
+the reload, and the next write carried no lock where the file held one. It
+also fails without the timer restart on a change
+of `settings`, without the stop once the host is current, with no quiet
+period, and with the order repair not waiting.
 
 ## Accepted limit: the first second after a reload
 
 Until the file has been quiet for a second, the pocket runs on the frozen copy.
-A pin click or a drop in that second writes it back, as before this change.
-A hand is slower than that after a reload, and the reload itself is rare.
+Nothing writes on its own in that second; a pin click or a drop by hand does,
+and writes the frozen copy back, as before this change. A hand is slower than
+that after a reload, and the reload itself is rare. The order repair, and so
+the reorder after a drop, now runs a second later than before.
 
 ## Consequences
 
