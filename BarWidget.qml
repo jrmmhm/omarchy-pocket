@@ -80,8 +80,8 @@ BarWidget {
     root.settingsChecked = true
   }
 
-  // A pin, a drop or a drag of the mark that comes before the timer asks the
-  // file first, so none of them acts on the frozen copy.
+  // A click on the mark, a drag, a drop or a write that comes before the
+  // timer asks the file first, so none of them acts on the frozen copy.
   function settleSettings() {
     if (!root.settingsChecked) root.reconcileSettings()
   }
@@ -1137,6 +1137,8 @@ BarWidget {
 
   onDragSourceChanged: {
     if (root.dragSource) {
+      // Before the snapshot every decision of this drag is made from.
+      root.settleSettings()
       root.dragSeen = true
       root.dragMembers = root.memberIds.slice()
       return
@@ -1360,6 +1362,7 @@ BarWidget {
   // move that follows reads the config this call already updated.
   function commitDrop(intent, id) {
     if (!root.mayWriteMembers) return
+    root.settleSettings()
 
     var region = root.ownRegion
     var raw = root.setting("members", "")
