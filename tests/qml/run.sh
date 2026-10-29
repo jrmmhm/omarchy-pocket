@@ -45,8 +45,8 @@ ln -s "$ROOT" "$WORK/plugin"
 # reason the plugin is: neighbourhood.qml asserts what THIS host answers, and a
 # copy would go on passing after the host changed its mind.
 ln -s "$SHELL_DIR/plugins/bar" "$WORK/host"
-# The pocket reads its own entry from $HOME/.config/omarchy/shell.json
-# (docs/decisions/0025). Every case gets an empty home of its own instead, so no
+# The pocket reads its own entry from a file under $HOME (`configPath` in
+# BarWidget.qml, docs/decisions/0025). Every case gets an empty home of its own, so no
 # case reads the user's real config, and reload.qml writes the file it needs.
 mkdir -p "$WORK/home/.config/omarchy"
 

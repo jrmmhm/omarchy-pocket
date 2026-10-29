@@ -544,8 +544,9 @@ Quickshell and pins the drop steering — which fails silently in both direction
 it can fail — the membership a drag is decided against, the fan-out order when
 the member list it holds lags the bar, the room the neighbours slide by and
 that a member gets its own size back even after the pocket is unloaded, that
-the mark refuses its own drag while a member stands against it, what the two
-clicks do through the host's own button, how the widget degrades
+the mark refuses its own drag while a member stands against it, that a
+hot-reloaded pocket takes its entry from the file and writes nothing stale,
+what the two clicks do through the host's own button, how the widget degrades
 when the host stops publishing a symbol it reads, and that its copy of the bar's
 drop rule still agrees with the bar's own, swept pixel by pixel against the
 installed shell's `BarModel.js`. It runs as part of `tests/run.sh` and skips

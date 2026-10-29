@@ -28,7 +28,7 @@ The theme matters more than it looks. `bar.active` is generated from the theme's
 red and `Color.accent` from its accent, and in this one both are `#eb5864` — so
 the two drop states light the same colour, which is what the README says and
 what the drag recording shows. The desktop's own theme at the time, Solace Neon,
-would not have: its red is `#f25577` and its accent `#e4498e`.
+would not have: its red and its accent differ (its `colors.toml`).
 
 ## Finding the mark
 
