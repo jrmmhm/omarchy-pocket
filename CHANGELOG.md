@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-29
+
+A hot reload, which `omarchy plugin update` takes, no longer forgets a pin or a
+member changed since the last restart, and no longer writes the old state back.
+The README's recordings are re-shot on 0.6.0. Tested live on two monitors;
+[decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)
+owns the measurements.
+
 ### Fixed
 
 - **A hot reload no longer forgets what changed since the last restart.**
@@ -599,7 +607,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.1
 [0.6.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.5.0
 [0.4.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.4.1
