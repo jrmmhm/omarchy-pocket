@@ -106,9 +106,10 @@ same two states there by its own procedure, with the pin by click: a pin set
 was lost 3 of 3, a pin released came back 2 of 2.
 
 Row 1, revised: in the one run without a pin the member had stayed out, and
-the click wrote nothing; the logs held no error, and the next six runs passed.
+the click wrote nothing. The owner had moved the mouse during that run; the
+logs held no error, and the next six runs passed.
 Row 4, 0.6.1: the one failure was a drag out that left the member in; its
-cause is not known. Neither came back.
+cause is not known, and it did not come back.
 
 Row 4 is there for the rebuild a drop causes: the rebuilt pocket must not take
 over the file before the move is on disk. It never did.
