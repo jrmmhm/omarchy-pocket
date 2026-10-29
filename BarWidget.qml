@@ -82,9 +82,8 @@ BarWidget {
   // taken over from the file, are replaced. Anything else came from the host's
   // delta path and is newer than both.
   //
-  // Asked only once the file has been quiet for a second: the file lags the
-  // host's own config (the host sets it first and writes the file after), and
-  // a pocket the bar rebuilt after a drag is born before that write lands.
+  // Asked only once the file has been quiet for a while, because the file lags
+  // the host's own config (0025).
   function adoptFileSettings() {
     if (root.hostSettingsCurrent) return
     var slot = root.ownSlot
@@ -399,8 +398,7 @@ BarWidget {
   }
   onSettingsChanged: {
     refreshWalk()
-    // The host injects the frozen copy more than once, the last time a turn
-    // after the widget is built, so a copy taken over earlier can be overwritten.
+    // The host can inject the frozen copy again after it was taken over (0025).
     if (!root.hostSettingsCurrent) root.settingsChecked = false
     reconcileTimer.restart()
   }

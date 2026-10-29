@@ -7,17 +7,12 @@ import "plugin" as Pk
 // A reloaded pocket writes what shell.json holds, not what its slot was built
 // with.
 //
-// The host patches an inline settings change into the running widget but not
-// into the slot's entry, so the slot's `moduleSettings` stays at the entry the
-// slot was built with. A hot reload builds the widget again in the same slot and
-// injects that frozen copy: at once, a turn later, and once more when the slot's
-// active item changes (Bar.qml::injectProps, omacom/omarchy#7691). The inline
-// write rebuilds the whole entry from `settings` (0019), so the next pin or drag
-// put the old members and pins back. docs/decisions/0025.
-//
-// The host side is played here in its order: a slot item with a frozen
-// `moduleSettings`, a Loader standing in for the registry loader, and the three
-// injections. The pocket is handed the host's own Ui/PluginBarApi.qml and walks
+// After a hot reload the host injects the slot's frozen `moduleSettings`
+// (omacom/omarchy#7691), and the inline write rebuilds the whole entry from
+// `settings` (0019), so the next write put the old members and pins back.
+// docs/decisions/0025 has the host's injection order, which inject() below
+// plays against a slot item with a frozen `moduleSettings` and a Loader
+// standing in for the registry loader. The pocket is handed the host's own Ui/PluginBarApi.qml and walks
 // its window for slots, as on 4.0.3 and later. The file is written to the home
 // tests/qml/run.sh gives this case.
 //
@@ -97,8 +92,6 @@ QtObject {
     height: 30
   }
 
-  // Bar.qml's order: injectProps() in the loader's onLoaded, the same again a
-  // turn later, and the active item's change handler calls it a turn later too.
   function inject(slot, item) {
     item.settings = slot.moduleSettings
     Qt.callLater(function () { item.settings = slot.moduleSettings })
