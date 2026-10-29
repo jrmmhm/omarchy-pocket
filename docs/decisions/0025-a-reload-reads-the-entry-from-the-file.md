@@ -87,7 +87,12 @@ first and restored byte-identically after every run.
 | 1 | `omarchy.tailscale` dropped from `members` after the start, reload, a pin click on the eDP-1 mark | **the member came back, 2 of 2** | the member stayed out, the pin was written, 6 of 6 |
 | 2 | The eDP-1 pin set after the start, reload | not run | open, 6 of 6 |
 | 3 | Shell started with the eDP-1 pin, the pin dropped after the start, reload | not run | folded, 6 of 6 |
-| 4 | `tests/live.sh --gesture eDP-1`: a member dragged out and back in | not run | passed, 6 of 6 |
+| 4 | `tests/live.sh --gesture eDP-1`: a member dragged out and back in | not run | passed, 6 of 6; with the order repair waiting, 17 of 18 |
+
+Rows 1 and 2 were run again once the order repair waited, 6 of 6 each; row 3
+was not. The one failure in row 4 was a drag out that left the member in; it
+did not come back in the twelve runs after it, six of them at the same pace,
+and its cause is not known.
 
 Rows 2 and 3 were not run against `main` with this script; 0023 measured the
 same two states there by its own procedure, with the pin by click: a pin set
