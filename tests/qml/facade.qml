@@ -392,7 +392,6 @@ QtObject {
   }
 
   property var survivor: null
-  property var departedHover: null
 
   function step3() {
     // Every pocket builds its own. Finding one by name and sharing it is what
@@ -420,7 +419,6 @@ QtObject {
     // ones, so the pocket that built first is the one that goes while the other
     // lives on. That is the order that killed the shared overlay.
     harness.survivor = win.secondPocket.overlay
-    harness.departedHover = win.pocketItem.overlay.hoverHandler
 
     // Off the surface in the same breath, not whenever the deferred delete gets
     // round to it: an overlay still in the window would go on taking presses,
@@ -438,12 +436,8 @@ QtObject {
   function step4() {
     probe("the departed pocket took its own overlay with it",
           function () { return harness.overlayCount() }, 1)
-    probe("and its hover handler, which sits on the surface root",
-          function () { return String(harness.departedHover) }, "null")
     probe("the survivor still holds its own overlay",
           function () { return win.secondPocket.overlay === harness.survivor }, true)
-    probe("whose hover handler is still armed",
-          function () { return harness.survivor.hoverHandler.enabled }, true)
 
     Qt.callLater(harness.step5)
   }
@@ -470,14 +464,8 @@ QtObject {
     harness.fakeShell.inlineWrites = 0
     p.settings = ({ members: "omarchy.audio" })
 
-    // Offscreen, the overlay's surface HoverHandler reports the pointer as on
-    // the bar, and the fold timer waits for it to leave for as long as it says
-    // so. Every fold below is about the lock, not about that, so the pointer is
-    // taken off the bar here and the pocket starts closed.
-    p.overlay.hovered = false
+    // The pocket starts closed for the lock.
     p.expanded = false
-    probe("the pointer is off the bar for these steps",
-          function () { return p.pointerOnBar }, false)
 
     probe("the pocket holds its member", function () { return p.resolution.slots.length }, 1)
 
@@ -595,9 +583,6 @@ QtObject {
     probe("locking under a member's open panel locks", function () { return p.locked }, true)
     probe("but does not fold away the widget the panel hangs from",
           function () { return p.expanded }, true)
-    // The offscreen hover answers again whenever a slot changes visibility, so
-    // the pointer is taken off the bar once more before the fold is asked for.
-    p.overlay.hovered = false
     harness.facade.activePopout = null
 
     harness.afterFold(harness.step7)
@@ -701,10 +686,6 @@ QtObject {
   function step10() {
     var b = harness.pocket()
     var c = win2.pocket
-    // Offscreen, an overlay reports the pointer on the bar; every fold below is
-    // about the screens, not about that.
-    if (c.overlay) c.overlay.hovered = false
-    b.overlay.hovered = false
     b.expanded = false
     c.expanded = false
 
@@ -836,14 +817,10 @@ QtObject {
     memberItem2.opened = false
   }
 
-  // A new layout restarts each pocket's settling pass, which re-arms the
-  // overlay's hover 250 ms later — and offscreen that hover answers "on the
-  // bar". So the pointer is taken off the bar only after that pass has run.
+  // Both pockets closed before a case starts.
   function quiet() {
     var b = harness.pocket()
     var c = win2.pocket
-    b.overlay.hovered = false
-    if (c.overlay) c.overlay.hovered = false
     b.expanded = false
     c.expanded = false
   }
@@ -888,7 +865,6 @@ QtObject {
 
     memberItem.opened = false
     harness.facade.activePopout = null
-    b.overlay.hovered = false
     harness.afterFold(harness.step13)
   }
 
@@ -908,7 +884,6 @@ QtObject {
     // own panel from that one, so the pocket is held for it.
     memberItem2.opened = false
     memberSlot2.activeItem = ({ open: function () { }, close: function () { } })
-    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step13b)
   }
 
@@ -918,7 +893,6 @@ QtObject {
           function () { return c.expanded }, true)
     // The member keeps the contract again, so nothing is left holding.
     memberSlot2.activeItem = memberItem2
-    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step14)
   }
 
@@ -958,8 +932,6 @@ QtObject {
                                    harness.fakeShell.lastSettings.pinned])
           }, JSON.stringify(["VS248", ""]))
     probe("both twins read locked", function () { return b.locked && c.locked }, true)
-    b.overlay.hovered = false
-    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step15)
   }
 
