@@ -347,7 +347,10 @@ A few things change your first hour with it:
   and the bar draws its line there — which is the gesture for putting something
   away, whether or not you meant it that way. One drag back out undoes it. With
   the pocket *open* the members are back on the bar, so only the gap against the
-  mark itself puts a widget in.
+  mark itself puts a widget in. Going to fetch a widget from elsewhere on the
+  bar folds the pocket on the way, so a widget dropped on the mark's near half
+  usually arrives this way: it joins at the far end of the group rather than
+  beside the mark.
 - **`SUPER+CTRL+1…9` renumbers, but only for some members.** Those bindings open
   "the Nth panel in the right section", and the count skips both what is not
   *drawn* and anything without a panel of its own. So tucking away the tray, the
@@ -537,6 +540,7 @@ plan to come back.
 bash tests/run.sh                    # ALL TESTS PASSED (N assertions, 0 failures)
 bash tests/live.sh                   # asks the RUNNING bar; needs a shell
 bash tests/live.sh --gesture         # DRIVES a real drag; restores shell.json
+bash tests/live.sh --full [--system] # DRIVES every feature; restores shell.json
 qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
@@ -575,6 +579,15 @@ virtual pointer, one member out past the mark and back in. The gesture broke on
 ([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
 It moves the pointer on your screens, snapshots `shell.json` before it starts,
 and puts it back from a trap.
+
+`tests/live.sh --full` drives everything else the same way, after a host
+update for instance: the reveal and the fold and their edges, the pin and the
+lock, every kind of drop the section above describes, a member's panel, a
+rescan and a restart. With `--system` it also turns Hyprland's animations off,
+docks the bar vertically and moves the pocket to the left and centre sections,
+and puts each of them back. Each check prints PASS or FAIL;
+[decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+has the run that found the centre sections' oscillation.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

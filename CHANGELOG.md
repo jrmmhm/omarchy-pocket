@@ -28,7 +28,16 @@ owns the measurements.
 ### Changed
 
 - **The pocket folds as soon as the pointer leaves the mark and its
-  members**, instead of waiting for the pointer to leave the whole bar.
+  members**, instead of waiting for the pointer to leave the whole bar. In the
+  centre sections, where opening slides the mark aside, it stays open while
+  the pointer rests where the mark was.
+
+### Tests
+
+- `tests/live.sh --full` drives every feature on the running bar with a
+  virtual pointer, edge cases included, and `--system` adds animations off, a
+  vertical bar and the left and centre sections. `shell.json` is restored
+  after every block.
 
 ## [0.6.2] — 2026-10-29
 
