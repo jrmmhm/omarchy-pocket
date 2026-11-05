@@ -406,6 +406,7 @@ BarWidget {
   // the layout signal catches every later change. A drag adds one more, in the
   // overlay below, because that is the moment the answer has to be right.
   onBarLayoutChanged: {
+    root.checkRemoval()
     refreshWalk()
     Qt.callLater(refreshWalk)
     root.attachOverlay()
@@ -1165,6 +1166,12 @@ BarWidget {
     slot.enabled = true
   }
 
+  // The slot this drag lifted, and whether it was one this pocket hides. The
+  // slot and not its id: the host lets one id be added twice, and pulling the
+  // other copy off the bar must not touch the member.
+  property var dragSlot: null
+  property bool dragSlotDriven: false
+
   onDragSourceChanged: {
     if (root.dragSource) {
       // Before the snapshot every decision of this drag is made from.
@@ -1172,8 +1179,21 @@ BarWidget {
       root.intentSealed = false
       root.dragSeen = true
       root.dragMembers = root.memberIds.slice()
+      root.dragSlot = root.dragSource
+      root.dragSlotDriven = root.driven.indexOf(root.dragSource) !== -1
       return
     }
+
+    // A widget let go of past the host's removal threshold: the host says so
+    // on its slot before it clears the drag (Bar.qml::removeBarDrag), and that
+    // release is no drop. A member removed this way is forgotten once its
+    // entry has left the layout (awaitRemoval()). A host without the property
+    // reads undefined here and goes on as before.
+    var lifted = root.dragSlot
+    var removed = !!lifted && lifted.removalPending === true
+    var removedMember = removed && root.dragSlotDriven ? root.canonical(lifted.moduleName) : ""
+    root.dragSlot = null
+    root.dragSlotDriven = false
 
     // Always cleared on the falling edge. Bar.qml calls clearBarDrag() on every
     // press too, and a sample left from the previous drag must never be able to
@@ -1190,7 +1210,72 @@ BarWidget {
     root.dragMembers = []
     root.pendingIntent = "none"
     root.pendingId = ""
+    if (removed) {
+      if (removedMember !== "") root.awaitRemoval(removedMember)
+      return
+    }
     if (intent !== "none") root.commitDrop(intent, id)
+  }
+
+  // ------------------------------------------------- removed off the bar
+
+  // A member the host has announced it is removing, and how many entries
+  // carried its id when it did. The host writes the removal only once the
+  // widget's poof has played (Bar.qml::commitBarRemoval, 620 ms), and it can
+  // fail to: the layout may have changed under it, or the shell gone away. So
+  // the member is forgotten when one of its entries has actually left the
+  // layout, and the announcement lapses after `removalPatience` without one.
+  // An entry that leaves later is not this gesture's doing. docs/decisions/0027.
+  property string removalId: ""
+  property int removalCount: 0
+  property int removalPatience: 3000
+
+  Timer {
+    id: removalTimer
+    interval: root.removalPatience
+    onTriggered: root.removalId = ""
+  }
+
+  function awaitRemoval(id) {
+    root.removalId = id
+    root.removalCount = root.entriesNamed(id)
+    removalTimer.restart()
+  }
+
+  // Every section, not only the three Model.countEntries() knows: from 4.5.0
+  // on the layout has centerBegin, centerEnd and the tray's as well.
+  function entriesNamed(id) {
+    var layout = root.barLayout
+    var n = 0
+    if (!layout) return 0
+    for (var region in layout) {
+      var entries = layout[region]
+      if (!entries || typeof entries === "string" || typeof entries.length !== "number") continue
+      for (var i = 0; i < entries.length; i++)
+        if (root.canonical(Model.entryIdOf(entries[i])) === id) n++
+    }
+    return n
+  }
+
+  function checkRemoval() {
+    if (root.removalId === "") return
+    if (root.entriesNamed(root.removalId) >= root.removalCount) return
+    var id = root.removalId
+    root.removalId = ""
+    removalTimer.stop()
+    root.forgetRemoved(id)
+  }
+
+  // That one id out of `members`, and nothing else: no reordering, and a
+  // member that is missing for another reason stays named.
+  function forgetRemoved(id) {
+    if (!root.mayWriteMembers) return
+    root.settleSettings()
+    var raw = root.setting("members", "")
+    var list = Model.toList(raw)
+    var next = Model.withoutMember(list, id)
+    if (next.length === list.length) return
+    root.writeMembers(Model.membersValue(next, raw))
   }
 
   // -------------------------------------------------------- drop steering
