@@ -1,4 +1,7 @@
 import QtQuick
+// For the `Layout` attached properties of a slot that a section layout sizes,
+// and to recognise such a layout (layoutSized()).
+import QtQuick.Layouts
 // Quickshell, not just its submodules: the QsWindow attached property used to
 // tell this bar surface from the one on the other monitor lives in the base
 // module, and without it the lookup silently yields null — at which point one
@@ -1577,16 +1580,28 @@ BarWidget {
   // the reveal and the neighbours slide with the fade. Clipped while it is
   // shorter than what it paints. Fully out, the host's own sizing goes back, so
   // a widget whose label changes while the pocket is open still sizes itself.
+  //
+  // A section that is a layout -- a GridLayout from Omarchy 4.5.0 on
+  // (Bar.qml::ModuleList) -- does not read `width`: it sizes the slot from the
+  // slot's `Layout.preferredWidth`, which the host binds to the full size, and
+  // overrules a written width on its next pass. The pocket caps that size
+  // instead, through the slot's `Layout.maximumWidth`: a layout clamps a
+  // preferred size into [minimum, maximum], so the host's own binding stays
+  // untouched and the neighbours slide. docs/decisions/0027.
   function setSlotExtent(slot, fraction) {
     if (fraction >= 1) {
       root.restoreSlotExtent(slot)
       return
     }
     if (!root.isSizedSlot(slot)) return
-    var along = root.vertical ? "height" : "width"
     var implicit = root.vertical ? "implicitHeight" : "implicitWidth"
+    var extent = Model.revealExtent(slot[implicit], fraction)
     root.setSlotProperty(slot, "clip", true)
-    root.setSlotProperty(slot, along, Model.revealExtent(slot[implicit], fraction))
+    if (root.layoutSized(slot)) {
+      root.setSlotMaximum(slot, root.vertical ? "maximumHeight" : "maximumWidth", extent)
+      return
+    }
+    root.setSlotProperty(slot, root.vertical ? "height" : "width", extent)
   }
 
   // A reset, not a binding: `undefined` hands the size back to the slot, which
@@ -1594,17 +1609,36 @@ BarWidget {
   // here would belong to this instance and stop with it, and a hot reload would
   // leave a released member frozen at the width it had at that moment
   // (docs/decisions/0023). Both axes, because resetting one that was never
-  // driven changes nothing.
+  // driven changes nothing. In a layout the reset is -1, which Qt documents as
+  // "back to the implicit maximum": no limit, for an item that is not itself a
+  // layout.
   function restoreSlotExtent(slot) {
     if (!root.isSizedSlot(slot)) return
-    root.setSlotProperty(slot, "width", undefined)
-    root.setSlotProperty(slot, "height", undefined)
+    if (root.layoutSized(slot)) {
+      root.setSlotMaximum(slot, "maximumWidth", -1)
+      root.setSlotMaximum(slot, "maximumHeight", -1)
+    } else {
+      root.setSlotProperty(slot, "width", undefined)
+      root.setSlotProperty(slot, "height", undefined)
+    }
     root.setSlotProperty(slot, "clip", false)
+  }
+
+  function setSlotMaximum(slot, name, value) {
+    try { slot.Layout[name] = value } catch (e) { }
   }
 
   // Every Item has an implicit size; only the QtObject stand-ins in tests/qml
   // do not, and they have no extent to drive.
   function isSizedSlot(slot) { return !!slot && "implicitWidth" in slot }
+
+  // Whether a Qt Quick layout sizes this slot, rather than a Row or a Column
+  // placing it. Asked of the slot's parent each time, never of a version.
+  function layoutSized(slot) {
+    var holder = slot ? slot.parent : null
+    return !!holder && (holder instanceof GridLayout || holder instanceof RowLayout
+                        || holder instanceof ColumnLayout)
+  }
 
   function hideDriven() {
     for (var i = 0; i < root.driven.length; i++) {
