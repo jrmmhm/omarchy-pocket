@@ -30,6 +30,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -268,7 +269,11 @@ def drag(ptr, bar, source_id, target_x, target_y=None, hold=0.5, during=None, af
 
 def sample_slide(bar, trigger, duration):
     """Every drawn non-member's position along the bar, timed, from just before
-    `trigger()` until `duration` seconds after it."""
+    `trigger()` until `duration` seconds after it.
+
+    The trigger runs on a thread of its own: a warp waits a fifth of a second
+    after moving the cursor (Pointer.warp), and sampled after it, the first
+    third of the reveal went unseen and read as a jump."""
     along = "y" if bar.vertical() else "x"
     members = P.members()
 
@@ -278,18 +283,22 @@ def sample_slide(bar, trigger, duration):
 
     rows = [(0.0, read())]
     t0 = time.time()
-    trigger()
+    worker = threading.Thread(target=trigger)
+    worker.start()
     while time.time() - t0 < duration:
         rows.append((time.time() - t0, read()))
         time.sleep(0.02)
+    worker.join()
     return rows
 
 
-def check_slides(name, rows):
+def check_slides(name, rows, required=True):
     """The widgets the reveal moves glide there: every one that moved passes
     through at least two positions in between, one way, and no single sample
     step covers three quarters of its travel. Decision 0026 measured the jump
-    this replaces as the whole travel in one frame."""
+    this replaces as the whole travel in one frame. `required`: there is a
+    widget beside the run that has to move; a run at the outer end of its
+    section has none."""
     moved = []
     for wid in sorted(rows[0][1]):
         xs = [p[wid] for _, p in rows if wid in p]
@@ -310,7 +319,10 @@ def check_slides(name, rows):
         moved.append((wid, len(between) >= 2 and one_way and biggest < 0.75 * travel,
                       "travel %s, largest step %s, %d in between, one way: %s"
                       % (travel, biggest, len(between), one_way)))
-    check("%s: something beside the run moves" % name, bool(moved))
+    if required:
+        check("%s: something beside the run moves" % name, bool(moved))
+    elif not moved:
+        note("%s: nothing beside the run moves here" % name)
     for wid, ok, detail in moved:
         check("%s: %s slides rather than jumps" % (name, wid), ok, detail)
 
@@ -857,7 +869,7 @@ def block_system(ptr, bar):
             mark_xy = bar.centre(bar.mark())
             rows = sample_slide(bar, lambda: ptr.warp(*mark_xy), 1.2)
             check("G37 %s: hover opens it" % label, wait(bar.is_open, timeout=2.5))
-            check_slides("G37 %s opening" % label, rows)
+            check_slides("G37 %s opening" % label, rows, required=False)
             # In the centre, opening slides the mark from under the pointer
             # that opened it; it has to stay open, not open and fold in turn.
             check("G37 %s: resting where the mark was, it stays open (no oscillation)" % label,
