@@ -8,6 +8,9 @@
   the pocket now folds as soon as the pointer leaves the mark and its members
 - Amends [0015](0015-the-host-answers-by-capability-now.md): the overlay's
   HoverHandler now says whether the pointer is over the run, not the bar
+- Two of its open items, the neighbours that no longer slid and the member
+  pulled off the bar, are resolved by
+  [0027](0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
 - Owns every number below; the README and the CHANGELOG name this file
 
 ## Context
@@ -148,6 +151,9 @@ and the overlay's ownership rules of 0017, are unchanged.
   the host (#6782). The pocket reads that release as no drop, so a member
   removed this way stays named in `members`, and the tooltip reports it as
   missing. Not handled; noted for a later version.
+
+  > **Resolved 2026-11-05 by [0027](0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md).**
+  > The pocket forgets the member once the host has written the removal.
 - A drag the host cancels (a layout written mid-drag, 0024's refusal of a
   self-drag) still commits the last intent, as it did before.
 - The mark's glyph is measured with JetBrainsMono Nerd Font only, the one
@@ -174,6 +180,9 @@ and the overlay's ownership rules of 0017, are unchanged.
   `Layout.preferredWidth`. 0023's sliding neighbours rest on writing the
   slot's `width`, and no longer slide: measured, the tray beside the run jumps
   by the run's whole length in the first frame of the reveal (907 → 687).
+
+  > **Resolved 2026-11-05 by [0027](0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md).**
+  > The pocket caps the slot's `Layout.maximumWidth` instead.
 - `moduleSettings` moved from the slot to the new `WidgetHost`, so 0025's
   repair never engages on 4.5.0; the host now hands a widget its entry's
   settings again whenever they change.

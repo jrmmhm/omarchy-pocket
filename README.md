@@ -75,6 +75,13 @@ Treat that as the honest position it is: if the scene stops being walkable,
 Pocket stops hiding and says so in its tooltip, and the preferred path is
 already asked first.
 
+Two more things it reads off a widget's slot rather than asks the bar: whether
+a layout sizes the slot, which decides how the slide narrows it, and the
+removal the bar announces on a slot pulled off the bar. A host without either
+gets the older path for that one thing;
+[decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
+has both.
+
 It also imports the shell's own `qs.Commons` and `qs.Ui` modules. A renamed
 module is the one failure with no graceful half. And it reads its own entry
 from `~/.config/omarchy/shell.json` after a reload; a shell that keeps the file
@@ -251,11 +258,15 @@ no longer is, is *on the bar*, and that split is where things come apart:
 
 **Pocket moves nothing out.** The widgets stay in `bar.layout`, in their own
 module slots, built by the bar itself. Pocket flips `visible` on those slots,
-and a Qt `Row` does not lay out an invisible child — so the space closes up
+and the bar does not lay out an invisible child — so the space closes up
 while the entry never moves: `inBar` still finds it, `findPanelWidget` still
 finds it, and its settings still live on its own entry. While it opens and
 closes it also narrows those slots, so the widgets beside them slide instead of
-jumping, and hands the width back to the slot once a member is out.
+jumping, and hands the width back to the slot once a member is out. From
+Omarchy 4.5 on the bar's sections are layouts, and there the narrowing is a cap
+on the slot's layout size rather than its width; the bar's own sizing is never
+replaced
+([decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)).
 
 Not every grouping widget moves them, and this section is a comparison with the
 common kind rather than with all of them. Three were read: two move the entries
@@ -336,12 +347,12 @@ A few things change your first hour with it:
   and the gesture that put it in cannot get it out. This is true on every
   Omarchy version. The tooltip names it and tells you to edit `members`; that is
   the way back.
-- **A member pulled off the bar stays named in `members`.** From Omarchy 4.5
-  on, dragging a widget well away from the bar removes it from the bar
-  altogether. Pocket does not count that as taking it out, so the name stays
-  in `members`, the tooltip reports it as missing, and if you add the widget
-  back later it starts out hidden. Drag a member out past the mark first, or
-  edit `members`.
+- **A member pulled off the bar leaves the pocket too.** From Omarchy 4.5 on,
+  dragging a widget well away from the bar removes it from the bar
+  altogether. Once the bar has written that, Pocket takes the name out of
+  `members` and changes nothing else there; a widget added back later starts
+  out shown. Let go of it closer to the bar and the bar puts it back, still a
+  member.
 - **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
   hidden group takes up no room, so the widget beside it stands against the mark
   and the bar draws its line there — which is the gesture for putting something
