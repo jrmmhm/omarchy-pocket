@@ -1068,6 +1068,45 @@ QtObject {
               && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.power") !== -1
           }, true)
 
+    Qt.callLater(harness.stepFold1)
+  }
+
+  // ------------------------------------------------ the fold
+  //
+  // The pocket folds as soon as the pointer has left the mark and its members,
+  // not once it has left the whole bar (docs/decisions/0026). Offscreen the
+  // pointer rests at the window's corner, which on win3 is on the network
+  // widget: a neighbour, on the bar, off the run.
+
+  function stepFold1() {
+    var d = win3.pocket
+    d.sessionPinned = false
+    memberSlot3.hovered = false
+    d.expanded = true
+    probe("unpinned, nothing holds the gesture pocket open", function () { return d.holdOpen }, false)
+
+    // Driven tick by tick: one idle tick is a pointer crossing a sliver of the
+    // bar between two slots, and must not fold it.
+    d.foldTick()
+    probe("one idle tick leaves it open", function () { return d.expanded }, true)
+    memberSlot3.hovered = true
+    d.foldTick()
+    probe("a member hovered again starts the count over", function () { return d.idleTicks }, 0)
+    memberSlot3.hovered = false
+    d.foldTick()
+    probe("so the next idle tick is a first one again", function () { return d.expanded }, true)
+    d.foldTick()
+    probe("and the second idle tick in a row folds it", function () { return d.expanded }, false)
+
+    // Now on the timer alone, with the pointer still on the bar.
+    d.expanded = true
+    harness.afterFold(harness.stepFold2)
+  }
+
+  function stepFold2() {
+    var d = win3.pocket
+    probe("with the pointer on a neighbour on the bar, the pocket folds on its own",
+          function () { return d.expanded }, false)
     Qt.callLater(harness.finish)
   }
 
