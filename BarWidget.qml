@@ -201,10 +201,16 @@ BarWidget {
   // does publish an anchor and would refuse a centre member the previous
   // behaviour hid. That is the one place this could have changed behaviour on
   // an older Omarchy, and the hard requirement is that it does not.
+  //
+  // A slot that a section layout sizes is in a section by construction. From
+  // Omarchy 4.5.0 on every section is a GridLayout, which has no `spacing`
+  // either, and there is no centre anchor at all: asked by `spacing` alone,
+  // every member in `center` was refused (docs/decisions/0027).
   function anchoredByStructure(slot) {
     if (!bar) return false
     if ("centerAnchor" in bar) return false
     if (!slot || String(slot.region || "") !== "center") return false
+    if (root.layoutSized(slot)) return false
     var holder = slot.parent
     return !holder || holder.spacing === undefined
   }
