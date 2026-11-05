@@ -1096,10 +1096,11 @@ BarWidget {
 
   // From Omarchy 4.5.0 on, Bar.qml no longer clears the drag in its release
   // handler: the released widget's ghost glides to where it lands, and only
-  // then is the drag cleared (Bar.qml::settleBarDrag, 180 ms). The overlay sees
-  // the button come up at the start of that glide, the drop target goes with
-  // it, and an intent recomputed then reads "no target, nothing to do" — every
-  // drop came to nothing, and the host moved the widget all the same.
+  // then is the drag cleared (Bar.qml::settleBarDrag; 0026 has the length).
+  // The overlay sees the button come up at the start of that glide, the drop
+  // target goes with it, and an intent recomputed then reads "no target,
+  // nothing to do" — every drop came to nothing, and the host moved the widget
+  // all the same.
   //
   // So on the overlay's path the intent is taken only while the button is
   // down, and sealed the moment it comes up during a drag: a new press during
@@ -1648,10 +1649,7 @@ BarWidget {
   }
 
   onResolutionChanged: apply()
-  onExpandedChanged: {
-    root.idleTicks = 0
-    apply()
-  }
+  onExpandedChanged: apply()
 
   // A rebuild can hand the pocket back with the pointer already resting on it,
   // and holdOpen would then never *change* — it was already true when this
@@ -1765,7 +1763,8 @@ BarWidget {
   // finds it still open. A lock takes the pointer's say away, here as in
   // `holdOpen`.
   readonly property int foldAfterIdleTicks: 2
-  // Reset whenever `expanded` changes (onExpandedChanged, below the effect).
+  // Reset whenever the fold timer starts, which is every way back to an open,
+  // unpinned pocket: opened, or released from a pin.
   property int idleTicks: 0
 
   function foldTick() {
@@ -1786,6 +1785,7 @@ BarWidget {
     interval: 120
     repeat: true
     running: root.expanded && !root.pinned
+    onRunningChanged: if (running) root.idleTicks = 0
     onTriggered: root.foldTick()
   }
 
@@ -1833,8 +1833,8 @@ BarWidget {
     // The upright dots (md-dots_vertical), laid flat by the rotation, rather
     // than the flat ones (md-dots_horizontal) turned upright: the same picture
     // at every angle. Omarchy 4.5.0 fits a bar icon to its painted bounds, and
-    // the flat glyph came out of that 2 px above the middle of the bar while the
-    // upright one sits exactly in it (tests/qml/glyph.qml measures it).
+    // the flat glyph came out of that above the middle of the bar while the
+    // upright one sits in it (tests/qml/glyph.qml asks; 0026 has the numbers).
     text: String.fromCodePoint(0xf01d9)
     // Derived from the animated scalar, so it must not carry a Behavior of its
     // own — two animations on one value fight and the slower one wins twice.
