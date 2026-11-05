@@ -894,13 +894,15 @@ BarWidget {
     var source = root.walkedDragSource
     if (!source) return null
 
-    var top = root.surfaceRoot
-    if (!top) return null
+    var strip = root.barStrip()
+    if (!strip) return null
 
-    // Off this bar entirely is no target at all, which is what a release
-    // outside the bar has to mean — the same bounds test the host makes.
-    var here = top.mapFromItem(null, glass.sceneX, glass.sceneY)
-    if (here.x < 0 || here.x > top.width || here.y < 0 || here.y > top.height) return null
+    // Off the bar strip is no target at all, which is what a release outside
+    // the bar has to mean — the host makes the same test against the same strip
+    // (Bar.qml::moduleDropAtScene). The window is no longer that bound: from
+    // Omarchy 4.5.0 on it spans the whole screen.
+    var here = strip.mapFromItem(null, glass.sceneX, glass.sceneY)
+    if (here.x < 0 || here.x > strip.width || here.y < 0 || here.y > strip.height) return null
 
     var slots = root.barSlots
     var rows = []
@@ -917,6 +919,20 @@ BarWidget {
 
     return Model.nearestDropTarget(rows, { x: glass.sceneX, y: glass.sceneY },
                                    root.vertical === true)
+  }
+
+  // The item the bar paints itself in: this widget's ancestor that hangs
+  // directly off the surface root. From Omarchy 4.5.0 on the surface spans its
+  // screen and that item is the strip along its edge (Bar.qml::BarPanel's
+  // `barStrip`, a notch floor included); before, it filled the window, which
+  // was the strip. Found by structure, so neither the bar's size nor its edge
+  // has to be known here.
+  function barStrip() {
+    var top = root.surfaceRoot
+    if (!top) return null
+    var item = root
+    while (item && item.parent !== top) item = item.parent
+    return item || top
   }
 
   readonly property var dragSource: root.hostPublishesDrag ? bar.barDragSource
@@ -1098,8 +1114,32 @@ BarWidget {
   property string pendingId: ""
   property bool dragSeen: false
 
+  // From Omarchy 4.5.0 on, Bar.qml no longer clears the drag in its release
+  // handler: the released widget's ghost glides to where it lands, and only
+  // then is the drag cleared (Bar.qml::settleBarDrag, 180 ms). The overlay sees
+  // the button come up at the start of that glide, the drop target goes with
+  // it, and an intent recomputed then reads "no target, nothing to do" — every
+  // drop came to nothing, and the host moved the widget all the same.
+  //
+  // So on the overlay's path the intent is taken only while the button is
+  // down, and sealed the moment it comes up during a drag: a new press during
+  // the glide (which is what makes the host finish it) must not re-aim a drop
+  // already released. The seal is lifted when the drag ends. A host that
+  // publishes the drag itself answers until it clears it, as before.
+  property bool intentSealed: false
+
+  readonly property bool overlayPressed: !!root.overlay && root.overlay.pressed === true
+
+  onOverlayPressedChanged: {
+    if (!root.overlayPressed && root.dragSource && !root.hostPublishesDrag) root.intentSealed = true
+  }
+
   onDropIntentChanged: {
     if (!root.dragSource) return
+    // Asked of the overlay directly: which of this handler and the seal's runs
+    // first when the button comes up is the engine's to choose.
+    if (!root.hostPublishesDrag
+        && (root.intentSealed || !root.overlay || root.overlay.pressed !== true)) return
     root.pendingIntent = root.dropIntent
     root.pendingId = root.dragSourceId
   }
@@ -1139,6 +1179,7 @@ BarWidget {
     if (root.dragSource) {
       // Before the snapshot every decision of this drag is made from.
       root.settleSettings()
+      root.intentSealed = false
       root.dragSeen = true
       root.dragMembers = root.memberIds.slice()
       return
@@ -1154,6 +1195,7 @@ BarWidget {
     // lines are in this order on purpose and not by accident.
     var intent = root.dragSeen ? root.pendingIntent : "none"
     var id = root.pendingId
+    root.intentSealed = false
     root.dragSeen = false
     root.dragMembers = []
     root.pendingIntent = "none"
