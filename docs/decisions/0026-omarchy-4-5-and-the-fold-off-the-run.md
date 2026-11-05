@@ -77,7 +77,9 @@ edge has to be known.
 **The mark is the upright dots, laid flat.** `U+F01D9` turned by
 `(vertical ? 90 : 0) − 90 + revealProgress × 90` is the picture `U+F01D8`
 turned by `(vertical ? 90 : 0) + revealProgress × 90` was, at every angle, and
-it is centred to the pixel on 4.5.0 and as close as before on 4.0.6.
+it is centred to the pixel on 4.5.0. On 4.0.6 it stays within a pixel, closed
+and open, which the old glyph did as well (table above; measured offscreen
+only).
 `tests/qml/glyph.qml` asks the pixels, with 1 px of tolerance.
 
 **The pocket folds off the run.** The fold timer no longer waits for the
@@ -154,6 +156,12 @@ and the overlay's ownership rules of 0017, are unchanged.
   widget dropped on the mark's near half usually joins the collapsed group, at
   its far end rather than beside the mark. Measured: dragged from the right of
   the mark in `right`, it landed first in the run.
+- The run is one span, from its first slot to its last, and does not ask
+  whether it is unbroken. A member cut off from the group by a widget that is
+  not one (a misplacement the host no longer lets the pocket repair, 0015)
+  makes the widgets in between hold the pocket open too.
+- The run's vertical axis is covered live (a vertical bar opens and folds off
+  the bar) but by no offscreen case.
 - A long run in `centerEnd` on a narrow screen reaches the right section, and
   4.5.0 opens the tray's drawer over it during every drag
   (`Bar.qml::traySectionDragActive`). A drop aimed at the mark there lands in

@@ -4,7 +4,7 @@
   [0015](0015-the-host-answers-by-capability-now.md) for hosts without
   `barHovered`; the per-screen fold that gives a 4.0.3+ host was measured on
   three monitors in [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md);
-  the fold guard itself is dropped by
+  the fold guard itself is narrowed from the bar to the pocket's own run by
   [0026](0026-omarchy-4-5-and-the-fold-off-the-run.md), which folds the pocket
   as soon as the pointer leaves the mark and its members
 - Date: 2026-08-27

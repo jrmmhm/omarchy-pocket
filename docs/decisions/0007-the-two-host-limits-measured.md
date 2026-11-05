@@ -5,7 +5,8 @@
   pair, so the shared-origin case below needs outputs overlapped by hand; and
   on 4.0.3+ the fold no longer waits on the shell-wide hover (0015); option B
   below is taken after all by [0026](0026-omarchy-4-5-and-the-fold-off-the-run.md),
-  which found no oscillation to guard against
+  which guards against the oscillation by where the pointer is rather than by
+  hover alone
 - Date: 2026-08-27
 - Corrects the `moduleClickTargetAt` paragraph of [0005](0005-a-pocket-drives-only-its-own-screens-slots.md)
 
