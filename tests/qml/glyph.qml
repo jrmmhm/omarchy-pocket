@@ -7,13 +7,14 @@ import "plugin" as Pk
 //
 // Omarchy 4.5.0 fits every bar icon to its painted bounds (Ui/OpticalGlyph.qml,
 // "Normalize bar icon size and alignment"), and the dots-horizontal glyph the
-// mark used came out of that 2 px above the middle closed and 2.5 px right of
-// it open, while the host's own arithmetic reported no error at all. So this
-// asks the pixels, not the host: the real pocket, drawn by the real
-// BarIconButton out of the installed shell, grabbed, and its ink measured.
+// mark used came out of that above the middle closed and off to the side open,
+// while the host's own arithmetic reported no error at all. So this asks the
+// pixels, not the host: the real pocket, drawn by the real BarIconButton out
+// of the installed shell, grabbed, and its ink measured.
 //
 // 1 px of tolerance, because a glyph's ink is whole pixels and the previous
-// host drew this mark half a pixel off; the 2 px this case exists for fail it.
+// host drew this mark up to a pixel off; the offsets this case exists for,
+// which docs/decisions/0026 measured, fail it.
 //
 // Needs the bar's Nerd Font: tests/qml/run.sh skips the case where fontconfig
 // knows none, rather than measuring an empty box.

@@ -975,7 +975,7 @@ QtObject {
   // ------------------------------------------------ the drop, on 4.5.0
   //
   // Omarchy 4.5.0 lets a released widget's ghost glide to where it lands, and
-  // clears the drag only once it is there (Bar.qml::settleBarDrag, 180 ms). The
+  // clears the drag only once it is there (Bar.qml::settleBarDrag). The
   // overlay sees the button come up at the start of that glide, so the drop's
   // target is gone before the drag is. Driven here in every order the two can
   // arrive in, plus a press during the glide, a release below the strip, and a
@@ -1200,6 +1200,16 @@ QtObject {
     d.foldTick()
     d.foldTick()
     probe("below the strip, in line with the run, it folds", function () { return d.expanded }, false)
+
+    // An idle tick counted before a pin must not count after it: released, the
+    // pocket gets its full grace again rather than folding on the first tick.
+    d.expanded = true
+    d.idleTicks = 1
+    d.sessionPinned = true
+    d.sessionPinned = false
+    probe("releasing a pin starts the idle count over", function () { return d.idleTicks }, 0)
+    d.expanded = false
+
     glass.rearmHover()
     Qt.callLater(harness.finish)
   }

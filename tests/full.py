@@ -26,6 +26,7 @@ lists, and the per-screen cases stay with docs/decisions/0022.
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -736,8 +737,20 @@ def block_reload(ptr, bar):
     park(ptr, bar)
 
 
+def animations_on():
+    raw = subprocess.run(["hyprctl", "-j", "getoption", "animations:enabled"],
+                         capture_output=True, text=True).stdout
+    try:
+        return json.loads(raw).get("bool") is not False
+    except ValueError:
+        return True
+
+
 def block_system(ptr, bar):
     print("\n== G. system settings")
+    # Put back as found, not as assumed: the toggle lives outside shell.json.
+    animations_were_on = animations_on()
+    position_was = bar.position
     # G35 animations off: the host lands a drop synchronously.
     subprocess.run(["omarchy", "toggle", "animations", "off"], capture_output=True)
     time.sleep(2.0)
@@ -752,7 +765,8 @@ def block_system(ptr, bar):
         check("G35 animations off: and comes back on the near half", subject in P.members())
         park(ptr, bar)
     finally:
-        subprocess.run(["omarchy", "toggle", "animations", "on"], capture_output=True)
+        subprocess.run(["omarchy", "toggle", "animations", "on" if animations_were_on else "off"],
+                       capture_output=True)
         time.sleep(2.0)
 
     # G37 the pocket in the left section (members after the mark), and in
@@ -837,7 +851,7 @@ def block_system(ptr, bar):
         ptr.warp(vb.ox + 600, vb.oy + 400)
         check("G36 vertical: off the bar it folds", wait(vb.is_closed, 2.0))
     finally:
-        subprocess.run(["omarchy", "bar", "position", "top"], capture_output=True)
+        subprocess.run(["omarchy", "bar", "position", position_was], capture_output=True)
         wait_shell()
         time.sleep(4.0)
 
@@ -897,5 +911,12 @@ def main(argv):
     return P.OK if not failed else P.FAILED
 
 
+def interrupted(*_):
+    # A SIGTERM raises like a Ctrl-C does, so every `finally` above -- the
+    # button released, the settings and shell.json put back -- still runs.
+    raise KeyboardInterrupt()
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupted)
     sys.exit(main(sys.argv[1:]))
