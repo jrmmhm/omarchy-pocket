@@ -20,6 +20,15 @@
 #   bash tests/live.sh --open     # expects it fanned out (pinned or hovered)
 #   bash tests/live.sh --gesture  # DRIVES a real drag; writes and restores the config
 #   bash tests/live.sh --gesture DP-2  # the same, on the monitor on that connector
+#   bash tests/live.sh --full     # DRIVES every feature with its edge cases
+#                                 # (tests/full.py), about ten minutes
+#   bash tests/live.sh --full --system  # and with Hyprland's animations off, a
+#                                 # vertical bar, and the pocket in the left and
+#                                 # centre sections; every setting is put back
+#
+# `--full` takes the pointer and writes shell.json for as long as it runs. It
+# snapshots the file first and restores it after every block and at the end,
+# whatever happened; tests/full.py owns the details.
 #
 # Exit 0 = the bar agrees with the setting. Exit 1 = it does not. Exit 2 = there
 # was nothing to ask.
@@ -48,14 +57,26 @@ set -u
 WANT_OPEN=0
 WANT_GESTURE=0
 SCREEN=""
+WANT_FULL=0
 case "${1:-}" in
   --open) WANT_OPEN=1 ;;
   --gesture) WANT_GESTURE=1; SCREEN="${2:-}" ;;
+  --full) WANT_FULL=1 ;;
 esac
 
 if ! command -v omarchy-shell >/dev/null 2>&1; then
   echo "LIVE SKIPPED (omarchy-shell is not installed)"
   exit 2
+fi
+
+if [ "$WANT_FULL" = "1" ]; then
+  if [ ! -w /dev/uinput ]; then
+    echo "LIVE SKIPPED (full: /dev/uinput is not writable, so there is no pointer to drive)"
+    exit 2
+  fi
+  echo "LIVE FULL (this takes the pointer for several minutes; hands off the mouse)"
+  shift
+  exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/full.py" "$@"
 fi
 
 if [ "$(omarchy-shell shell ping 2>/dev/null)" != "ok" ]; then
