@@ -223,6 +223,87 @@ QtObject {
     property Pk.BarWidget pocket: pocketC
   }
 
+  // A third bar surface, with real geometry, for the gesture itself. Omarchy
+  // 4.5.0's bar surface spans its whole screen and paints the bar as a strip
+  // along one edge (Bar.qml::BarPanel), so the strip here is the top 26 px of a
+  // taller window. Four slots side by side: network, the member, the pocket,
+  // power. Its own facade, so the layout the other steps rewrite stays theirs.
+  property PluginBarApi facade3: PluginBarApi {
+    pluginId: "jrmmhm.pocket"
+    moduleName: "jrmmhm.pocket"
+    shell: harness.fakeShell
+    layoutConfig: ({ left: [], center: [], right: [
+      { id: "omarchy.network" }, { id: "omarchy.audio" },
+      { id: "jrmmhm.pocket", members: "omarchy.audio" }, { id: "omarchy.power" }] })
+  }
+
+  property FloatingWindow win3: FloatingWindow {
+    id: win3
+    visible: true
+    implicitWidth: 300
+    implicitHeight: 200
+
+    Item {
+      width: 300
+      height: 26
+
+      Row {
+        Item {
+          id: netSlot3
+          property string moduleName: "omarchy.network"
+          property string region: "right"
+          property var activeItem: netItem3
+          property bool hovered: false
+          property bool dragSource: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: netItem3 }
+        }
+
+        Item {
+          id: memberSlot3
+          property string moduleName: "omarchy.audio"
+          property string region: "right"
+          property var activeItem: memberItem3
+          property bool hovered: false
+          property bool dragSource: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: memberItem3 }
+        }
+
+        Item {
+          property string moduleName: "jrmmhm.pocket"
+          property string region: "right"
+          property var activeItem: pocketD
+          property bool hovered: false
+          property bool dragSource: false
+          implicitWidth: 27
+          implicitHeight: 26
+
+          Pk.BarWidget {
+            id: pocketD
+            settings: ({ members: "omarchy.audio" })
+          }
+        }
+
+        Item {
+          id: powerSlot3
+          property string moduleName: "omarchy.power"
+          property string region: "right"
+          property var activeItem: powerItem3
+          property bool hovered: false
+          property bool dragSource: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: powerItem3 }
+        }
+      }
+    }
+
+    property Pk.BarWidget pocket: pocketD
+  }
+
   property Timer starter: Timer {
     interval: 0
     running: true
@@ -889,6 +970,132 @@ QtObject {
     harness.buttonOf(b).triggerPress(Qt.RightButton)
     probe("unlocking either twin unlocks both",
           function () { return !b.locked && !c.locked && harness.fakeShell.lastSettings.locked === "" }, true)
+    Qt.callLater(harness.stepDrag1)
+  }
+
+  // ------------------------------------------------ the drop, on 4.5.0
+  //
+  // Omarchy 4.5.0 lets a released widget's ghost glide to where it lands, and
+  // clears the drag only once it is there (Bar.qml::settleBarDrag, 180 ms). The
+  // overlay sees the button come up at the start of that glide, so the drop's
+  // target is gone before the drag is. Driven here in every order the two can
+  // arrive in, plus a press during the glide, a release below the strip, and a
+  // widget going in. Coordinates are win3's: network 0-27, member 27-54,
+  // pocket 54-81, power 81-108, strip 0-26 high.
+
+  function stepDrag1() {
+    var d = win3.pocket
+    harness.fakeShell.modelDelta = false
+    harness.fakeShell.refuse = false
+    harness.fakeShell.mutatorConfig = null
+    d.bar = harness.facade3
+    d.moduleName = "jrmmhm.pocket"
+    Qt.callLater(harness.stepDrag2)
+  }
+
+  function stepDrag2() {
+    var d = win3.pocket
+    d.refreshWalk()
+    // Open, so the member is drawn and can be dragged. Pinned for the session,
+    // so nothing folds it while the reveal runs.
+    d.sessionPinned = true
+    harness.pending = harness.stepDrag3
+    later.interval = 900
+    later.restart()
+  }
+
+  // Aims the overlay at a scene point. The pointer's position is set before
+  // the press, the way the PointHandler reports it.
+  function aim(x, y) {
+    var glass = win3.pocket.overlay
+    glass.sceneX = x
+    glass.sceneY = y
+  }
+
+  function stepDrag3() {
+    var d = win3.pocket
+    var glass = d.overlay
+    probe("the gesture pocket resolves its member", function () { return d.resolution.slots.length }, 1)
+    probe("and the member is drawn at full width", function () { return memberSlot3.width }, 27)
+
+    // A: the button comes up first, the drag ends after the glide.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    probe("A: past the mark, the drag means taking the member out",
+          function () { return d.dropIntent }, "remove")
+    glass.pressed = false
+    probe("A: the release during the glide keeps that answer",
+          function () { return d.pendingIntent }, "remove")
+    var writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    probe("A: and the drag ending after the glide takes the member out",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // B: the drag ends while the button is still down, as on 4.0.x and with
+    // animations off.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    glass.pressed = false
+    probe("B: a drag that ends before the release takes the member out as before",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // C: a new press lands during the glide, inside the run. The host finishes
+    // the glide from that press; the drop is still the one released.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    glass.pressed = false
+    harness.aim(40, 13)
+    glass.pressed = true
+    probe("C: a press during the glide does not change what was released",
+          function () { return d.pendingIntent }, "remove")
+    writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    glass.pressed = false
+    probe("C: and the member is taken out",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // Below the strip, still inside the surface: the host moves nothing there,
+    // and neither may the pocket.
+    harness.aim(80, 100)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    probe("below the strip there is no drop target", function () { return d.localDrop }, null)
+    probe("and the drag means nothing", function () { return d.dropIntent }, "none")
+    writes = harness.fakeShell.inlineWrites
+    glass.pressed = false
+    memberSlot3.dragSource = false
+    probe("so the release below the strip writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+
+    // A widget going in: power aimed at the mark's near half, the button first.
+    harness.aim(55, 13)
+    powerSlot3.dragSource = true
+    glass.pressed = true
+    probe("power on the mark's near half means taking it in",
+          function () { return d.dropIntent }, "add")
+    glass.pressed = false
+    writes = harness.fakeShell.inlineWrites
+    powerSlot3.dragSource = false
+    probe("and released before the glide ends, it is taken in",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.power") !== -1
+          }, true)
+
     Qt.callLater(harness.finish)
   }
 
