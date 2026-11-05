@@ -248,6 +248,8 @@ QtObject {
       height: 26
 
       Row {
+        id: strip3
+
         Item {
           id: netSlot3
           property string moduleName: "omarchy.network"
@@ -255,6 +257,9 @@ QtObject {
           property var activeItem: netItem3
           property bool hovered: false
           property bool dragSource: false
+          // Bar.qml::ModuleSlot: true from the moment a widget is let go of
+          // past the removal threshold until its entry leaves the layout.
+          property bool removalPending: false
           implicitWidth: 27
           implicitHeight: 26
           Item { id: netItem3 }
@@ -267,6 +272,7 @@ QtObject {
           property var activeItem: memberItem3
           property bool hovered: false
           property bool dragSource: false
+          property bool removalPending: false
           implicitWidth: 27
           implicitHeight: 26
           Item { id: memberItem3 }
@@ -278,6 +284,7 @@ QtObject {
           property var activeItem: pocketD
           property bool hovered: false
           property bool dragSource: false
+          property bool removalPending: false
           implicitWidth: 27
           implicitHeight: 26
 
@@ -294,6 +301,7 @@ QtObject {
           property var activeItem: powerItem3
           property bool hovered: false
           property bool dragSource: false
+          property bool removalPending: false
           implicitWidth: 27
           implicitHeight: 26
           Item { id: powerItem3 }
@@ -1095,7 +1103,127 @@ QtObject {
               && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.power") !== -1
           }, true)
 
+    Qt.callLater(harness.stepRemove1)
+  }
+
+  // ------------------------------------------------ pulled off the bar
+  //
+  // From Omarchy 4.5.0 on, a widget let go of far enough past the bar is
+  // removed from it (Bar.qml::removeBarDrag): its slot reports
+  // `removalPending` from the release, and its entry leaves the layout once
+  // the poof has played (commitBarRemoval). A member removed that way leaves
+  // `members` too -- once its entry has left, and nothing else in the list
+  // changes. A member that is merely missing, here `gone.plugin`, stays.
+
+  function layout3(audio, power) {
+    var right = [{ id: "omarchy.network" }]
+    if (audio) right.push({ id: "omarchy.audio" })
+    right.push({ id: "jrmmhm.pocket", members: "omarchy.audio" })
+    if (power) right.push({ id: "omarchy.power" })
+    return { left: [], center: [], right: right }
+  }
+
+  // A drag of `slot` let go of below the bar. `removed`: past the threshold,
+  // so the host announces the removal before it clears the drag.
+  function pullOff(slot, removed) {
+    var glass = win3.pocket.overlay
+    harness.aim(40, 120)
+    slot.dragSource = true
+    glass.pressed = true
+    glass.pressed = false
+    if (removed) slot.removalPending = true
+    slot.dragSource = false
+  }
+
+  function stepRemove1() {
+    var d = win3.pocket
+    // Shortened from the widget's own, so R4 need not wait for it.
+    if ("removalPatience" in d) d.removalPatience = 300
+    d.settings = ({ members: "omarchy.audio, gone.plugin" })
+    probe("R: the gesture pocket holds its member", function () { return d.resolution.slots.length }, 1)
+
+    // R1: the host removes the member, after its poof.
+    var writes = harness.fakeShell.inlineWrites
+    harness.pullOff(memberSlot3, true)
+    probe("R1: nothing is written while the removal is only announced",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    memberSlot3.removalPending = false
+    probe("R1: once its entry has left the layout, the member leaves members, and only it",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && harness.fakeShell.lastSettings.members === "gone.plugin"
+          }, true)
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R2: let go of within the threshold. The host puts it back; nothing
+    // changes.
+    writes = harness.fakeShell.inlineWrites
+    harness.pullOff(memberSlot3, false)
+    probe("R2: a member let go of near the bar stays a member",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+
+    // R3: a widget that is not a member is removed. Nothing to forget.
+    harness.pullOff(powerSlot3, true)
+    harness.facade3.layoutConfig = harness.layout3(true, false)
+    powerSlot3.removalPending = false
+    probe("R3: removing a widget that is not a member writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R4: the removal is announced and never written (the layout changed
+    // under it, or the shell went away). Past the wait, an entry that leaves
+    // later is not this gesture's doing.
+    harness.pullOff(memberSlot3, true)
+    memberSlot3.removalPending = false
+    harness.pending = harness.stepRemove2
+    later.interval = 450
+    later.restart()
+  }
+
+  function stepRemove2() {
+    var d = win3.pocket
+    var writes = harness.fakeShell.inlineWrites
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    probe("R4: a removal the host never wrote is let go of, and nothing is written",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R5: a second copy of the member's id, not the slot the pocket hides,
+    // is pulled off. The member stays.
+    var twin = memberCopy3.createObject(strip3)
+    d.refreshWalk()
+    probe("R5: the pocket still hides its first copy",
+          function () { return d.driven.indexOf(memberSlot3) !== -1 && d.driven.indexOf(twin) === -1 }, true)
+    harness.pullOff(twin, true)
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    probe("R5: removing the other copy writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    twin.destroy()
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+    d.settings = ({ members: "omarchy.audio" })
+    harness.pending = harness.stepRemove3
+    later.interval = 100
+    later.restart()
+  }
+
+  function stepRemove3() {
+    win3.pocket.refreshWalk()
     Qt.callLater(harness.stepFold1)
+  }
+
+  property Component memberCopy3: Component {
+    Item {
+      property string moduleName: "omarchy.audio"
+      property string region: "right"
+      property var activeItem: copyItem
+      property bool hovered: false
+      property bool dragSource: false
+      property bool removalPending: false
+      implicitWidth: 27
+      implicitHeight: 26
+      Item { id: copyItem }
+    }
   }
 
   // ------------------------------------------------ the fold
