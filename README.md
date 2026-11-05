@@ -21,8 +21,8 @@ and the network already sit — and somewhere past a dozen you stop reading it
 and start hunting through it.
 
 Pocket takes the icons you rarely need and hides them behind a single mark.
-Point at the mark and they slide back out. Move away and they tuck themselves
-back in.
+Point at the mark and they slide back out. Move off them and they tuck
+themselves back in, wherever on the bar the pointer goes.
 
 They are not stand-ins. They are the same icons, still fully working while they
 are out — and, the part that turns out to matter most, they never leave the bar
@@ -314,7 +314,7 @@ why both belong to a screen and how a screen is named.
 
 ## Good to know
 
-Three things change your first hour with it:
+A few things change your first hour with it:
 
 - **Keep members in the pocket's own section.** A member in a different section
   than the pocket *is* hidden, but it fans out over there on its own, which
@@ -336,6 +336,12 @@ Three things change your first hour with it:
   and the gesture that put it in cannot get it out. This is true on every
   Omarchy version. The tooltip names it and tells you to edit `members`; that is
   the way back.
+- **A member pulled off the bar stays named in `members`.** From Omarchy 4.5
+  on, dragging a widget well away from the bar removes it from the bar
+  altogether. Pocket does not count that as taking it out, so the name stays
+  in `members`, the tooltip reports it as missing, and if you add the widget
+  back later it starts out hidden. Drag a member out past the mark first, or
+  edit `members`.
 - **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
   hidden group takes up no room, so the widget beside it stands against the mark
   and the bar draws its line there — which is the gesture for putting something
@@ -354,10 +360,11 @@ Three things change your first hour with it:
 <details>
 <summary><b>On more than one monitor</b></summary>
 
-- **Each screen's pocket folds on its own.** Moving the pointer onto another
-  monitor's bar folds the pocket you left. On Omarchy 4.0.2 and older the bar
-  counted hover once for the whole shell, so there no pocket folded while the
-  pointer was on *any* monitor's bar; it only delayed a fold.
+- **Each screen's pocket folds on its own.** A pocket folds a moment after the
+  pointer leaves its mark and its members, whether the pointer goes elsewhere
+  on the bar, onto another monitor's bar or off the bars altogether. Until 0.6.2 it waited for the pointer to leave the bar;
+  [decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+  has why that wait could go.
 - **An open panel can hold pockets open on every screen.** A member whose
   widget does not say whether its own panel is open cannot be told apart from
   any other panel, so while any panel is open

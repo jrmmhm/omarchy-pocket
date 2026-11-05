@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Pocket on Omarchy 4.5.0, which reworked how bar widgets are dragged and how
+bar icons are drawn.
+[Decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+owns the measurements.
+
+### Fixed
+
+- **Dragging a widget in or out of the pocket works again on Omarchy 4.5.**
+  The bar now lets a released widget glide to its place before it ends the
+  drag, and the pocket had already forgotten what the release meant by then:
+  a member dragged past the mark landed there and stayed a member, and nothing
+  dropped on the mark went in. A release just below the bar no longer counts
+  as a drop either, now that the bar's window covers the whole screen.
+- **The mark's dots sit in the middle of the bar again.** Omarchy 4.5 fits bar
+  icons to their painted bounds, which put the dots too high while closed and
+  off to the side while open. The mark is now drawn from the upright dots,
+  laid flat: the same picture, centred.
+
+### Changed
+
+- **The pocket folds as soon as the pointer leaves the mark and its
+  members**, instead of waiting for the pointer to leave the whole bar.
+
 ## [0.6.2] — 2026-10-29
 
 The reload fix of 0.6.1, made to hold. Three fresh-context reviews of

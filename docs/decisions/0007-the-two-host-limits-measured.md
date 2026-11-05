@@ -3,7 +3,9 @@
 - Status: accepted; [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
   measured that Hyprland's own mirroring builds one surface for the mirrored
   pair, so the shared-origin case below needs outputs overlapped by hand; and
-  on 4.0.3+ the fold no longer waits on the shell-wide hover (0015)
+  on 4.0.3+ the fold no longer waits on the shell-wide hover (0015); option B
+  below is taken after all by [0026](0026-omarchy-4-5-and-the-fold-off-the-run.md),
+  which found no oscillation to guard against
 - Date: 2026-08-27
 - Corrects the `moduleClickTargetAt` paragraph of [0005](0005-a-pocket-drives-only-its-own-screens-slots.md)
 
