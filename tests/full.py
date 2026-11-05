@@ -266,6 +266,55 @@ def drag(ptr, bar, source_id, target_x, target_y=None, hold=0.5, during=None, af
     time.sleep(1.4)
 
 
+def sample_slide(bar, trigger, duration):
+    """Every drawn non-member's position along the bar, timed, from just before
+    `trigger()` until `duration` seconds after it."""
+    along = "y" if bar.vertical() else "x"
+    members = P.members()
+
+    def read():
+        s = bar.slots()
+        return {k: v[along] for k, v in s.items() if k not in members and is_drawn(v)}
+
+    rows = [(0.0, read())]
+    t0 = time.time()
+    trigger()
+    while time.time() - t0 < duration:
+        rows.append((time.time() - t0, read()))
+        time.sleep(0.02)
+    return rows
+
+
+def check_slides(name, rows):
+    """The widgets the reveal moves glide there: every one that moved passes
+    through at least two positions in between, one way, and no single sample
+    step covers three quarters of its travel. Decision 0026 measured the jump
+    this replaces as the whole travel in one frame."""
+    moved = []
+    for wid in sorted(rows[0][1]):
+        xs = [p[wid] for _, p in rows if wid in p]
+        if len(xs) < 2 or xs[0] == xs[-1]:
+            continue
+        start, end = xs[0], xs[-1]
+        travel = abs(end - start)
+        steps = [b - a for a, b in zip(xs, xs[1:])]
+        one_way = all(st * (end - start) >= 0 for st in steps)
+        biggest = max(abs(st) for st in steps)
+        between = set(x for x in xs if min(start, end) < x < max(start, end))
+        trail, last = [], None
+        for t, p in rows:
+            if wid in p and p[wid] != last:
+                trail.append("%.2fs %s" % (t, p[wid]))
+                last = p[wid]
+        note("%s %s: %s" % (name, wid, ", ".join(trail)))
+        moved.append((wid, len(between) >= 2 and one_way and biggest < 0.75 * travel,
+                      "travel %s, largest step %s, %d in between, one way: %s"
+                      % (travel, biggest, len(between), one_way)))
+    check("%s: something beside the run moves" % name, bool(moved))
+    for wid, ok, detail in moved:
+        check("%s: %s slides rather than jumps" % (name, wid), ok, detail)
+
+
 def mark_edge(bar, s, inner):
     """Two px inside the mark's near (inner=True) or far edge."""
     return P.mark_gap(s, bar.ox, inner)
@@ -308,28 +357,18 @@ def block_display(ptr, bar):
     check("A2 closed: the dots sit within 1 px of the slot's middle",
           off is not None and max(abs(off[0]), abs(off[1])) <= 1.0, "offset=%s" % (off,))
 
-    before, _ = bar.neighbours()
-    before_x0 = before["x"] if before else None
-    hover(ptr, bar.centre(bar.mark()), pause=0.05)
-    # The neighbour before the run, sampled while the reveal runs.
-    xs = []
-    end = time.time() + 1.0
-    while time.time() < end:
-        s = bar.slots()
-        if before:
-            xs.append(s[before["id"]]["x"])
-        time.sleep(0.04)
+    # A4 the widgets beside the run, sampled while the reveal runs, out and
+    # back (docs/decisions/0027).
+    mark_xy = bar.centre(bar.mark())
+    rows = sample_slide(bar, lambda: ptr.warp(*mark_xy), 1.2)
     check("A3 hover on the mark opens it", wait(bar.is_open, timeout=2.0), "drawn=%s" % bar.drawn())
+    check_slides("A4 opening", rows)
     off = ink_offset(shot(bar, "A2-open"))
     check("A2 open: the dots sit within 1 px of the slot's middle",
           off is not None and max(abs(off[0]), abs(off[1])) <= 1.0, "offset=%s" % (off,))
-    if before:
-        steps = sorted(set(xs))
-        between = [x for x in steps if x != before_x0 and x != steps[-1] and x != steps[0]]
-        # Reported, not judged: decision 0026 found the host's GridLayout may
-        # no longer let the extent ride the reveal.
-        note("A4 %s's x during the reveal: %d distinct values from %s to %s (%d in between)"
-             % (before["id"], len(steps), steps[0], steps[-1], len(between)))
+    rows = sample_slide(bar, lambda: ptr.warp(bar.ox + 400, bar.oy + 400), 1.6)
+    check("A4 folding: it folds", wait(bar.is_closed, timeout=2.0))
+    check_slides("A4 folding", rows)
     hover(ptr, bar.centre(bar.mark()), pause=1.6)
     shot(bar, "A5-tooltip", slot=bar.mark(), below=140, pad=160)
     note("A5 tooltip shot: %s" % os.path.join(SHOTS, "A5-tooltip.png"))
@@ -650,16 +689,24 @@ def block_poof(ptr, bar):
     print("\n== D25. pulled off the bar (Omarchy removes the widget)")
     park(ptr, bar)
     subject = nearest(bar)
+    members_before = P.members()
+    off_bar = [m for m in members_before if m not in bar.slots()]
     open_by_hover(ptr, bar)
     m = bar.mark()
     drag(ptr, bar, subject, lambda s: mark_edge(bar, s, inner=False),
          target_y=bar.oy + m["y"] + m["height"] + 120)
-    time.sleep(1.0)
+    # The host writes the removal after its poof (620 ms), the pocket after it.
+    time.sleep(1.5)
     layout = json.load(open(CONFIG))["bar"]["layout"]
     gone = all(subject not in [i.get("id") if isinstance(i, dict) else i for i in v]
                for v in layout.values() if isinstance(v, list))
-    note("D25 %s removed from the layout by the host: %s; still in members: %s (documented)"
-         % (subject, gone, subject in P.members()))
+    check("D25 the host removed %s from the layout" % subject, gone)
+    after = P.members()
+    check("D25 and %s is no longer named in members" % subject, subject not in after,
+          "members=%s" % after)
+    check("D25 nothing else in members changed, order and members not on the bar (%s) included"
+          % ", ".join(off_bar), after == [x for x in members_before if x != subject],
+          "before=%s after=%s" % (members_before, after))
     check("D25 nothing breaks: the pocket still folds and opens", open_by_hover(ptr, bar))
     park(ptr, bar)
 
@@ -795,15 +842,22 @@ def block_system(ptr, bar):
     # over it during every drag (Bar.qml::traySectionDragActive), so a drop
     # aimed at the mark lands in the tray's section -- for the host and the
     # pocket alike. centerBegin carries the drags for the centre.
+    # `center` itself, the box centred on the bar, re-centres as the run grows:
+    # the mark and both sides move. Its members were refused as the centre
+    # anchor on 4.5.0 until 0027; fold and rest only, as for centerEnd.
     for region, label, at, drags in (("left", "left", lambda t: len(t), True),
                                      ("centerEnd", "centre", lambda t: min(2, len(t)), False),
-                                     ("centerBegin", "centre-begin", lambda t: len(t), True)):
+                                     ("centerBegin", "centre-begin", lambda t: len(t), True),
+                                     ("center", "centre box", lambda t: len(t), False)):
         write_config(move_run(region, at))
         time.sleep(2.0)
         try:
             park(ptr, bar)
             check("G37 %s: shut, no member is drawn" % label, bar.is_closed())
-            check("G37 %s: hover opens it" % label, open_by_hover(ptr, bar))
+            mark_xy = bar.centre(bar.mark())
+            rows = sample_slide(bar, lambda: ptr.warp(*mark_xy), 1.2)
+            check("G37 %s: hover opens it" % label, wait(bar.is_open, timeout=2.5))
+            check_slides("G37 %s opening" % label, rows)
             # In the centre, opening slides the mark from under the pointer
             # that opened it; it has to stay open, not open and fold in turn.
             check("G37 %s: resting where the mark was, it stays open (no oscillation)" % label,
@@ -845,11 +899,14 @@ def block_system(ptr, bar):
         time.sleep(1.0)
         check("G36 vertical: shut, no member is drawn", vb.is_closed())
         shot(vb, "G36-vertical-closed")
-        ptr.warp(*vb.centre(vb.mark()))
+        mark_xy = vb.centre(vb.mark())
+        rows = sample_slide(vb, lambda: ptr.warp(*mark_xy), 1.2)
         check("G36 vertical: hover opens it", wait(vb.is_open, 2.5))
+        check_slides("G36 vertical opening", rows)
         shot(vb, "G36-vertical-open")
-        ptr.warp(vb.ox + 600, vb.oy + 400)
+        rows = sample_slide(vb, lambda: ptr.warp(vb.ox + 600, vb.oy + 400), 1.6)
         check("G36 vertical: off the bar it folds", wait(vb.is_closed, 2.0))
+        check_slides("G36 vertical folding", rows)
     finally:
         subprocess.run(["omarchy", "bar", "position", position_was], capture_output=True)
         wait_shell()
