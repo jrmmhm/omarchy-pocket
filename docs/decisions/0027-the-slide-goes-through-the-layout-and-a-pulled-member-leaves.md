@@ -129,7 +129,39 @@ centre anchor.
 
 ## The live run
 
-To be filled from the run on the release candidate.
+`tests/live.sh --full --system` on the machine above, positions read with
+`debugBarGeometry` about every 40 ms from just before the pointer moved:
+107 checks, 106 passed, `shell.json` restored byte for byte, animations and
+the bar position as found. `tests/live.sh` and `tests/live.sh --gesture`
+passed on the same build.
+
+| Check | Widget | Positions along the bar (s, px) |
+|---|---|---|
+| A4 opening, `right` | tray | 0.00 907, 0.05 884, 0.09 845, 0.12 804, 0.16 750, 0.21 727, 0.24 707, 0.28 695, 0.32 693, 0.36 690, 0.40 688, 0.51 687 |
+| A4 folding, `right` | tray | 0.00 687, 0.15 692, 0.19 712, 0.23 765, 0.28 805, 0.31 837, 0.35 875, 0.39 888, 0.43 895, 0.47 901, 0.51 903, 0.55 904, 0.59 906, 0.66 907 |
+| G37 opening, `centerEnd` | the mark | 691 → 889 in 12 steps, largest 46 |
+| G37 opening, `center` | clock | 496 → 397 in 11 steps, largest 25 |
+| G36 opening, vertical | tray (y) | 475 → 248 in 12 steps, largest 59 |
+| G36 folding, vertical | tray (y) | 248 → 475 in 12 steps, largest 59 |
+
+Before the change, 0026 measured the tray at 907 and then 687 in the next
+frame. In `left` and `centerBegin` the run ends its section and nothing beside
+it moves.
+
+- D25: `omarchy.tailscale` pulled 120 px below the bar was removed by the
+  host and left `members`; the other six, in their order and with
+  `io.github.ilyazar.syncthing` (not on the bar), were unchanged.
+- G37 `center`: shut, opened, rested 3 s on the place the mark left without
+  folding, and folded onto the widget before the run (the clock) without
+  reopening; the run ended the box, so there was no widget after it.
+- The one failure, F33, reads `shell.json` 0.8 s after the click that
+  releases a pin after a plugin rescan and found the pin still written in 2 of
+  5 runs; in every run the pocket folded, which it does only unpinned, and the
+  file had the pin released by F34. It is the reload path of 0025, which this
+  change does not touch.
+
+The checks of [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
+on a second monitor were not run: none was attached.
 
 ## Review
 
