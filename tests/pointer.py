@@ -344,10 +344,10 @@ def open_pocket(pointer, wanted, screen=None):
 def park(pointer, origin_x, origin_y):
     """Take the pointer off the bar.
 
-    Left on it, `pointerOnBar` stays true and the fold timer returns early on
-    every tick, so the pocket hangs open for the rest of the session -- which is
-    indistinguishable from a bug this plugin has actually shipped, and made a
-    later tests/live.sh run report six members drawn while collapsed.
+    Left on the mark or on a member, it holds the pocket open, and a later
+    tests/live.sh run would report the members drawn while it expects them
+    collapsed. Anywhere else the pocket folds on its own (docs/decisions/0026);
+    off the bar is simply the one place that is never the mark.
     """
     pointer.warp(origin_x + 400, origin_y + 400)
     time.sleep(1.2)
