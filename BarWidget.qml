@@ -1795,10 +1795,16 @@ BarWidget {
     // side are two things a user cannot tell apart. Dots read as "there is more
     // here", and turning them upright rides the same scalar as everything else,
     // so it is the drawer's move by construction rather than by a copied number.
-    text: String.fromCodePoint(0xf01d8)
+    //
+    // The upright dots (md-dots_vertical), laid flat by the rotation, rather
+    // than the flat ones (md-dots_horizontal) turned upright: the same picture
+    // at every angle. Omarchy 4.5.0 fits a bar icon to its painted bounds, and
+    // the flat glyph came out of that 2 px above the middle of the bar while the
+    // upright one sits exactly in it (tests/qml/glyph.qml measures it).
+    text: String.fromCodePoint(0xf01d9)
     // Derived from the animated scalar, so it must not carry a Behavior of its
     // own — two animations on one value fight and the slower one wins twice.
-    textRotation: (root.vertical ? 90 : 0) + root.revealProgress * 90
+    textRotation: (root.vertical ? 90 : 0) - 90 + root.revealProgress * 90
 
     // The plugin's only text sink, and the reason Model.describe() escapes what
     // it interpolates. From here the string travels through WidgetButton's
