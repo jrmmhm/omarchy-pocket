@@ -400,7 +400,13 @@ BarWidget {
     refreshWalk()
     Qt.callLater(refreshWalk)
     root.attachOverlay()
+    root.rearmOverlayHover()
     settle.restart()
+  }
+
+  function rearmOverlayHover() {
+    var glass = root.overlay
+    if (glass && typeof glass.rearmHover === "function") glass.rearmHover()
   }
 
   onSettingsChanged: {
@@ -424,6 +430,7 @@ BarWidget {
     onTriggered: {
       root.refreshWalk()
       root.attachOverlay()
+      root.rearmOverlayHover()
     }
   }
 
@@ -614,18 +621,19 @@ BarWidget {
 
   // ------------------------------------------------------- pointer overlay
 
-  // An invisible, non-painting item spanning this bar surface, carrying the
-  // pointer handler that answers what the host stopped answering: where the
-  // pointer is WHILE another item holds the mouse grab (the drag the host
-  // described with `barDragTarget`). Qt delivers no hover under an exclusive
-  // grab, but a PointHandler that takes a PASSIVE grab keeps receiving every
-  // move and the release regardless of it, which is what makes the drag
-  // readable at all.
+  // An invisible, non-painting item spanning this bar surface, carrying the two
+  // pointer handlers that answer what the host stopped answering: where the
+  // pointer is while it is NOT pressed (what the fold guard asks, see
+  // pointerOnRun()), and where it is WHILE another item holds the mouse grab
+  // (the drag the host described with `barDragTarget`).
   //
-  // It used to carry a HoverHandler as well, for the fold guard that waited for
-  // the pointer to leave the whole bar. The pocket now folds as soon as the
-  // pointer leaves the mark and its members, so that guard and its handler are
-  // gone (docs/decisions/0026).
+  // Both halves are needed and neither substitutes for the other. Qt delivers
+  // hover only while no exclusive grabber exists — the same line sits in every
+  // release from 6.5 to 6.11, so it is a design and not a bug — and a
+  // PointHandler answers only while a point is pressed, resetting its position
+  // to (0,0) on release. A PointHandler that takes a PASSIVE grab keeps
+  // receiving every move and the release regardless of the foreign exclusive
+  // grab, which is what makes the drag readable at all.
   //
   // It has to hang here rather than on this widget: the passive grab is only
   // available to an item hit at press time, before the slot's own MouseArea
@@ -656,9 +664,76 @@ BarWidget {
       // first rebuild, and from then on no press ever reached `pressed`: the
       // gesture worked once per session. See docs/decisions/0017.
 
+      property bool hovered: false
       property bool pressed: false
       property real sceneX: 0
       property real sceneY: 0
+
+      // Parented to the surface root and NOT to this item, which is the whole
+      // difference between a bar that still hovers and one that does not.
+      //
+      // Qt walks a hover down the children in reverse paint order, and
+      // `deliverHoverEventRecursive` breaks out of that loop as soon as any
+      // HoverHandler reports itself hovered — `blocking` only decides whether
+      // the walk stops entirely, not whether it skips the remaining SIBLINGS.
+      // This item sits above the whole bar by construction, so a handler here
+      // was visited first every time and the bar underneath never saw a hover
+      // at all: the mark stopped fanning out on pointer, and nothing in the
+      // plugin could tell, because from the inside it simply never happened.
+      // Measured on the live bar, and the reason the earlier build appeared to
+      // work is that its overlay was never built.
+      //
+      // The same function says where a handler may sit without doing that:
+      // "Don't propagate to siblings, only to ancestors". An ancestor is
+      // served after its children, so this sees every pointer on the surface
+      // and takes none of them away. It is also where the host puts its own
+      // bar hover — a HoverHandler on the bar's strip-filling loader.
+      HoverHandler {
+        id: surfaceHover
+        parent: glass.parent
+        blocking: false
+        onHoveredChanged: glass.hovered = hovered
+        onPointChanged: {
+          if (glass.pressed) return
+          glass.sceneX = point.scenePosition.x
+          glass.sceneY = point.scenePosition.y
+        }
+      }
+
+      // For tests/qml/facade.qml, which has to reach the handler from outside to
+      // see that it goes with this item and that a surviving one stays armed.
+      readonly property var hoverHandler: surfaceHover
+
+      // A bar rebuild destroys and recreates every item on this surface while a
+      // hover is in flight, and Qt's hover bookkeeping does not always survive
+      // it: measured on the live bar as `hovered` stuck true at a frozen
+      // position on the one surface the drop happened on, with no leave event
+      // ever arriving. A frozen position over the run would hold the pocket
+      // open for the rest of the session.
+      //
+      // Re-arming is the reset: a disabled handler drops its hover, and an
+      // enabled one takes it again from the next pointer event. The cost is one
+      // stale `false` for a pointer that is resting on the bar and not moving,
+      // and it is a cost worth paying — while the pointer is on the pocket or on
+      // one of its members, `holdOpen` holds it open through their own hover.
+      function rearmHover() {
+        surfaceHover.enabled = false
+        glass.hovered = false
+        surfaceHover.enabled = true
+      }
+
+      // The handler is declared here but reparented onto the surface root, and
+      // that moves its ownership with it: destroying this item does NOT destroy
+      // the handler. Measured — it is still there afterwards, and `destroy()`
+      // does not take it either, because `destroy()` only works on objects that
+      // were created dynamically. With one overlay per instance that would leave
+      // a live handler on the surface for every rebuild, so it is handed back
+      // before this item goes: switched off, and parented to this item again,
+      // which takes its ownership back with it. Measured: gone with the item.
+      function retire() {
+        surfaceHover.enabled = false
+        surfaceHover.parent = glass
+      }
 
       PointHandler {
         // target: null keeps it a pure observer — it moves nothing and takes no
@@ -707,6 +782,7 @@ BarWidget {
     var glass = root.overlay
     root.overlay = null
     if (!glass) return
+    glass.retire()
     glass.parent = null
     glass.destroy()
   }
@@ -1641,21 +1717,59 @@ BarWidget {
 
   onLockedChanged: foldIfLocked()
 
-  // The pocket folds as soon as the pointer has left the mark and its members,
-  // wherever on the bar it went. Folding moves every widget towards its
-  // section's anchor and never past a pointer that has left the run, so it
-  // cannot slide the mark back under the pointer (docs/decisions/0026).
+  // The pocket folds as soon as the pointer has left the run — the mark and
+  // its members — wherever on the bar it went (docs/decisions/0026).
   //
+  // The run is asked by where the pointer is, not only by which slot reports a
+  // hover, because Qt hovers on motion. In the centre sections opening the
+  // pocket slides the mark away from the pointer that opened it, and the
+  // member that slides under that still pointer reports nothing. Asked by
+  // hover alone, the pocket folded there, the mark slid back under the
+  // pointer, and it opened and folded for as long as the pointer rested on it
+  // — measured on the live bar. Where the pointer is comes from the overlay's
+  // surface hover; across the whole strip, so the slivers above and below a
+  // widget shorter than the bar count as the run.
+  //
+  // A host that publishes its drag builds no overlay, and publishes its bar
+  // hover as well: there the pocket waits for the pointer to leave the bar, as
+  // it always did.
+  function pointerOnRun() {
+    var glass = root.overlay
+    if (!glass) return !!bar && ("barHovered" in bar) && bar.barHovered === true
+    if (glass.hovered !== true) return false
+
+    var strip = root.barStrip()
+    if (!strip) return false
+    var at = strip.mapFromItem(null, glass.sceneX, glass.sceneY)
+    if (at.x < 0 || at.x > strip.width || at.y < 0 || at.y > strip.height) return false
+
+    var along = root.vertical === true ? "y" : "x"
+    var extent = root.vertical === true ? "height" : "width"
+    var slots = [root.ownSlot].concat(root.driven)
+    var from = Infinity, to = -Infinity
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i]
+      if (!slot || slot.visible !== true || !(slot[extent] > 0)) continue
+      // A member in another section is not part of the run beside the mark.
+      if (slot !== root.ownSlot && String(slot.region || "") !== root.ownRegion) continue
+      var corner
+      try { corner = slot.mapToItem(strip, 0, 0) } catch (e) { continue }
+      from = Math.min(from, corner[along])
+      to = Math.max(to, corner[along] + slot[extent])
+    }
+    return from <= to && at[along] >= from && at[along] <= to
+  }
+
   // A tick counts as idle when nothing holds the pocket open, and it folds on
-  // the second idle tick in a row: a pointer crossing a sliver of the bar that
-  // no member covers — between two slots on a diagonal, under a widget shorter
-  // than the bar — finds it still open.
+  // the second idle tick in a row: a pointer crossing a sliver no slot covers
+  // finds it still open. A lock takes the pointer's say away, here as in
+  // `holdOpen`.
   readonly property int foldAfterIdleTicks: 2
   // Reset whenever `expanded` changes (onExpandedChanged, below the effect).
   property int idleTicks: 0
 
   function foldTick() {
-    if (root.holdOpen) {
+    if (root.holdOpen || (!root.locked && root.pointerOnRun())) {
       root.idleTicks = 0
       return
     }

@@ -392,6 +392,7 @@ QtObject {
   }
 
   property var survivor: null
+  property var departedHover: null
 
   function step3() {
     // Every pocket builds its own. Finding one by name and sharing it is what
@@ -419,6 +420,7 @@ QtObject {
     // ones, so the pocket that built first is the one that goes while the other
     // lives on. That is the order that killed the shared overlay.
     harness.survivor = win.secondPocket.overlay
+    harness.departedHover = win.pocketItem.overlay.hoverHandler
 
     // Off the surface in the same breath, not whenever the deferred delete gets
     // round to it: an overlay still in the window would go on taking presses,
@@ -436,8 +438,12 @@ QtObject {
   function step4() {
     probe("the departed pocket took its own overlay with it",
           function () { return harness.overlayCount() }, 1)
+    probe("and its hover handler, which sits on the surface root",
+          function () { return String(harness.departedHover) }, "null")
     probe("the survivor still holds its own overlay",
           function () { return win.secondPocket.overlay === harness.survivor }, true)
+    probe("whose hover handler is still armed",
+          function () { return harness.survivor.hoverHandler.enabled }, true)
 
     Qt.callLater(harness.step5)
   }
@@ -464,7 +470,12 @@ QtObject {
     harness.fakeShell.inlineWrites = 0
     p.settings = ({ members: "omarchy.audio" })
 
-    // The pocket starts closed for the lock.
+    // Offscreen, the overlay's surface HoverHandler reports the pointer at the
+    // window's corner, which is where these unplaced slots all sit, and the
+    // fold timer holds the pocket open for a pointer on its run. Every fold
+    // below is about the lock, not about that, so the pointer is taken off the
+    // bar here and the pocket starts closed.
+    p.overlay.hovered = false
     p.expanded = false
 
     probe("the pocket holds its member", function () { return p.resolution.slots.length }, 1)
@@ -583,6 +594,9 @@ QtObject {
     probe("locking under a member's open panel locks", function () { return p.locked }, true)
     probe("but does not fold away the widget the panel hangs from",
           function () { return p.expanded }, true)
+    // The offscreen hover answers again whenever a slot changes visibility, so
+    // the pointer is taken off the bar once more before the fold is asked for.
+    p.overlay.hovered = false
     harness.facade.activePopout = null
 
     harness.afterFold(harness.step7)
@@ -686,6 +700,10 @@ QtObject {
   function step10() {
     var b = harness.pocket()
     var c = win2.pocket
+    // Offscreen, an overlay reports the pointer on the run; every fold below is
+    // about the screens, not about that.
+    if (c.overlay) c.overlay.hovered = false
+    b.overlay.hovered = false
     b.expanded = false
     c.expanded = false
 
@@ -817,10 +835,14 @@ QtObject {
     memberItem2.opened = false
   }
 
-  // Both pockets closed before a case starts.
+  // A new layout restarts each pocket's settling pass, which re-arms the
+  // overlay's hover 250 ms later — and offscreen that hover answers "on the
+  // run". So the pointer is taken off the bar only after that pass has run.
   function quiet() {
     var b = harness.pocket()
     var c = win2.pocket
+    b.overlay.hovered = false
+    if (c.overlay) c.overlay.hovered = false
     b.expanded = false
     c.expanded = false
   }
@@ -865,6 +887,7 @@ QtObject {
 
     memberItem.opened = false
     harness.facade.activePopout = null
+    b.overlay.hovered = false
     harness.afterFold(harness.step13)
   }
 
@@ -884,6 +907,7 @@ QtObject {
     // own panel from that one, so the pocket is held for it.
     memberItem2.opened = false
     memberSlot2.activeItem = ({ open: function () { }, close: function () { } })
+    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step13b)
   }
 
@@ -893,6 +917,7 @@ QtObject {
           function () { return c.expanded }, true)
     // The member keeps the contract again, so nothing is left holding.
     memberSlot2.activeItem = memberItem2
+    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step14)
   }
 
@@ -932,6 +957,8 @@ QtObject {
                                    harness.fakeShell.lastSettings.pinned])
           }, JSON.stringify(["VS248", ""]))
     probe("both twins read locked", function () { return b.locked && c.locked }, true)
+    b.overlay.hovered = false
+    if (c.overlay) c.overlay.hovered = false
     harness.afterFold(harness.step15)
   }
 
@@ -1080,6 +1107,8 @@ QtObject {
 
   function stepFold1() {
     var d = win3.pocket
+    // Off the bar, so the ticks below are about hover and nothing else.
+    d.overlay.hovered = false
     d.sessionPinned = false
     memberSlot3.hovered = false
     d.expanded = true
@@ -1098,8 +1127,12 @@ QtObject {
     d.foldTick()
     probe("and the second idle tick in a row folds it", function () { return d.expanded }, false)
 
-    // Now on the timer alone, with the pointer still on the bar.
+    // Now on the timer alone, with the pointer still on the bar, on the
+    // network widget before the run.
     d.expanded = true
+    d.overlay.hovered = true
+    d.overlay.sceneX = 13
+    d.overlay.sceneY = 13
     harness.afterFold(harness.stepFold2)
   }
 
@@ -1107,6 +1140,67 @@ QtObject {
     var d = win3.pocket
     probe("with the pointer on a neighbour on the bar, the pocket folds on its own",
           function () { return d.expanded }, false)
+    Qt.callLater(harness.stepFold3)
+  }
+
+  // The pointer resting where the run is while no member reports a hover. Qt
+  // hovers on motion, so that is what a member looks like that has slid under
+  // a still pointer -- and in the centre sections opening the pocket slides
+  // the mark away from the pointer that opened it. Folding there opened and
+  // folded the pocket forever, measured on the live bar (docs/decisions/0026).
+  // The overlay's surface hover is what says where the pointer is.
+  function stepFold3() {
+    var d = win3.pocket
+    memberSlot3.hovered = false
+    // On the member's place from the start: the pocket opens with the pointer
+    // on its run, and nothing holds it but where the pointer is. The real
+    // handler is switched off for this, because offscreen it reports the
+    // window's corner whenever an item moves, over the position put in here.
+    d.overlay.hoverHandler.enabled = false
+    d.overlay.hovered = true
+    d.overlay.sceneX = 40
+    d.overlay.sceneY = 13
+    d.expanded = true
+    // Past the 600 ms reveal, so the run stands where it will be measured.
+    harness.pending = harness.stepFold4
+    later.interval = 900
+    later.restart()
+  }
+
+  function stepFold4() {
+    var d = win3.pocket
+    var glass = d.overlay
+    glass.hovered = true
+    glass.sceneX = 40
+    glass.sceneY = 13
+    d.foldTick()
+    d.foldTick()
+    d.foldTick()
+    probe("the pointer over a member that reports no hover still holds it open",
+          function () { return d.expanded }, true)
+    glass.sceneX = 70
+    d.foldTick()
+    d.foldTick()
+    probe("and over the mark", function () { return d.expanded }, true)
+    glass.sceneX = 95
+    d.foldTick()
+    d.foldTick()
+    probe("over the widget after the run it folds", function () { return d.expanded }, false)
+    // Asked straight away from here on: the run is measured while it folds and
+    // reopens, which is the moment it is at its narrowest, and these points are
+    // outside it at any width.
+    d.expanded = true
+    glass.sceneX = 13
+    d.foldTick()
+    d.foldTick()
+    probe("over the widget before the run it folds", function () { return d.expanded }, false)
+    d.expanded = true
+    glass.sceneX = 40
+    glass.sceneY = 100
+    d.foldTick()
+    d.foldTick()
+    probe("below the strip, in line with the run, it folds", function () { return d.expanded }, false)
+    glass.rearmHover()
     Qt.callLater(harness.finish)
   }
 
