@@ -71,6 +71,14 @@ if [ ! -f "$SHELL_DIR/Ui/PluginBarApi.qml" ]; then
   CASES="$(printf '%s\n' $CASES | grep -v '^facade$' | tr '\n' ' ')"
 fi
 
+# The glyph case measures the mark's ink as the bar draws it, which takes the
+# bar's Nerd Font. Without one there is nothing to measure but an empty box.
+if fc-list : family 2>/dev/null | grep -qi 'nerd'; then
+  CASES="$CASES glyph"
+else
+  echo "QML SKIPPED (glyph: fontconfig knows no Nerd Font to draw the mark with)"
+fi
+
 status=0
 for name in $CASES; do
   cp "$HERE/$name.qml" "$WORK/$name.qml"
@@ -83,7 +91,7 @@ for name in $CASES; do
   # Captured rather than piped: Quickshell does not exit through a pipe here.
   if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ] \
       || [ "$name" = "cascade" ] || [ "$name" = "extent" ] || [ "$name" = "selfdrag" ] \
-      || [ "$name" = "reload" ]; then
+      || [ "$name" = "reload" ] || [ "$name" = "glyph" ]; then
     output="$(HOME="$WORK/home" QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
     output="$(HOME="$WORK/home" timeout 60 qs -p "$WORK/$name.qml" 2>&1)"

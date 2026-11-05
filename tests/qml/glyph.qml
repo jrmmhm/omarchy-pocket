@@ -32,7 +32,10 @@ QtObject {
   property PluginBarApi facade: PluginBarApi {
     pluginId: "jrmmhm.pocket"
     moduleName: "jrmmhm.pocket"
-    foreground: "white"
+    // The bar's icons draw in `barForeground` (Ui/WidgetButton.qml), and a
+    // pinned mark is lit in `urgent`.
+    barForeground: "white"
+    urgent: "white"
     fontFamily: "monospace"
     barSize: 26
     layoutConfig: ({ left: [], center: [], right: [{ id: "jrmmhm.pocket" }] })
@@ -52,6 +55,10 @@ QtObject {
       property var activeItem: pocket
       property bool hovered: false
       property bool dragSource: false
+      // Off the window's corner: offscreen, the pointer rests at (0, 0), and a
+      // pocket under it would open on hover before it could be measured shut.
+      x: 30
+      y: 10
       width: 27
       height: 26
 
