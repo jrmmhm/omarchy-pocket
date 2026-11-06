@@ -115,7 +115,10 @@ centre anchor.
 
 - A member grabbed while it is still sliding out keeps a capped room in the
   host's drag until the reveal ends (`ModuleSlot.alongLength` reads the capped
-  preferred size). Visual, under 600 ms.
+  preferred size). Visual, for the rest of the reveal.
+- A plugin rescan or a shell restart between the release and the host's write
+  builds a new pocket that was not told of the removal, and the member stays
+  named in `members`, as before this change.
 - A host that binds `Layout.maximumWidth` itself would lose that binding to
   the pocket's write, as one that bound `width` would have under 0023.
 - A removal the host writes more than 3 s after the release is not followed.
@@ -172,7 +175,18 @@ removal; the centre fix gets its own commit and a live check (G37, `center`);
 the two new host dependencies are named in the README; the live slide check
 is judged by its largest step, with timestamps; the capped drag room is a
 consequence above; the offscreen cases wait for the layout's polish and cover
-a duplicate id. Its alternative for the centre (`columnSpacing`) was refused
+a duplicate id. The removal with animations off, where the host writes it
+right after clearing the drag, was checked by reading only: the facade hands
+the pocket its new layout a turn later (`Bar.qml::schedulePluginBarApiSync`),
+so the removal is always noted before the count drops.
+
+A fresh-context review of the finished work then found no new behaviour
+wrong, and four gaps, all closed: an offscreen case for the order of the
+members left behind (R1 now keeps two, out of layout order, and fails if they
+are reordered), one for a drag whose slot is destroyed before it ends (R6),
+the old host's centre answers pinned in `tests/qml/layoutextent.qml` (a Row
+member, the anchor beside the sections refused), and the rescan during the
+poof above. Its alternative for the centre (`columnSpacing`) was refused
 above. The first live run then failed the opening slide everywhere at exactly
 0.20 s: the sampler started after `Pointer.warp()` returned, which waits a
 fifth of a second, so the first third of the reveal went unseen. The trigger
