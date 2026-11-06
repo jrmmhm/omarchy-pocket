@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Pocket on Omarchy 4.5.0, which reworked how bar widgets are dragged and how
-bar icons are drawn.
+## [0.7.0] — 2026-11-06
+
+Pocket on Omarchy 4.5.0, which reworked how bar widgets are dragged, laid out
+and drawn. Tested live on eDP-1, and on eDP-1 beside an ASUS VG289 for the
+per-screen checks.
 [Decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
-owns the measurements.
+owns the measurements of the drag, the mark and the fold,
+[decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
+those of the slide and the removal.
 
 ### Fixed
 
@@ -679,7 +684,8 @@ owns the measurements.
 - A tooltip that names every member it could not find, could not use, or would
   not touch.
 
-[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/jrmmhm/omarchy-pocket/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.7.0
 [0.6.2]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.2
 [0.6.1]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.1
 [0.6.0]: https://github.com/jrmmhm/omarchy-pocket/releases/tag/v0.6.0
