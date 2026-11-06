@@ -24,7 +24,9 @@ import "plugin" as Pk
 //
 // Then a pocket in the `center` section of a bar that publishes no
 // `centerAnchor`, as 4.5.0 does not: its member is a member, not refused as the
-// centre anchor.
+// centre anchor. Beside it, the answers of a host older than 4.5.0, which must
+// not change: a centre member in a Row is a member, and one hanging beside the
+// sections, where the old centre anchor hung, is refused.
 //
 // Needs a window: Model.ownsSlot() refuses every slot to an instance that does
 // not know its surface. tests/qml/run.sh runs this case offscreen.
@@ -102,8 +104,14 @@ QtObject {
   property FakeBar columnBar: FakeBar { vertical: true }
   property FakeBar unloadedBar: FakeBar { vertical: false }
   property AnchorlessBar centreBar: AnchorlessBar { }
+  // The same question on a host older than 4.5.0, which must answer as it
+  // always did: a centre slot in a Row is a member, one hanging beside the
+  // sections (the old centre anchor's place) is refused.
+  property AnchorlessBar rowCentreBar: AnchorlessBar { }
+  property AnchorlessBar anchorCentreBar: AnchorlessBar { }
   property var unloadedMember: null
   property var centreMember: null
+  property var rowCentreMember: null
 
   property FloatingWindow win: FloatingWindow {
     id: win
@@ -153,6 +161,18 @@ QtObject {
     property Pk.BarWidget centrePocket: Pk.BarWidget {
       parent: win.contentItem
       bar: harness.centreBar
+      settings: ({ members: harness.memberId })
+    }
+    property Row rowCentre: Row { parent: win.contentItem; y: 250 }
+    property Item anchorCentre: Item { parent: win.contentItem; y: 280 }
+    property Pk.BarWidget rowCentrePocket: Pk.BarWidget {
+      parent: win.contentItem
+      bar: harness.rowCentreBar
+      settings: ({ members: harness.memberId })
+    }
+    property Pk.BarWidget anchorCentrePocket: Pk.BarWidget {
+      parent: win.contentItem
+      bar: harness.anchorCentreBar
       settings: ({ members: harness.memberId })
     }
     property Loader unloadable: Loader {
@@ -349,6 +369,12 @@ QtObject {
     var centre = harness.build(win.centreGrid, harness.centreBar, "center", false)
     centre[2].activeItem = win.centrePocket
     harness.centreMember = centre[1]
+
+    var inRow = harness.build(win.rowCentre, harness.rowCentreBar, "center", false)
+    inRow[2].activeItem = win.rowCentrePocket
+    harness.rowCentreMember = inRow[1]
+    var beside = harness.build(win.anchorCentre, harness.anchorCentreBar, "center", false)
+    beside[2].activeItem = win.anchorCentrePocket
     harness.next(400)
   }
 
@@ -367,6 +393,12 @@ QtObject {
     harness.check("centre: the member is not refused as the centre anchor", p.resolution.anchored.length, 0)
     harness.check("centre: it is resolved as a member", p.resolution.slots.length, 1)
     harness.check("centre: and tucked away", harness.centreMember.visible, false)
+
+    harness.check("centre in a Row: a member, as before 4.5.0",
+                  win.rowCentrePocket.resolution.slots.length, 1)
+    harness.check("centre in a Row: and tucked away", harness.rowCentreMember.visible, false)
+    harness.check("centre beside the sections: still refused as the centre anchor",
+                  win.anchorCentrePocket.resolution.anchored.length, 1)
     harness.next(100)
   }
 

@@ -1139,8 +1139,10 @@ QtObject {
     var d = win3.pocket
     // Shortened from the widget's own, so R4 need not wait for it.
     if ("removalPatience" in d) d.removalPatience = 300
-    d.settings = ({ members: "omarchy.audio, gone.plugin" })
-    probe("R: the gesture pocket holds its member", function () { return d.resolution.slots.length }, 1)
+    // Out of layout order on purpose: the rule that orders members by the
+    // layout would put the network first.
+    d.settings = ({ members: "gone.plugin, omarchy.audio, omarchy.network" })
+    probe("R: the gesture pocket holds its two members", function () { return d.resolution.slots.length }, 2)
 
     // R1: the host removes the member, after its poof.
     var writes = harness.fakeShell.inlineWrites
@@ -1149,11 +1151,13 @@ QtObject {
           function () { return harness.fakeShell.inlineWrites }, writes)
     harness.facade3.layoutConfig = harness.layout3(false, true)
     memberSlot3.removalPending = false
-    probe("R1: once its entry has left the layout, the member leaves members, and only it",
+    probe("R1: once its entry has left the layout, the member leaves members, and nothing else changes",
           function () {
             return harness.fakeShell.inlineWrites === writes + 1
-              && harness.fakeShell.lastSettings.members === "gone.plugin"
+              && harness.fakeShell.lastSettings.members === "gone.plugin, omarchy.network"
           }, true)
+    // Back before the order repair's callLater can see the list.
+    d.settings = ({ members: "omarchy.audio, gone.plugin" })
     harness.facade3.layoutConfig = harness.layout3(true, true)
 
     // R2: let go of within the threshold. The host puts it back; nothing
@@ -1201,13 +1205,35 @@ QtObject {
           function () { return harness.fakeShell.inlineWrites }, writes)
     twin.destroy()
     harness.facade3.layoutConfig = harness.layout3(true, true)
-    d.settings = ({ members: "omarchy.audio" })
+
+    // R6: the dragged slot is destroyed before the drag ends, as a rebuild
+    // does. The drag ends without a throw and without a write.
+    var doomed = memberCopy3.createObject(strip3)
+    d.refreshWalk()
+    doomed.dragSource = true
+    probe("R6: the drag of the doomed slot is seen", function () { return d.dragSlot === doomed }, true)
+    harness.doomedWrites = harness.fakeShell.inlineWrites
+    doomed.removalPending = true
+    doomed.destroy()
     harness.pending = harness.stepRemove3
     later.interval = 100
     later.restart()
   }
 
+  property int doomedWrites: 0
+
   function stepRemove3() {
+    var d = win3.pocket
+    d.refreshWalk()
+    probe("R6: a drag whose slot was destroyed ends, and writes nothing",
+          function () { return !d.dragSeen && d.dragSlot === null && harness.fakeShell.inlineWrites === harness.doomedWrites }, true)
+    d.settings = ({ members: "omarchy.audio" })
+    harness.pending = harness.stepRemove4
+    later.interval = 100
+    later.restart()
+  }
+
+  function stepRemove4() {
     win3.pocket.refreshWalk()
     Qt.callLater(harness.stepFold1)
   }
