@@ -202,6 +202,13 @@ def wait_shell():
     return wait(lambda: ipc("ping") == "ok", timeout=20, step=0.5)
 
 
+def has_geometry():
+    try:
+        return bool(P.geometry())
+    except P.Unavailable:
+        return False
+
+
 # ------------------------------------------------------------------ gestures
 
 
@@ -776,13 +783,20 @@ def block_reload(ptr, bar):
 
     ipc("rescanPlugins")
     time.sleep(3.0)
+    # With a second monitor the shell can report no bar at all for longer
+    # than that while it rebuilds both surfaces.
+    wait(has_geometry, timeout=15.0, step=0.25)
     check("F33 after a plugin rescan the pin still holds it open", wait(bar.is_open, timeout=3.0))
     hover(ptr, bar.centre(bar.mark()), pause=0.4)
     ptr.click(P.BTN_LEFT)
-    time.sleep(0.8)
+    # Polled, not read once: the host persists shell.json on its own time, and
+    # a single read 0.8 s after the click sometimes came too early (decision
+    # 0027 has the measured spread).
+    t_click = time.time()
+    released = wait(lambda: not on_list(entry().get("pinned"), bar.screen), timeout=3.0, step=0.02)
     e = entry()
     check("F33 the first click after the rescan releases the pin",
-          not on_list(e.get("pinned"), bar.screen), "pinned=%r" % e.get("pinned"))
+          released, "pinned=%r after %.2f s" % (e.get("pinned"), time.time() - t_click))
     check("F33 and writes the members back unchanged", P.members() == members_before,
           "members=%s" % P.members())
     ptr.warp(bar.ox + 400, bar.oy + 400)
