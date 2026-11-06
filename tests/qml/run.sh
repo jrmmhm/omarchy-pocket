@@ -55,10 +55,10 @@ mkdir -p "$WORK/home/.config/omarchy"
 # shell that costs us the neighbourhood sweep must not silently cost us this one
 # too. A case that quietly stops running is the kind of green tests/run.sh warns
 # about in its own header.
-CASES="model steer steer-readonly noslots neighbourhood facade cascade extent selfdrag reload"
+CASES="model steer steer-readonly noslots neighbourhood facade cascade extent layoutextent selfdrag reload"
 if [ ! -f "$SHELL_DIR/plugins/bar/BarModel.js" ]; then
   echo "QML SKIPPED (neighbourhood: this shell has no plugins/bar/BarModel.js to sweep against)"
-  CASES="model steer steer-readonly noslots facade cascade extent selfdrag reload"
+  CASES="model steer steer-readonly noslots facade cascade extent layoutextent selfdrag reload"
 fi
 
 # The facade case loads the host's own Ui/PluginBarApi.qml rather than a
@@ -69,6 +69,14 @@ fi
 if [ ! -f "$SHELL_DIR/Ui/PluginBarApi.qml" ]; then
   echo "QML SKIPPED (facade: this shell has no Ui/PluginBarApi.qml to load)"
   CASES="$(printf '%s\n' $CASES | grep -v '^facade$' | tr '\n' ' ')"
+fi
+
+# The glyph case measures the mark's ink as the bar draws it, which takes the
+# bar's Nerd Font. Without one there is nothing to measure but an empty box.
+if fc-list : family 2>/dev/null | grep -qi 'nerd'; then
+  CASES="$CASES glyph"
+else
+  echo "QML SKIPPED (glyph: fontconfig knows no Nerd Font to draw the mark with)"
 fi
 
 status=0
@@ -82,8 +90,9 @@ for name in $CASES; do
   #
   # Captured rather than piped: Quickshell does not exit through a pipe here.
   if [ "$name" = "neighbourhood" ] || [ "$name" = "noslots" ] || [ "$name" = "facade" ] \
-      || [ "$name" = "cascade" ] || [ "$name" = "extent" ] || [ "$name" = "selfdrag" ] \
-      || [ "$name" = "reload" ]; then
+      || [ "$name" = "cascade" ] || [ "$name" = "extent" ] || [ "$name" = "layoutextent" ] \
+      || [ "$name" = "selfdrag" ] \
+      || [ "$name" = "reload" ] || [ "$name" = "glyph" ]; then
     output="$(HOME="$WORK/home" QT_QPA_PLATFORM=offscreen timeout 60 qs -p "$WORK/$name.qml" 2>&1)"
   else
     output="$(HOME="$WORK/home" timeout 60 qs -p "$WORK/$name.qml" 2>&1)"

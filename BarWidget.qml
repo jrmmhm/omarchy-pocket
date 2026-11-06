@@ -1,4 +1,7 @@
 import QtQuick
+// For the `Layout` attached properties of a slot that a section layout sizes,
+// and to recognise such a layout (layoutSized()).
+import QtQuick.Layouts
 // Quickshell, not just its submodules: the QsWindow attached property used to
 // tell this bar surface from the one on the other monitor lives in the base
 // module, and without it the lookup silently yields null — at which point one
@@ -198,10 +201,16 @@ BarWidget {
   // does publish an anchor and would refuse a centre member the previous
   // behaviour hid. That is the one place this could have changed behaviour on
   // an older Omarchy, and the hard requirement is that it does not.
+  //
+  // A slot that a section layout sizes is in a section by construction. From
+  // Omarchy 4.5.0 on every section is a GridLayout, which has no `spacing`
+  // either, and there is no centre anchor at all: asked by `spacing` alone,
+  // every member in `center` was refused (docs/decisions/0027).
   function anchoredByStructure(slot) {
     if (!bar) return false
     if ("centerAnchor" in bar) return false
     if (!slot || String(slot.region || "") !== "center") return false
+    if (root.layoutSized(slot)) return false
     var holder = slot.parent
     return !holder || holder.spacing === undefined
   }
@@ -397,6 +406,7 @@ BarWidget {
   // the layout signal catches every later change. A drag adds one more, in the
   // overlay below, because that is the moment the answer has to be right.
   onBarLayoutChanged: {
+    root.checkRemoval()
     refreshWalk()
     Qt.callLater(refreshWalk)
     root.attachOverlay()
@@ -408,6 +418,7 @@ BarWidget {
     var glass = root.overlay
     if (glass && typeof glass.rearmHover === "function") glass.rearmHover()
   }
+
   onSettingsChanged: {
     refreshWalk()
     // The host can inject the frozen copy again after it was taken over (0025).
@@ -604,19 +615,6 @@ BarWidget {
   readonly property bool holdOpen: pinned || (!locked && (selfHovered || memberHovered))
     || memberPanelOpen || foreignPanelHold || dragHoldsOpen
 
-  // Whether the pointer is still somewhere on this bar, which is what the fold
-  // timer waits for. The host's own `barHovered` counts across every surface —
-  // it is why a pocket on another screen folds up late — so the overlay's
-  // answer, which is per window, is the more precise one wherever it applies.
-  //
-  // `pressed` is part of it because hover is dead under a foreign mouse grab:
-  // without it the pocket would fold in the middle of a drag across the bar.
-  readonly property bool pointerOnBar: {
-    if (bar && ("barHovered" in bar)) return bar.barHovered === true
-    var glass = root.overlay
-    return !!glass && (glass.hovered === true || glass.pressed === true)
-  }
-
   // Counted off the layout rather than off live instances. `bar.moduleWidgets`
   // counts what is mounted, and the bar is built once per monitor — plus a
   // second time for every center widget when centerAnchor is set — so it
@@ -635,18 +633,17 @@ BarWidget {
 
   // An invisible, non-painting item spanning this bar surface, carrying the two
   // pointer handlers that answer what the host stopped answering: where the
-  // pointer is while it is NOT pressed (the fold guard the host called
-  // `barHovered`), and where it is WHILE another item holds the mouse grab (the
-  // drag the host described with `barDragTarget`).
+  // pointer is while it is NOT pressed (what the fold guard asks, see
+  // pointerOnRun()), and where it is WHILE another item holds the mouse grab
+  // (the drag the host described with `barDragTarget`).
   //
   // Both halves are needed and neither substitutes for the other. Qt delivers
   // hover only while no exclusive grabber exists — the same line sits in every
   // release from 6.5 to 6.11, so it is a design and not a bug — and a
   // PointHandler answers only while a point is pressed, resetting its position
-  // to (0,0) on release, which is inside the bar and would mean the pocket never
-  // folded again. A PointHandler that takes a PASSIVE grab keeps receiving every
-  // move and the release regardless of the foreign exclusive grab, which is what
-  // makes the drag readable at all.
+  // to (0,0) on release. A PointHandler that takes a PASSIVE grab keeps
+  // receiving every move and the release regardless of the foreign exclusive
+  // grab, which is what makes the drag readable at all.
   //
   // It has to hang here rather than on this widget: the passive grab is only
   // available to an item hit at press time, before the slot's own MouseArea
@@ -699,9 +696,8 @@ BarWidget {
       // The same function says where a handler may sit without doing that:
       // "Don't propagate to siblings, only to ancestors". An ancestor is
       // served after its children, so this sees every pointer on the surface
-      // and takes none of them away. It is also where the host puts its own —
-      // `barHovered` comes from a HoverHandler on the bar's window-filling
-      // loader.
+      // and takes none of them away. It is also where the host puts its own
+      // bar hover — a HoverHandler on the bar's strip-filling loader.
       HoverHandler {
         id: surfaceHover
         parent: glass.parent
@@ -722,20 +718,14 @@ BarWidget {
       // hover is in flight, and Qt's hover bookkeeping does not always survive
       // it: measured on the live bar as `hovered` stuck true at a frozen
       // position on the one surface the drop happened on, with no leave event
-      // ever arriving. `pointerOnBar` then answered true for the rest of the
-      // session and the fold timer returned early every single tick — the
-      // pocket fanned out and never closed again.
+      // ever arriving. A frozen position over the run would hold the pocket
+      // open for the rest of the session.
       //
       // Re-arming is the reset: a disabled handler drops its hover, and an
       // enabled one takes it again from the next pointer event. The cost is one
       // stale `false` for a pointer that is resting on the bar and not moving,
       // and it is a cost worth paying — while the pointer is on the pocket or on
-      // one of its members, `holdOpen` holds it open through their own hover and
-      // never consults this at all.
-      //
-      // The host guards the neighbouring case, a surface destroyed without a
-      // leave, in Bar.qml's own HoverHandler. This is the case where the surface
-      // lives and its contents do not.
+      // one of its members, `holdOpen` holds it open through their own hover.
       function rearmHover() {
         surfaceHover.enabled = false
         glass.hovered = false
@@ -894,13 +884,15 @@ BarWidget {
     var source = root.walkedDragSource
     if (!source) return null
 
-    var top = root.surfaceRoot
-    if (!top) return null
+    var strip = root.barStrip()
+    if (!strip) return null
 
-    // Off this bar entirely is no target at all, which is what a release
-    // outside the bar has to mean — the same bounds test the host makes.
-    var here = top.mapFromItem(null, glass.sceneX, glass.sceneY)
-    if (here.x < 0 || here.x > top.width || here.y < 0 || here.y > top.height) return null
+    // Off the bar strip is no target at all, which is what a release outside
+    // the bar has to mean — the host makes the same test against the same strip
+    // (Bar.qml::moduleDropAtScene). The window is no longer that bound: from
+    // Omarchy 4.5.0 on it spans the whole screen.
+    var here = strip.mapFromItem(null, glass.sceneX, glass.sceneY)
+    if (here.x < 0 || here.x > strip.width || here.y < 0 || here.y > strip.height) return null
 
     var slots = root.barSlots
     var rows = []
@@ -917,6 +909,20 @@ BarWidget {
 
     return Model.nearestDropTarget(rows, { x: glass.sceneX, y: glass.sceneY },
                                    root.vertical === true)
+  }
+
+  // The item the bar paints itself in: this widget's ancestor that hangs
+  // directly off the surface root. From Omarchy 4.5.0 on the surface spans its
+  // screen and that item is the strip along its edge (Bar.qml::BarPanel's
+  // `barStrip`, a notch floor included); before, it filled the window, which
+  // was the strip. Found by structure, so neither the bar's size nor its edge
+  // has to be known here.
+  function barStrip() {
+    var top = root.surfaceRoot
+    if (!top) return null
+    var item = root
+    while (item && item.parent !== top) item = item.parent
+    return item || top
   }
 
   readonly property var dragSource: root.hostPublishesDrag ? bar.barDragSource
@@ -1098,8 +1104,33 @@ BarWidget {
   property string pendingId: ""
   property bool dragSeen: false
 
+  // From Omarchy 4.5.0 on, Bar.qml no longer clears the drag in its release
+  // handler: the released widget's ghost glides to where it lands, and only
+  // then is the drag cleared (Bar.qml::settleBarDrag; 0026 has the length).
+  // The overlay sees the button come up at the start of that glide, the drop
+  // target goes with it, and an intent recomputed then reads "no target,
+  // nothing to do" — every drop came to nothing, and the host moved the widget
+  // all the same.
+  //
+  // So on the overlay's path the intent is taken only while the button is
+  // down, and sealed the moment it comes up during a drag: a new press during
+  // the glide (which is what makes the host finish it) must not re-aim a drop
+  // already released. The seal is lifted when the drag ends. A host that
+  // publishes the drag itself answers until it clears it, as before.
+  property bool intentSealed: false
+
+  readonly property bool overlayPressed: !!root.overlay && root.overlay.pressed === true
+
+  onOverlayPressedChanged: {
+    if (!root.overlayPressed && root.dragSource && !root.hostPublishesDrag) root.intentSealed = true
+  }
+
   onDropIntentChanged: {
     if (!root.dragSource) return
+    // Asked of the overlay directly: which of this handler and the seal's runs
+    // first when the button comes up is the engine's to choose.
+    if (!root.hostPublishesDrag
+        && (root.intentSealed || !root.overlay || root.overlay.pressed !== true)) return
     root.pendingIntent = root.dropIntent
     root.pendingId = root.dragSourceId
   }
@@ -1135,14 +1166,34 @@ BarWidget {
     slot.enabled = true
   }
 
+  // The slot this drag lifted, and whether it was one this pocket hides. The
+  // slot and not its id: the host lets one id be added twice, and pulling the
+  // other copy off the bar must not touch the member.
+  property var dragSlot: null
+  property bool dragSlotDriven: false
+
   onDragSourceChanged: {
     if (root.dragSource) {
       // Before the snapshot every decision of this drag is made from.
       root.settleSettings()
+      root.intentSealed = false
       root.dragSeen = true
       root.dragMembers = root.memberIds.slice()
+      root.dragSlot = root.dragSource
+      root.dragSlotDriven = root.driven.indexOf(root.dragSource) !== -1
       return
     }
+
+    // A widget let go of past the host's removal threshold: the host says so
+    // on its slot before it clears the drag (Bar.qml::removeBarDrag), and that
+    // release is no drop. A member removed this way is forgotten once its
+    // entry has left the layout (awaitRemoval()). A host without the property
+    // reads undefined here and goes on as before.
+    var lifted = root.dragSlot
+    var removed = !!lifted && lifted.removalPending === true
+    var removedMember = removed && root.dragSlotDriven ? root.canonical(lifted.moduleName) : ""
+    root.dragSlot = null
+    root.dragSlotDriven = false
 
     // Always cleared on the falling edge. Bar.qml calls clearBarDrag() on every
     // press too, and a sample left from the previous drag must never be able to
@@ -1154,11 +1205,77 @@ BarWidget {
     // lines are in this order on purpose and not by accident.
     var intent = root.dragSeen ? root.pendingIntent : "none"
     var id = root.pendingId
+    root.intentSealed = false
     root.dragSeen = false
     root.dragMembers = []
     root.pendingIntent = "none"
     root.pendingId = ""
+    if (removed) {
+      if (removedMember !== "") root.awaitRemoval(removedMember)
+      return
+    }
     if (intent !== "none") root.commitDrop(intent, id)
+  }
+
+  // ------------------------------------------------- removed off the bar
+
+  // A member the host has announced it is removing, and how many entries
+  // carried its id when it did. The host writes the removal only once the
+  // widget's poof has played (Bar.qml::poofTimer, commitBarRemoval), and it can
+  // fail to: the layout may have changed under it, or the shell gone away. So
+  // the member is forgotten when one of its entries has actually left the
+  // layout, and the announcement lapses after `removalPatience` without one.
+  // An entry that leaves later is not this gesture's doing. docs/decisions/0027.
+  property string removalId: ""
+  property int removalCount: 0
+  property int removalPatience: 3000
+
+  Timer {
+    id: removalTimer
+    interval: root.removalPatience
+    onTriggered: root.removalId = ""
+  }
+
+  function awaitRemoval(id) {
+    root.removalId = id
+    root.removalCount = root.entriesNamed(id)
+    removalTimer.restart()
+  }
+
+  // Every section, not only the three Model.countEntries() knows: from 4.5.0
+  // on the layout has centerBegin, centerEnd and the tray's as well.
+  function entriesNamed(id) {
+    var layout = root.barLayout
+    var n = 0
+    if (!layout) return 0
+    for (var region in layout) {
+      var entries = layout[region]
+      if (!entries || typeof entries === "string" || typeof entries.length !== "number") continue
+      for (var i = 0; i < entries.length; i++)
+        if (root.canonical(Model.entryIdOf(entries[i])) === id) n++
+    }
+    return n
+  }
+
+  function checkRemoval() {
+    if (root.removalId === "") return
+    if (root.entriesNamed(root.removalId) >= root.removalCount) return
+    var id = root.removalId
+    root.removalId = ""
+    removalTimer.stop()
+    root.forgetRemoved(id)
+  }
+
+  // That one id out of `members`, and nothing else: no reordering, and a
+  // member that is missing for another reason stays named.
+  function forgetRemoved(id) {
+    if (!root.mayWriteMembers) return
+    root.settleSettings()
+    var raw = root.setting("members", "")
+    var list = Model.toList(raw)
+    var next = Model.withoutMember(list, id)
+    if (next.length === list.length) return
+    root.writeMembers(Model.membersValue(next, raw))
   }
 
   // -------------------------------------------------------- drop steering
@@ -1554,16 +1671,28 @@ BarWidget {
   // the reveal and the neighbours slide with the fade. Clipped while it is
   // shorter than what it paints. Fully out, the host's own sizing goes back, so
   // a widget whose label changes while the pocket is open still sizes itself.
+  //
+  // A section that is a layout -- a GridLayout from Omarchy 4.5.0 on
+  // (Bar.qml::ModuleList) -- does not read `width`: it sizes the slot from the
+  // slot's `Layout.preferredWidth`, which the host binds to the full size, and
+  // overrules a written width on its next pass. The pocket caps that size
+  // instead, through the slot's `Layout.maximumWidth`: a layout clamps a
+  // preferred size into [minimum, maximum], so the host's own binding stays
+  // untouched and the neighbours slide. docs/decisions/0027.
   function setSlotExtent(slot, fraction) {
     if (fraction >= 1) {
       root.restoreSlotExtent(slot)
       return
     }
     if (!root.isSizedSlot(slot)) return
-    var along = root.vertical ? "height" : "width"
     var implicit = root.vertical ? "implicitHeight" : "implicitWidth"
+    var extent = Model.revealExtent(slot[implicit], fraction)
     root.setSlotProperty(slot, "clip", true)
-    root.setSlotProperty(slot, along, Model.revealExtent(slot[implicit], fraction))
+    if (root.layoutSized(slot)) {
+      root.setSlotMaximum(slot, root.vertical ? "maximumHeight" : "maximumWidth", extent)
+      return
+    }
+    root.setSlotProperty(slot, root.vertical ? "height" : "width", extent)
   }
 
   // A reset, not a binding: `undefined` hands the size back to the slot, which
@@ -1571,17 +1700,36 @@ BarWidget {
   // here would belong to this instance and stop with it, and a hot reload would
   // leave a released member frozen at the width it had at that moment
   // (docs/decisions/0023). Both axes, because resetting one that was never
-  // driven changes nothing.
+  // driven changes nothing. In a layout the reset is -1, which Qt documents as
+  // "back to the implicit maximum": no limit, for an item that is not itself a
+  // layout.
   function restoreSlotExtent(slot) {
     if (!root.isSizedSlot(slot)) return
-    root.setSlotProperty(slot, "width", undefined)
-    root.setSlotProperty(slot, "height", undefined)
+    if (root.layoutSized(slot)) {
+      root.setSlotMaximum(slot, "maximumWidth", -1)
+      root.setSlotMaximum(slot, "maximumHeight", -1)
+    } else {
+      root.setSlotProperty(slot, "width", undefined)
+      root.setSlotProperty(slot, "height", undefined)
+    }
     root.setSlotProperty(slot, "clip", false)
+  }
+
+  function setSlotMaximum(slot, name, value) {
+    try { slot.Layout[name] = value } catch (e) { }
   }
 
   // Every Item has an implicit size; only the QtObject stand-ins in tests/qml
   // do not, and they have no extent to drive.
   function isSizedSlot(slot) { return !!slot && "implicitWidth" in slot }
+
+  // Whether a Qt Quick layout sizes this slot, rather than a Row or a Column
+  // placing it. Asked of the slot's parent each time, never of a version.
+  function layoutSized(slot) {
+    var holder = slot ? slot.parent : null
+    return !!holder && (holder instanceof GridLayout || holder instanceof RowLayout
+                        || holder instanceof ColumnLayout)
+  }
 
   function hideDriven() {
     for (var i = 0; i < root.driven.length; i++) {
@@ -1669,9 +1817,9 @@ BarWidget {
 
   onHoldOpenChanged: if (holdOpen) expanded = true
 
-  // Locking folds at once, without waiting for the pointer to leave the bar the
-  // way the fold timer does — the pointer is on the mark, because that is where
-  // the right click was. Only when nothing else holds it: folding underneath a
+  // Locking folds at once, without waiting for the pointer to leave the mark
+  // the way the fold timer does — the pointer is on the mark, because that is
+  // where the right click was. Only when nothing else holds it: folding underneath a
   // member's open panel, or on another screen whose pocket is pinned, would hide
   // a widget something is still using, and `holdOpen` would never change again
   // to bring it back.
@@ -1692,25 +1840,78 @@ BarWidget {
 
   onLockedChanged: foldIfLocked()
 
+  // The pocket folds as soon as the pointer has left the run — the mark and
+  // its members — wherever on the bar it went (docs/decisions/0026).
+  //
+  // The run is asked by where the pointer is, not only by which slot reports a
+  // hover, because Qt hovers on motion. In the centre sections opening the
+  // pocket slides the mark away from the pointer that opened it, and the
+  // member that slides under that still pointer reports nothing. Asked by
+  // hover alone, the pocket folded there, the mark slid back under the
+  // pointer, and it opened and folded for as long as the pointer rested on it
+  // — measured on the live bar. Where the pointer is comes from the overlay's
+  // surface hover; across the whole strip, so the slivers above and below a
+  // widget shorter than the bar count as the run.
+  //
+  // A host that publishes its drag builds no overlay, and publishes its bar
+  // hover as well: there the pocket waits for the pointer to leave the bar, as
+  // it always did.
+  function pointerOnRun() {
+    var glass = root.overlay
+    if (!glass) return !!bar && ("barHovered" in bar) && bar.barHovered === true
+    if (glass.hovered !== true) return false
+
+    var strip = root.barStrip()
+    if (!strip) return false
+    var at = strip.mapFromItem(null, glass.sceneX, glass.sceneY)
+    if (at.x < 0 || at.x > strip.width || at.y < 0 || at.y > strip.height) return false
+
+    var along = root.vertical === true ? "y" : "x"
+    var extent = root.vertical === true ? "height" : "width"
+    var slots = [root.ownSlot].concat(root.driven)
+    var from = Infinity, to = -Infinity
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i]
+      if (!slot || slot.visible !== true || !(slot[extent] > 0)) continue
+      // A member in another section is not part of the run beside the mark.
+      if (slot !== root.ownSlot && String(slot.region || "") !== root.ownRegion) continue
+      var corner
+      try { corner = slot.mapToItem(strip, 0, 0) } catch (e) { continue }
+      from = Math.min(from, corner[along])
+      to = Math.max(to, corner[along] + slot[extent])
+    }
+    return from <= to && at[along] >= from && at[along] <= to
+  }
+
+  // A tick counts as idle when nothing holds the pocket open, and it folds on
+  // the second idle tick in a row: a pointer crossing a sliver no slot covers
+  // finds it still open. A lock takes the pointer's say away, here as in
+  // `holdOpen`.
+  readonly property int foldAfterIdleTicks: 2
+  // Reset whenever the fold timer starts, which is every way back to an open,
+  // unpinned pocket: opened, or released from a pin.
+  property int idleTicks: 0
+
+  function foldTick() {
+    if (root.holdOpen || (!root.locked && root.pointerOnRun())) {
+      root.idleTicks = 0
+      return
+    }
+    root.idleTicks++
+    if (root.idleTicks >= root.foldAfterIdleTicks) root.expanded = false
+  }
+
   // A repeating tick rather than a one-shot restarted on hover-end. Omarchy's
   // own bar polls hover the same way for its tooltip, for the same reason: a
   // leave event is not something to build a state machine on. A one-shot can be
-  // spent by a hover-end that the guard below then refuses, after which nothing
-  // re-arms it and the pocket stays open forever.
+  // spent by a hover-end that a guard then refuses, after which nothing re-arms
+  // it and the pocket stays open forever.
   Timer {
     interval: 120
     repeat: true
     running: root.expanded && !root.pinned
-    onTriggered: {
-      if (root.holdOpen) return
-      // Folding up narrows the section, which slides the pocket itself out from
-      // under a stationary pointer — and the pointer landing on a neighbour
-      // would fold it, moving it back, and so on. Hold until the pointer has
-      // left the bar entirely, which is the same rule Bar.qml applies to its
-      // own hover reveal.
-      if (root.pointerOnBar) return
-      root.expanded = false
-    }
+    onRunningChanged: if (running) root.idleTicks = 0
+    onTriggered: root.foldTick()
   }
 
   // ----------------------------------------------------------------- view
@@ -1753,10 +1954,16 @@ BarWidget {
     // side are two things a user cannot tell apart. Dots read as "there is more
     // here", and turning them upright rides the same scalar as everything else,
     // so it is the drawer's move by construction rather than by a copied number.
-    text: String.fromCodePoint(0xf01d8)
+    //
+    // The upright dots (md-dots_vertical), laid flat by the rotation, rather
+    // than the flat ones (md-dots_horizontal) turned upright: the same picture
+    // at every angle. Omarchy 4.5.0 fits a bar icon to its painted bounds, and
+    // the flat glyph came out of that above the middle of the bar while the
+    // upright one sits in it (tests/qml/glyph.qml asks; 0026 has the numbers).
+    text: String.fromCodePoint(0xf01d9)
     // Derived from the animated scalar, so it must not carry a Behavior of its
     // own — two animations on one value fight and the slower one wins twice.
-    textRotation: (root.vertical ? 90 : 0) + root.revealProgress * 90
+    textRotation: (root.vertical ? 90 : 0) - 90 + root.revealProgress * 90
 
     // The plugin's only text sink, and the reason Model.describe() escapes what
     // it interpolates. From here the string travels through WidgetButton's

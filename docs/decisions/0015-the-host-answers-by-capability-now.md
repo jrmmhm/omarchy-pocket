@@ -8,7 +8,12 @@
   [0009](0009-a-drag-decides-against-the-membership-it-started-with.md) narrowed
   it before
 - Extends [0005](0005-a-pocket-drives-only-its-own-screens-slots.md) with the
-  fold guard a facade leaves behind
+  fold guard a facade leaves behind; [0026](0026-omarchy-4-5-and-the-fold-off-the-run.md)
+  narrows that guard from the bar to the pocket's own run
+- Its structural anchor test (`anchoredByStructure()`) is narrowed by
+  [0027](0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
+  to slots no layout sizes, and 0027 adds two things the pocket reads off a
+  slot: its `Layout` hints and the host's `removalPending`
 - Its overlay's lifecycle is corrected by
   [0017](0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md): shared
   between instances, the overlay's handlers died with the one that built it

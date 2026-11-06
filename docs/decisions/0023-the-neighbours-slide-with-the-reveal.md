@@ -5,6 +5,10 @@
 - Extends [0002](0002-members-belong-on-one-side.md)'s mechanism: the pocket
   still never moves an entry, but it now drives the slots' extent as well as
   their `visible`
+- Amended by [0027](0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md):
+  where a layout sizes the slots (Omarchy 4.5.0 on), the extent goes through
+  the slot's `Layout.maximumWidth` and is handed back with `-1`; the reset
+  below stays for a `Row` or `Column`
 - Owns every number below; the README and the CHANGELOG name this file
 
 ## Context

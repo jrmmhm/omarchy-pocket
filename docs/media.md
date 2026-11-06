@@ -20,7 +20,7 @@ one and shows the slide on open and on fold.
 | Hyprland | 0.56.2 |
 | Output | `eDP-1`, 1920×1200 device px at `scale = 1.6666666` → 1152×720 logical. A second monitor, `HDMI-A-1` (3840×2160 at scale 2.4, logical x = 1152), was attached; nothing of it is in frame. |
 | Bar | `position = top`, `size-horizontal = 26` logical px (the default), `[font] base-size = 12` |
-| Bar font | JetBrainsMono Nerd Font — the mark is `U+F01D8`, `md-dots_horizontal` |
+| Bar font | JetBrainsMono Nerd Font — the mark was `U+F01D8`, `md-dots_horizontal`, for these takes; it is now `U+F01D9` laid flat, the same picture ([decision 0026](decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)) |
 | Theme | `solace-sunset`: `accent #eb5864`, `foreground #f2e0c8`, `background #1c1d36` — set for the takes and reverted afterwards |
 | Pocket | 0.6.0, in `right`, six members on the bar and one that is not (the fourth tooltip line) |
 

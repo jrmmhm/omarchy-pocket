@@ -21,8 +21,8 @@ and the network already sit — and somewhere past a dozen you stop reading it
 and start hunting through it.
 
 Pocket takes the icons you rarely need and hides them behind a single mark.
-Point at the mark and they slide back out. Move away and they tuck themselves
-back in.
+Point at the mark and they slide back out. Move off them and they tuck
+themselves back in, wherever on the bar the pointer goes.
 
 They are not stand-ins. They are the same icons, still fully working while they
 are out — and, the part that turns out to matter most, they never leave the bar
@@ -75,10 +75,17 @@ Treat that as the honest position it is: if the scene stops being walkable,
 Pocket stops hiding and says so in its tooltip, and the preferred path is
 already asked first.
 
+Two more things it reads off a widget's slot rather than asks the bar: whether
+a layout sizes the slot, which decides how the slide narrows it, and the
+removal the bar announces on a slot pulled off the bar. A host without either
+gets the older path for that one thing;
+[decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
+has both.
+
 It also imports the shell's own `qs.Commons` and `qs.Ui` modules. A renamed
-module is the one failure with no graceful half. And it reads its own entry
-from `~/.config/omarchy/shell.json` after a reload; a shell that keeps the file
-elsewhere only loses that repair.
+module is the one failure with no graceful half. And before Omarchy 4.5 it
+reads its own entry from `~/.config/omarchy/shell.json` after a reload; a shell
+that keeps the file elsewhere only loses that repair.
 
 [Decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md) has
 the whole table, what each fallback cost, and what is not recoverable.
@@ -221,10 +228,12 @@ host atomically — so a reboot is just a restart, and `omarchy plugin update`
 pulls a new version and rebuilds the widgets without touching the file at all. A
 member whose widget fails to load after an update keeps its place, because the
 place is read from the file rather than from what is running. The same goes for
-the pocket's own entry: the shell hands a reloaded widget its settings as they
-were at the last restart, so the pocket reads its members, pins and locks back
-from the file
-([decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)).
+the pocket's own entry: before Omarchy 4.5 the shell hands a reloaded widget
+its settings as they were at the last restart, so there the pocket reads its
+members, pins and locks back from the file
+([decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md));
+from 4.5 on the shell hands over the current settings itself, and the file is
+left alone ([decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)).
 
 ## Why this one keeps your setup honest
 
@@ -251,11 +260,15 @@ no longer is, is *on the bar*, and that split is where things come apart:
 
 **Pocket moves nothing out.** The widgets stay in `bar.layout`, in their own
 module slots, built by the bar itself. Pocket flips `visible` on those slots,
-and a Qt `Row` does not lay out an invisible child — so the space closes up
+and the bar does not lay out an invisible child — so the space closes up
 while the entry never moves: `inBar` still finds it, `findPanelWidget` still
 finds it, and its settings still live on its own entry. While it opens and
 closes it also narrows those slots, so the widgets beside them slide instead of
-jumping, and hands the width back to the slot once a member is out.
+jumping, and hands the width back to the slot once a member is out. From
+Omarchy 4.5 on the bar's sections are layouts, and there the narrowing is a cap
+on the slot's layout size rather than its width; the bar's own sizing is never
+replaced
+([decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)).
 
 Not every grouping widget moves them, and this section is a comparison with the
 common kind rather than with all of them. Three were read: two move the entries
@@ -314,11 +327,13 @@ why both belong to a screen and how a screen is named.
 
 ## Good to know
 
-Three things change your first hour with it:
+A few things change your first hour with it:
 
 - **Keep members in the pocket's own section.** A member in a different section
   than the pocket *is* hidden, but it fans out over there on its own, which
-  looks like a bug rather than a choice. The tooltip names it. (Separately, a
+  looks like a bug rather than a choice, and it is not part of the run that
+  holds the pocket open: heading for it folds the pocket on the way. The
+  tooltip names it. (Separately, a
   member may not be the `centerAnchor` itself — that is a different mechanism
   and Pocket refuses it outright.)
 
@@ -336,12 +351,21 @@ Three things change your first hour with it:
   and the gesture that put it in cannot get it out. This is true on every
   Omarchy version. The tooltip names it and tells you to edit `members`; that is
   the way back.
+- **A member pulled off the bar leaves the pocket too.** From Omarchy 4.5 on,
+  dragging a widget well away from the bar removes it from the bar
+  altogether. Once the bar has written that, Pocket takes the name out of
+  `members` and changes nothing else there; a widget added back later starts
+  out shown. Let go of it closer to the bar and the bar puts it back, still a
+  member.
 - **Dragging a widget next to a collapsed pocket puts it in the pocket.** The
   hidden group takes up no room, so the widget beside it stands against the mark
   and the bar draws its line there — which is the gesture for putting something
   away, whether or not you meant it that way. One drag back out undoes it. With
   the pocket *open* the members are back on the bar, so only the gap against the
-  mark itself puts a widget in.
+  mark itself puts a widget in. Going to fetch a widget from elsewhere on the
+  bar folds the pocket on the way, so a widget dropped on the mark's near half
+  usually arrives this way: it joins at the far end of the group rather than
+  beside the mark.
 - **`SUPER+CTRL+1…9` renumbers, but only for some members.** Those bindings open
   "the Nth panel in the right section", and the count skips both what is not
   *drawn* and anything without a panel of its own. So tucking away the tray, the
@@ -354,10 +378,13 @@ Three things change your first hour with it:
 <details>
 <summary><b>On more than one monitor</b></summary>
 
-- **Each screen's pocket folds on its own.** Moving the pointer onto another
-  monitor's bar folds the pocket you left. On Omarchy 4.0.2 and older the bar
-  counted hover once for the whole shell, so there no pocket folded while the
-  pointer was on *any* monitor's bar; it only delayed a fold.
+- **Each screen's pocket folds on its own.** A pocket folds a moment after the
+  pointer leaves its mark and its members, whether the pointer goes elsewhere
+  on the bar, onto another monitor's bar or off the bars altogether. Until 0.6.2 it waited for the pointer to leave the bar;
+  [decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+  has why that wait could go. On Omarchy 4.0.2 and older it still waits, and
+  there the bar counts hover once for the whole shell, so no pocket folds
+  while the pointer is on *any* monitor's bar.
 - **An open panel can hold pockets open on every screen.** A member whose
   widget does not say whether its own panel is open cannot be told apart from
   any other panel, so while any panel is open
@@ -530,6 +557,7 @@ plan to come back.
 bash tests/run.sh                    # ALL TESTS PASSED (N assertions, 0 failures)
 bash tests/live.sh                   # asks the RUNNING bar; needs a shell
 bash tests/live.sh --gesture         # DRIVES a real drag; restores shell.json
+bash tests/live.sh --full [--system] # DRIVES every feature; restores shell.json
 qmlformat BarWidget.qml > /dev/null  # parses, or exits 1
 ```
 
@@ -568,6 +596,16 @@ virtual pointer, one member out past the mark and back in. The gesture broke on
 ([decision 0017](docs/decisions/0017-an-overlay-lives-as-long-as-the-pocket-that-built-it.md)).
 It moves the pointer on your screens, snapshots `shell.json` before it starts,
 and puts it back from a trap.
+
+`tests/live.sh --full` drives everything else the same way, after a host
+update for instance: the reveal and the fold and their edges, the pin and the
+lock, every kind of drop the section above describes, a member's panel, a
+rescan and a restart. With `--system` it also turns Hyprland's animations off,
+docks the bar vertically and moves the pocket to the left and centre sections,
+and puts each of them back. With a second monitor attached it also runs the
+per-screen checks there. Each check prints PASS or FAIL;
+[decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+has the run that found the centre sections' oscillation.
 
 Note that the shell's plugin file-watcher does not follow symlinks, so if you
 develop against a symlinked checkout, apply changes with `omarchy restart shell`.

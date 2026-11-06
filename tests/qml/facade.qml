@@ -223,6 +223,95 @@ QtObject {
     property Pk.BarWidget pocket: pocketC
   }
 
+  // A third bar surface, with real geometry, for the gesture itself. Omarchy
+  // 4.5.0's bar surface spans its whole screen and paints the bar as a strip
+  // along one edge (Bar.qml::BarPanel), so the strip here is the top 26 px of a
+  // taller window. Four slots side by side: network, the member, the pocket,
+  // power. Its own facade, so the layout the other steps rewrite stays theirs.
+  property PluginBarApi facade3: PluginBarApi {
+    pluginId: "jrmmhm.pocket"
+    moduleName: "jrmmhm.pocket"
+    shell: harness.fakeShell
+    layoutConfig: ({ left: [], center: [], right: [
+      { id: "omarchy.network" }, { id: "omarchy.audio" },
+      { id: "jrmmhm.pocket", members: "omarchy.audio" }, { id: "omarchy.power" }] })
+  }
+
+  property FloatingWindow win3: FloatingWindow {
+    id: win3
+    visible: true
+    implicitWidth: 300
+    implicitHeight: 200
+
+    Item {
+      width: 300
+      height: 26
+
+      Row {
+        id: strip3
+
+        Item {
+          id: netSlot3
+          property string moduleName: "omarchy.network"
+          property string region: "right"
+          property var activeItem: netItem3
+          property bool hovered: false
+          property bool dragSource: false
+          // Bar.qml::ModuleSlot: true from the moment a widget is let go of
+          // past the removal threshold until its entry leaves the layout.
+          property bool removalPending: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: netItem3 }
+        }
+
+        Item {
+          id: memberSlot3
+          property string moduleName: "omarchy.audio"
+          property string region: "right"
+          property var activeItem: memberItem3
+          property bool hovered: false
+          property bool dragSource: false
+          property bool removalPending: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: memberItem3 }
+        }
+
+        Item {
+          property string moduleName: "jrmmhm.pocket"
+          property string region: "right"
+          property var activeItem: pocketD
+          property bool hovered: false
+          property bool dragSource: false
+          property bool removalPending: false
+          implicitWidth: 27
+          implicitHeight: 26
+
+          Pk.BarWidget {
+            id: pocketD
+            settings: ({ members: "omarchy.audio" })
+          }
+        }
+
+        Item {
+          id: powerSlot3
+          property string moduleName: "omarchy.power"
+          property string region: "right"
+          property var activeItem: powerItem3
+          property bool hovered: false
+          property bool dragSource: false
+          property bool removalPending: false
+          implicitWidth: 27
+          implicitHeight: 26
+          Item { id: powerItem3 }
+        }
+      }
+    }
+
+    property Pk.BarWidget pocket: pocketD
+  }
+
   property Timer starter: Timer {
     interval: 0
     running: true
@@ -389,14 +478,13 @@ QtObject {
     harness.fakeShell.inlineWrites = 0
     p.settings = ({ members: "omarchy.audio" })
 
-    // Offscreen, the overlay's surface HoverHandler reports the pointer as on
-    // the bar, and the fold timer waits for it to leave for as long as it says
-    // so. Every fold below is about the lock, not about that, so the pointer is
-    // taken off the bar here and the pocket starts closed.
+    // Offscreen, the overlay's surface HoverHandler reports the pointer at the
+    // window's corner, which is where these unplaced slots all sit, and the
+    // fold timer holds the pocket open for a pointer on its run. Every fold
+    // below is about the lock, not about that, so the pointer is taken off the
+    // bar here and the pocket starts closed.
     p.overlay.hovered = false
     p.expanded = false
-    probe("the pointer is off the bar for these steps",
-          function () { return p.pointerOnBar }, false)
 
     probe("the pocket holds its member", function () { return p.resolution.slots.length }, 1)
 
@@ -620,7 +708,7 @@ QtObject {
   function step10() {
     var b = harness.pocket()
     var c = win2.pocket
-    // Offscreen, an overlay reports the pointer on the bar; every fold below is
+    // Offscreen, an overlay reports the pointer on the run; every fold below is
     // about the screens, not about that.
     if (c.overlay) c.overlay.hovered = false
     b.overlay.hovered = false
@@ -757,7 +845,7 @@ QtObject {
 
   // A new layout restarts each pocket's settling pass, which re-arms the
   // overlay's hover 250 ms later — and offscreen that hover answers "on the
-  // bar". So the pointer is taken off the bar only after that pass has run.
+  // run". So the pointer is taken off the bar only after that pass has run.
   function quiet() {
     var b = harness.pocket()
     var c = win2.pocket
@@ -889,6 +977,394 @@ QtObject {
     harness.buttonOf(b).triggerPress(Qt.RightButton)
     probe("unlocking either twin unlocks both",
           function () { return !b.locked && !c.locked && harness.fakeShell.lastSettings.locked === "" }, true)
+    Qt.callLater(harness.stepDrag1)
+  }
+
+  // ------------------------------------------------ the drop, on 4.5.0
+  //
+  // Omarchy 4.5.0 lets a released widget's ghost glide to where it lands, and
+  // clears the drag only once it is there (Bar.qml::settleBarDrag). The
+  // overlay sees the button come up at the start of that glide, so the drop's
+  // target is gone before the drag is. Driven here in every order the two can
+  // arrive in, plus a press during the glide, a release below the strip, and a
+  // widget going in. Coordinates are win3's: network 0-27, member 27-54,
+  // pocket 54-81, power 81-108, strip 0-26 high.
+
+  function stepDrag1() {
+    var d = win3.pocket
+    harness.fakeShell.modelDelta = false
+    harness.fakeShell.refuse = false
+    harness.fakeShell.mutatorConfig = null
+    d.bar = harness.facade3
+    d.moduleName = "jrmmhm.pocket"
+    Qt.callLater(harness.stepDrag2)
+  }
+
+  function stepDrag2() {
+    var d = win3.pocket
+    d.refreshWalk()
+    // Open, so the member is drawn and can be dragged. Pinned for the session,
+    // so nothing folds it while the reveal runs.
+    d.sessionPinned = true
+    harness.pending = harness.stepDrag3
+    later.interval = 900
+    later.restart()
+  }
+
+  // Aims the overlay at a scene point. The pointer's position is set before
+  // the press, the way the PointHandler reports it.
+  function aim(x, y) {
+    var glass = win3.pocket.overlay
+    glass.sceneX = x
+    glass.sceneY = y
+  }
+
+  function stepDrag3() {
+    var d = win3.pocket
+    var glass = d.overlay
+    probe("the gesture pocket resolves its member", function () { return d.resolution.slots.length }, 1)
+    probe("and the member is drawn at full width", function () { return memberSlot3.width }, 27)
+
+    // A: the button comes up first, the drag ends after the glide.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    probe("A: past the mark, the drag means taking the member out",
+          function () { return d.dropIntent }, "remove")
+    glass.pressed = false
+    probe("A: the release during the glide keeps that answer",
+          function () { return d.pendingIntent }, "remove")
+    var writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    probe("A: and the drag ending after the glide takes the member out",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // B: the drag ends while the button is still down, as on 4.0.x and with
+    // animations off.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    glass.pressed = false
+    probe("B: a drag that ends before the release takes the member out as before",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // C: a new press lands during the glide, inside the run. The host finishes
+    // the glide from that press; the drop is still the one released.
+    harness.aim(80, 13)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    glass.pressed = false
+    harness.aim(40, 13)
+    glass.pressed = true
+    probe("C: a press during the glide does not change what was released",
+          function () { return d.pendingIntent }, "remove")
+    writes = harness.fakeShell.inlineWrites
+    memberSlot3.dragSource = false
+    glass.pressed = false
+    probe("C: and the member is taken out",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.audio") === -1
+          }, true)
+
+    // Below the strip, still inside the surface: the host moves nothing there,
+    // and neither may the pocket.
+    harness.aim(80, 100)
+    memberSlot3.dragSource = true
+    glass.pressed = true
+    probe("below the strip there is no drop target", function () { return d.localDrop }, null)
+    probe("and the drag means nothing", function () { return d.dropIntent }, "none")
+    writes = harness.fakeShell.inlineWrites
+    glass.pressed = false
+    memberSlot3.dragSource = false
+    probe("so the release below the strip writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+
+    // A widget going in: power aimed at the mark's near half, the button first.
+    harness.aim(55, 13)
+    powerSlot3.dragSource = true
+    glass.pressed = true
+    probe("power on the mark's near half means taking it in",
+          function () { return d.dropIntent }, "add")
+    glass.pressed = false
+    writes = harness.fakeShell.inlineWrites
+    powerSlot3.dragSource = false
+    probe("and released before the glide ends, it is taken in",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && String(harness.fakeShell.lastSettings.members).indexOf("omarchy.power") !== -1
+          }, true)
+
+    Qt.callLater(harness.stepRemove1)
+  }
+
+  // ------------------------------------------------ pulled off the bar
+  //
+  // From Omarchy 4.5.0 on, a widget let go of far enough past the bar is
+  // removed from it (Bar.qml::removeBarDrag): its slot reports
+  // `removalPending` from the release, and its entry leaves the layout once
+  // the poof has played (commitBarRemoval). A member removed that way leaves
+  // `members` too -- once its entry has left, and nothing else in the list
+  // changes. A member that is merely missing, here `gone.plugin`, stays.
+
+  function layout3(audio, power) {
+    var right = [{ id: "omarchy.network" }]
+    if (audio) right.push({ id: "omarchy.audio" })
+    right.push({ id: "jrmmhm.pocket", members: "omarchy.audio" })
+    if (power) right.push({ id: "omarchy.power" })
+    return { left: [], center: [], right: right }
+  }
+
+  // A drag of `slot` let go of below the bar. `removed`: past the threshold,
+  // so the host announces the removal before it clears the drag.
+  function pullOff(slot, removed) {
+    var glass = win3.pocket.overlay
+    harness.aim(40, 120)
+    slot.dragSource = true
+    glass.pressed = true
+    glass.pressed = false
+    if (removed) slot.removalPending = true
+    slot.dragSource = false
+  }
+
+  function stepRemove1() {
+    var d = win3.pocket
+    // Shortened from the widget's own, so R4 need not wait for it.
+    if ("removalPatience" in d) d.removalPatience = 300
+    // Out of layout order on purpose: the rule that orders members by the
+    // layout would put the network first.
+    d.settings = ({ members: "gone.plugin, omarchy.audio, omarchy.network" })
+    probe("R: the gesture pocket holds its two members", function () { return d.resolution.slots.length }, 2)
+
+    // R1: the host removes the member, after its poof.
+    var writes = harness.fakeShell.inlineWrites
+    harness.pullOff(memberSlot3, true)
+    probe("R1: nothing is written while the removal is only announced",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    memberSlot3.removalPending = false
+    probe("R1: once its entry has left the layout, the member leaves members, and nothing else changes",
+          function () {
+            return harness.fakeShell.inlineWrites === writes + 1
+              && harness.fakeShell.lastSettings.members === "gone.plugin, omarchy.network"
+          }, true)
+    // Back before the order repair's callLater can see the list.
+    d.settings = ({ members: "omarchy.audio, gone.plugin" })
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R2: let go of within the threshold. The host puts it back; nothing
+    // changes.
+    writes = harness.fakeShell.inlineWrites
+    harness.pullOff(memberSlot3, false)
+    probe("R2: a member let go of near the bar stays a member",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+
+    // R3: a widget that is not a member is removed. Nothing to forget.
+    harness.pullOff(powerSlot3, true)
+    harness.facade3.layoutConfig = harness.layout3(true, false)
+    powerSlot3.removalPending = false
+    probe("R3: removing a widget that is not a member writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R4: the removal is announced and never written (the layout changed
+    // under it, or the shell went away). Past the wait, an entry that leaves
+    // later is not this gesture's doing.
+    harness.pullOff(memberSlot3, true)
+    memberSlot3.removalPending = false
+    harness.pending = harness.stepRemove2
+    later.interval = 450
+    later.restart()
+  }
+
+  function stepRemove2() {
+    var d = win3.pocket
+    var writes = harness.fakeShell.inlineWrites
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    probe("R4: a removal the host never wrote is let go of, and nothing is written",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R5: a second copy of the member's id, not the slot the pocket hides,
+    // is pulled off. The member stays.
+    var twin = memberCopy3.createObject(strip3)
+    d.refreshWalk()
+    probe("R5: the pocket still hides its first copy",
+          function () { return d.driven.indexOf(memberSlot3) !== -1 && d.driven.indexOf(twin) === -1 }, true)
+    harness.pullOff(twin, true)
+    harness.facade3.layoutConfig = harness.layout3(false, true)
+    probe("R5: removing the other copy writes nothing",
+          function () { return harness.fakeShell.inlineWrites }, writes)
+    twin.destroy()
+    harness.facade3.layoutConfig = harness.layout3(true, true)
+
+    // R6: the dragged slot is destroyed before the drag ends, as a rebuild
+    // does. The drag ends without a throw and without a write.
+    var doomed = memberCopy3.createObject(strip3)
+    d.refreshWalk()
+    doomed.dragSource = true
+    probe("R6: the drag of the doomed slot is seen", function () { return d.dragSlot === doomed }, true)
+    harness.doomedWrites = harness.fakeShell.inlineWrites
+    doomed.removalPending = true
+    doomed.destroy()
+    harness.pending = harness.stepRemove3
+    later.interval = 100
+    later.restart()
+  }
+
+  property int doomedWrites: 0
+
+  function stepRemove3() {
+    var d = win3.pocket
+    d.refreshWalk()
+    probe("R6: a drag whose slot was destroyed ends, and writes nothing",
+          function () { return !d.dragSeen && d.dragSlot === null && harness.fakeShell.inlineWrites === harness.doomedWrites }, true)
+    d.settings = ({ members: "omarchy.audio" })
+    harness.pending = harness.stepRemove4
+    later.interval = 100
+    later.restart()
+  }
+
+  function stepRemove4() {
+    win3.pocket.refreshWalk()
+    Qt.callLater(harness.stepFold1)
+  }
+
+  property Component memberCopy3: Component {
+    Item {
+      property string moduleName: "omarchy.audio"
+      property string region: "right"
+      property var activeItem: copyItem
+      property bool hovered: false
+      property bool dragSource: false
+      property bool removalPending: false
+      implicitWidth: 27
+      implicitHeight: 26
+      Item { id: copyItem }
+    }
+  }
+
+  // ------------------------------------------------ the fold
+  //
+  // The pocket folds as soon as the pointer has left the mark and its members,
+  // not once it has left the whole bar (docs/decisions/0026). Offscreen the
+  // pointer rests at the window's corner, which on win3 is on the network
+  // widget: a neighbour, on the bar, off the run.
+
+  function stepFold1() {
+    var d = win3.pocket
+    // Off the bar, so the ticks below are about hover and nothing else.
+    d.overlay.hovered = false
+    d.sessionPinned = false
+    memberSlot3.hovered = false
+    d.expanded = true
+    probe("unpinned, nothing holds the gesture pocket open", function () { return d.holdOpen }, false)
+
+    // Driven tick by tick: one idle tick is a pointer crossing a sliver of the
+    // bar between two slots, and must not fold it.
+    d.foldTick()
+    probe("one idle tick leaves it open", function () { return d.expanded }, true)
+    memberSlot3.hovered = true
+    d.foldTick()
+    probe("a member hovered again starts the count over", function () { return d.idleTicks }, 0)
+    memberSlot3.hovered = false
+    d.foldTick()
+    probe("so the next idle tick is a first one again", function () { return d.expanded }, true)
+    d.foldTick()
+    probe("and the second idle tick in a row folds it", function () { return d.expanded }, false)
+
+    // Now on the timer alone, with the pointer still on the bar, on the
+    // network widget before the run.
+    d.expanded = true
+    d.overlay.hovered = true
+    d.overlay.sceneX = 13
+    d.overlay.sceneY = 13
+    harness.afterFold(harness.stepFold2)
+  }
+
+  function stepFold2() {
+    var d = win3.pocket
+    probe("with the pointer on a neighbour on the bar, the pocket folds on its own",
+          function () { return d.expanded }, false)
+    Qt.callLater(harness.stepFold3)
+  }
+
+  // The pointer resting where the run is while no member reports a hover. Qt
+  // hovers on motion, so that is what a member looks like that has slid under
+  // a still pointer -- and in the centre sections opening the pocket slides
+  // the mark away from the pointer that opened it. Folding there opened and
+  // folded the pocket forever, measured on the live bar (docs/decisions/0026).
+  // The overlay's surface hover is what says where the pointer is.
+  function stepFold3() {
+    var d = win3.pocket
+    memberSlot3.hovered = false
+    // On the member's place from the start: the pocket opens with the pointer
+    // on its run, and nothing holds it but where the pointer is. The real
+    // handler is switched off for this, because offscreen it reports the
+    // window's corner whenever an item moves, over the position put in here.
+    d.overlay.hoverHandler.enabled = false
+    d.overlay.hovered = true
+    d.overlay.sceneX = 40
+    d.overlay.sceneY = 13
+    d.expanded = true
+    // Past the 600 ms reveal, so the run stands where it will be measured.
+    harness.pending = harness.stepFold4
+    later.interval = 900
+    later.restart()
+  }
+
+  function stepFold4() {
+    var d = win3.pocket
+    var glass = d.overlay
+    glass.hovered = true
+    glass.sceneX = 40
+    glass.sceneY = 13
+    d.foldTick()
+    d.foldTick()
+    d.foldTick()
+    probe("the pointer over a member that reports no hover still holds it open",
+          function () { return d.expanded }, true)
+    glass.sceneX = 70
+    d.foldTick()
+    d.foldTick()
+    probe("and over the mark", function () { return d.expanded }, true)
+    glass.sceneX = 95
+    d.foldTick()
+    d.foldTick()
+    probe("over the widget after the run it folds", function () { return d.expanded }, false)
+    // Asked straight away from here on: the run is measured while it folds and
+    // reopens, which is the moment it is at its narrowest, and these points are
+    // outside it at any width.
+    d.expanded = true
+    glass.sceneX = 13
+    d.foldTick()
+    d.foldTick()
+    probe("over the widget before the run it folds", function () { return d.expanded }, false)
+    d.expanded = true
+    glass.sceneX = 40
+    glass.sceneY = 100
+    d.foldTick()
+    d.foldTick()
+    probe("below the strip, in line with the run, it folds", function () { return d.expanded }, false)
+
+    // An idle tick counted before a pin must not count after it: released, the
+    // pocket gets its full grace again rather than folding on the first tick.
+    d.expanded = true
+    d.idleTicks = 1
+    d.sessionPinned = true
+    d.sessionPinned = false
+    probe("releasing a pin starts the idle count over", function () { return d.idleTicks }, 0)
+    d.expanded = false
+
+    glass.rearmHover()
     Qt.callLater(harness.finish)
   }
 

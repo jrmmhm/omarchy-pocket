@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Pocket on Omarchy 4.5.0, which reworked how bar widgets are dragged and how
+bar icons are drawn.
+[Decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
+owns the measurements.
+
+### Fixed
+
+- **Dragging a widget in or out of the pocket works again on Omarchy 4.5.**
+  The bar now lets a released widget glide to its place before it ends the
+  drag, and the pocket had already forgotten what the release meant by then:
+  a member dragged past the mark landed there and stayed a member, and nothing
+  dropped on the mark went in. A release just below the bar no longer counts
+  as a drop either, now that the bar's window covers the whole screen.
+- **The mark's dots sit in the middle of the bar again.** Omarchy 4.5 fits bar
+  icons to their painted bounds, which put the dots too high while closed and
+  off to the side while open. The mark is now drawn from the upright dots,
+  laid flat: the same picture, centred.
+- **The widgets beside the pocket slide again on Omarchy 4.5** instead of
+  jumping by the whole group's length when it opens and closes. The bar now
+  sizes its widgets through a layout, which ignored the width the pocket set;
+  the pocket now caps the layout's size and leaves the bar's own sizing alone.
+  [Decision 0027](docs/decisions/0027-the-slide-goes-through-the-layout-and-a-pulled-member-leaves.md)
+  owns the measurements, as for the next two.
+- **A member pulled off the bar leaves `members`.** From Omarchy 4.5 on,
+  dragging a widget well away from the bar removes it. Once the bar has
+  written that, the pocket takes that one name out and changes nothing else in
+  the list.
+- **Members in the `center` section are hidden again on Omarchy 4.5.** Every
+  one of them was mistaken for the old centre anchor, which 4.5 no longer has.
+
+### Changed
+
+- **The pocket folds as soon as the pointer leaves the mark and its
+  members**, instead of waiting for the pointer to leave the whole bar, on
+  Omarchy 4.0.3 and later; 4.0.2 and older still wait. In the centre
+  sections, where opening slides the mark aside, it stays open while the
+  pointer rests where the mark was. A member kept in another section is not
+  part of that run, so heading for it folds the pocket on the way.
+
+### Tests
+
+- `tests/live.sh --full` drives every feature on the running bar with a
+  virtual pointer, edge cases included, and `--system` adds animations off, a
+  vertical bar and the left and centre sections. `shell.json` is restored
+  after every block. It samples the widgets beside the pocket while it opens
+  and folds, and fails a jump. With a second monitor attached, its `screens`
+  block runs the per-screen checks: fold, pin, lock, a summoned panel, the
+  slide and the removal on the other screen.
+- `tests/qml/layoutextent.qml` drives the slide on layout sections like 4.5's,
+  horizontal and vertical, and a member in `center`.
+
 ## [0.6.2] — 2026-10-29
 
 The reload fix of 0.6.1, made to hold. Three fresh-context reviews of

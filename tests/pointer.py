@@ -51,7 +51,7 @@ UI_DEV_DESTROY = 0x5502
 
 EV_SYN, EV_KEY, EV_REL = 0, 1, 2
 REL_X, REL_Y = 0, 1
-BTN_LEFT = 0x110
+BTN_LEFT, BTN_RIGHT, BTN_MIDDLE = 0x110, 0x111, 0x112
 
 SELF = "jrmmhm.pocket"
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
@@ -83,7 +83,8 @@ class Pointer:
         self.pressed = False
         for event in (EV_KEY, EV_REL):
             fcntl.ioctl(self.fd, UI_SET_EVBIT, event)
-        fcntl.ioctl(self.fd, UI_SET_KEYBIT, BTN_LEFT)
+        for button in (BTN_LEFT, BTN_RIGHT, BTN_MIDDLE):
+            fcntl.ioctl(self.fd, UI_SET_KEYBIT, button)
         for axis in (REL_X, REL_Y):
             fcntl.ioctl(self.fd, UI_SET_RELBIT, axis)
 
@@ -133,6 +134,25 @@ class Pointer:
         self.pressed = False
         self._emit(EV_KEY, BTN_LEFT, 0)
         time.sleep(0.15)
+
+    def click(self, button=BTN_LEFT):
+        """A press and release with no motion between them, which is a click."""
+        self._emit(EV_KEY, button, 1)
+        time.sleep(0.08)
+        self._emit(EV_KEY, button, 0)
+        time.sleep(0.15)
+
+    def glide_to_y(self, target_y, tries=80):
+        """glide_to() along y: relative steps, corrected from the real position."""
+        for _ in range(tries):
+            at = position()[1]
+            delta = target_y - at
+            if abs(delta) <= 1:
+                return True
+            step = max(-8, min(8, delta))
+            self._emit(EV_REL, REL_Y, step)
+            time.sleep(0.02)
+        return abs(position()[1] - target_y) <= 3
 
     def nudge_by(self, dx):
         """Move by dx in small steps, without claiming to know where that lands."""
@@ -344,10 +364,10 @@ def open_pocket(pointer, wanted, screen=None):
 def park(pointer, origin_x, origin_y):
     """Take the pointer off the bar.
 
-    Left on it, `pointerOnBar` stays true and the fold timer returns early on
-    every tick, so the pocket hangs open for the rest of the session -- which is
-    indistinguishable from a bug this plugin has actually shipped, and made a
-    later tests/live.sh run report six members drawn while collapsed.
+    Left on the mark or on a member, it holds the pocket open, and a later
+    tests/live.sh run would report the members drawn while it expects them
+    collapsed. Anywhere else the pocket folds on its own (docs/decisions/0026);
+    off the bar is simply the one place that is never the mark.
     """
     pointer.warp(origin_x + 400, origin_y + 400)
     time.sleep(1.2)
