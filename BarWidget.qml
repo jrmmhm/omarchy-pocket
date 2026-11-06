@@ -1221,7 +1221,7 @@ BarWidget {
 
   // A member the host has announced it is removing, and how many entries
   // carried its id when it did. The host writes the removal only once the
-  // widget's poof has played (Bar.qml::commitBarRemoval, 620 ms), and it can
+  // widget's poof has played (Bar.qml::poofTimer, commitBarRemoval), and it can
   // fail to: the layout may have changed under it, or the shell gone away. So
   // the member is forgotten when one of its entries has actually left the
   // layout, and the announcement lapses after `removalPatience` without one.
