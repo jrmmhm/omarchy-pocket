@@ -19,8 +19,9 @@ Screenshots of the mark go to $POCKET_SHOTS (default: a fresh directory under
 $TMPDIR), for the checks a person has to look at: the lit and dimmed mark, and
 the tooltip.
 
-Single-surface by design: on several monitors it drives the first one hyprctl
-lists, and the per-screen cases stay with docs/decisions/0022.
+Every block but one drives the first monitor hyprctl lists. The screens block
+takes the first two and runs the per-screen checks of docs/decisions/0022 that
+move, plug or mirror no monitor; with one monitor it says so and runs nothing.
 """
 
 import json
@@ -61,21 +62,23 @@ def is_drawn(slot):
 
 
 class Bar:
-    """The first monitor's bar surface, read through debugBarGeometry."""
+    """One monitor's bar surface, read through debugBarGeometry: by default the
+    first monitor's and the first surface the shell reports; the screens block
+    names both, having identified the surface by opening its pocket."""
 
     def vertical(self, s=None):
         return self.position in ("left", "right")
 
-    def __init__(self):
-        name, ox, oy = P.monitors()[0]
-        self.screen, self.ox, self.oy = name, ox, oy
+    def __init__(self, screen=None, index=0):
+        name, ox, oy = P.monitors(screen)[0]
+        self.screen, self.ox, self.oy, self.index = name, ox, oy, index
         self.position = subprocess.run(["omarchy", "bar", "position"], capture_output=True,
                                        text=True).stdout.strip() or "top"
 
     def slots(self):
-        # One surface: every id's first slot. A centre widget built twice by a
+        # One surface: every id's Nth slot. A centre widget built twice by a
         # centre anchor is the one case this would misread, and this bar has none.
-        return P.by_occurrence(P.geometry(), 0)
+        return P.by_occurrence(P.geometry(), self.index)
 
     def mark(self, s=None):
         return (s or self.slots())[P.SELF]
@@ -939,6 +942,158 @@ def block_system(ptr, bar):
         time.sleep(4.0)
 
 
+def names(value):
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    return [x.strip() for x in str(value or "").split(",") if x.strip()]
+
+
+def focused():
+    raw = subprocess.run(["hyprctl", "-j", "monitors"], capture_output=True, text=True).stdout
+    return next((m["name"] for m in json.loads(raw) if m.get("focused")), None)
+
+
+def focus(screen):
+    subprocess.run(["hyprctl", "dispatch", 'hl.dsp.focus({ monitor = "%s" })' % screen],
+                   capture_output=True)
+    time.sleep(0.4)
+
+
+def off_run(bar):
+    """A drawn widget on this bar that is neither the mark nor a member: the
+    first one in the left section, else the drawn one furthest from the mark."""
+    s = bar.slots()
+    others = [v for k, v in s.items() if k != P.SELF and k not in P.members() and is_drawn(v)]
+    left = [v for v in others if v["section"] == "left"]
+    if left:
+        return left[0]
+    along = "y" if bar.vertical() else "x"
+    return max(others, key=lambda v: abs(v[along] - s[P.SELF][along]))
+
+
+def block_screens(ptr, bar):
+    """The per-screen checks of decision 0022 that need no monitor to be moved,
+    plugged or mirrored, with the slide and the removal of 0027 on the second
+    screen. Each surface is identified by opening its pocket."""
+    print("\n== H. screens")
+    mons = P.monitors()
+    if len(mons) < 2:
+        note("H not run: only one monitor is attached")
+        return
+    focused_was = focused()
+    wanted = P.members()
+    try:
+        found = {}
+        for name, _, _ in mons[:2]:
+            index = P.open_pocket(ptr, wanted, name)[0]
+            found[name] = Bar(name, index)
+            park(ptr, found[name])
+        a, b = found[mons[0][0]], found[mons[1][0]]
+        note("H surfaces: %s is surface %d, %s is surface %d" % (a.screen, a.index, b.screen, b.index))
+        check("H two screens, two surfaces", a.index != b.index)
+
+        # H1 (0022 row 1) each screen's pocket folds on its own, and holds on its run.
+        for this, other in ((a, b), (b, a)):
+            check("H1 %s: hover opens it" % this.screen, open_by_hover(ptr, this))
+            check("H1 %s: the other screen's pocket stays shut" % this.screen, other.is_closed())
+            m = P.nearest_member()
+            hover(ptr, this.centre(this.slots()[m]), pause=0)
+            check("H1 %s: onto a member it stays open" % this.screen, stays(this.is_open, 1.5))
+            target = off_run(other)
+            hover(ptr, other.centre(target), pause=0)
+            check("H1 %s: onto %s's bar it folds, and nothing opens there" % (this.screen, other.screen),
+                  wait(this.is_closed, 1.5) and other.is_closed(), "onto %s" % target["id"])
+            park(ptr, other)
+
+        # H2 (0022 row 2) the pin and the lock are this screen's alone.
+        for this, other in ((a, b), (b, a)):
+            before = names(entry().get("pinned"))
+            hover(ptr, this.centre(this.mark()), pause=0.4)
+            ptr.click(P.BTN_LEFT)
+            wait(lambda: names(entry().get("pinned")) != before, timeout=3.0, step=0.05)
+            added = [n for n in names(entry().get("pinned")) if n not in before]
+            check("H2 %s: a left click pins this screen, by one name" % this.screen, len(added) == 1,
+                  "added=%s" % added)
+            park(ptr, other)
+            check("H2 %s: it stays open with the pointer on the other screen" % this.screen,
+                  stays(this.is_open, 1.5))
+            check("H2 %s: and the other screen's pocket stays shut" % this.screen, other.is_closed())
+            hover(ptr, this.centre(this.mark()), pause=0.4)
+            ptr.click(P.BTN_LEFT)
+            check("H2 %s: a second click releases it" % this.screen,
+                  wait(lambda: names(entry().get("pinned")) == before, timeout=3.0, step=0.05))
+            park(ptr, this)
+
+            locked_before = names(entry().get("locked"))
+            hover(ptr, this.centre(this.mark()), pause=0.4)
+            ptr.click(P.BTN_RIGHT)
+            wait(lambda: names(entry().get("locked")) != locked_before, timeout=3.0, step=0.05)
+            added = [n for n in names(entry().get("locked")) if n not in locked_before]
+            check("H2 %s: a right click locks this screen, by one name" % this.screen, len(added) == 1,
+                  "added=%s" % added)
+            park(ptr, this)
+            hover(ptr, this.centre(this.mark()), pause=0)
+            check("H2 %s: locked, a hover leaves it shut" % this.screen, stays(this.is_closed, 1.2))
+            park(ptr, this)
+            check("H2 %s: the other screen's pocket still opens" % this.screen, open_by_hover(ptr, other))
+            park(ptr, other)
+            hover(ptr, this.centre(this.mark()), pause=0.4)
+            ptr.click(P.BTN_RIGHT)
+            check("H2 %s: a second right click unlocks it" % this.screen,
+                  wait(lambda: names(entry().get("locked")) == locked_before, timeout=3.0, step=0.05))
+            park(ptr, this)
+
+        # H3 (0022 row 10) a member's panel summoned by IPC opens the focused
+        # screen's pocket, and only that one.
+        member = "omarchy.tailscale"
+        if member in wanted and member in a.slots() and member in b.slots():
+            for this, other in ((a, b), (b, a)):
+                park(ptr, this)
+                focus(this.screen)
+                ipc("summon", member)
+                check("H3 %s: the summoned panel opens this screen's pocket" % this.screen,
+                      wait(this.is_open, 2.5))
+                check("H3 %s: and not the other screen's" % this.screen, other.is_closed())
+                ipc("hide", member)
+                check("H3 %s: hidden again, it folds" % this.screen, wait(this.is_closed, 2.5))
+        else:
+            note("H3 not run: %s is not a member drawn on both screens" % member)
+
+        # H4 (0022 row 9) the tooltip on the second screen, for a person to read.
+        hover(ptr, b.centre(b.mark()), pause=1.6)
+        shot(b, "H4-tooltip-%s" % b.screen, slot=b.mark(), below=140, pad=160)
+        note("H4 tooltip shot: %s" % os.path.join(SHOTS, "H4-tooltip-%s.png" % b.screen))
+        park(ptr, b)
+
+        # H5 (0027) the slide on the second screen, out and back.
+        mark_xy = b.centre(b.mark())
+        rows = sample_slide(b, lambda: ptr.warp(*mark_xy), 1.2)
+        check("H5 %s: hover opens it" % b.screen, wait(b.is_open, timeout=2.0))
+        check_slides("H5 %s opening" % b.screen, rows)
+        rows = sample_slide(b, lambda: ptr.warp(b.ox + 400, b.oy + 400), 1.6)
+        check("H5 %s: it folds" % b.screen, wait(b.is_closed, timeout=2.0))
+        check_slides("H5 %s folding" % b.screen, rows)
+
+        # H6 (0027) a member pulled off the second screen's bar leaves members.
+        subject = P.nearest_member()
+        members_before = P.members()
+        open_by_hover(ptr, b)
+        m = b.mark()
+        drag(ptr, b, subject, lambda s: mark_edge(b, s, inner=False),
+             target_y=b.oy + m["y"] + m["height"] + 120)
+        time.sleep(1.5)
+        after = P.members()
+        check("H6 %s: %s pulled off the bar is no longer named in members" % (b.screen, subject),
+              subject not in after, "members=%s" % after)
+        check("H6 %s: and nothing else in members changed" % b.screen,
+              after == [x for x in members_before if x != subject],
+              "before=%s after=%s" % (members_before, after))
+        park(ptr, b)
+    finally:
+        if focused_was:
+            focus(focused_was)
+
+
 # ------------------------------------------------------------------ main
 
 
@@ -953,7 +1108,7 @@ def restore(path):
 
 BLOCKS = [("display", block_display), ("fold", block_fold), ("pin", block_pin),
           ("drag", block_drag), ("panels", block_panels), ("reload", block_reload),
-          ("poof", block_poof), ("system", block_system)]
+          ("poof", block_poof), ("screens", block_screens), ("system", block_system)]
 
 
 def main(argv):
