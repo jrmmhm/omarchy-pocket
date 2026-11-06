@@ -203,6 +203,19 @@ eDP-1 both passed, a member out past the mark and back in. Rows 3, 5, 6 and 7
 (unplugging, mirroring, stacking, a profile switch) move or remove a monitor
 and were not run.
 
+### The last run
+
+On the release candidate, both monitors attached, `tests/live.sh --full
+--system`: 144 checks, 141 passed, `shell.json` restored byte for byte. Every
+slide check passed, among them the tray on the ASUS (largest step 41 of 220,
+and 40 back), the centre box (28 of 110) and the vertical bar (43 of 227,
+59 back). The three failures are one event: the run's very first hover, on
+eDP-1's mark, did not open the pocket (A3), so A4 had nothing moving to
+measure. The tooltip shot taken on the same mark seconds later shows it open
+under the pointer, and every later opening in the run worked. Three runs of
+the display block alone, two of them started with the ASUS focused as that
+run was, passed 9 of 9 each. Not reproduced, and not explained.
+
 ## Review
 
 A fresh-context review of the plan raised eight findings, all taken or
