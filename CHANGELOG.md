@@ -45,9 +45,11 @@ those of the slide and the removal.
 ### Changed
 
 - **The pocket folds as soon as the pointer leaves the mark and its
-  members**, instead of waiting for the pointer to leave the whole bar. In the
-  centre sections, where opening slides the mark aside, it stays open while
-  the pointer rests where the mark was.
+  members**, instead of waiting for the pointer to leave the whole bar, on
+  Omarchy 4.0.3 and later; 4.0.2 and older still wait. In the centre
+  sections, where opening slides the mark aside, it stays open while the
+  pointer rests where the mark was. A member kept in another section is not
+  part of that run, so heading for it folds the pocket on the way.
 
 ### Tests
 

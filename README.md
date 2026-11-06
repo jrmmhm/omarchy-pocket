@@ -83,9 +83,9 @@ gets the older path for that one thing;
 has both.
 
 It also imports the shell's own `qs.Commons` and `qs.Ui` modules. A renamed
-module is the one failure with no graceful half. And it reads its own entry
-from `~/.config/omarchy/shell.json` after a reload; a shell that keeps the file
-elsewhere only loses that repair.
+module is the one failure with no graceful half. And before Omarchy 4.5 it
+reads its own entry from `~/.config/omarchy/shell.json` after a reload; a shell
+that keeps the file elsewhere only loses that repair.
 
 [Decision 0015](docs/decisions/0015-the-host-answers-by-capability-now.md) has
 the whole table, what each fallback cost, and what is not recoverable.
@@ -228,10 +228,12 @@ host atomically — so a reboot is just a restart, and `omarchy plugin update`
 pulls a new version and rebuilds the widgets without touching the file at all. A
 member whose widget fails to load after an update keeps its place, because the
 place is read from the file rather than from what is running. The same goes for
-the pocket's own entry: the shell hands a reloaded widget its settings as they
-were at the last restart, so the pocket reads its members, pins and locks back
-from the file
-([decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md)).
+the pocket's own entry: before Omarchy 4.5 the shell hands a reloaded widget
+its settings as they were at the last restart, so there the pocket reads its
+members, pins and locks back from the file
+([decision 0025](docs/decisions/0025-a-reload-reads-the-entry-from-the-file.md));
+from 4.5 on the shell hands over the current settings itself, and the file is
+left alone ([decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)).
 
 ## Why this one keeps your setup honest
 
@@ -329,7 +331,9 @@ A few things change your first hour with it:
 
 - **Keep members in the pocket's own section.** A member in a different section
   than the pocket *is* hidden, but it fans out over there on its own, which
-  looks like a bug rather than a choice. The tooltip names it. (Separately, a
+  looks like a bug rather than a choice, and it is not part of the run that
+  holds the pocket open: heading for it folds the pocket on the way. The
+  tooltip names it. (Separately, a
   member may not be the `centerAnchor` itself — that is a different mechanism
   and Pocket refuses it outright.)
 
@@ -378,7 +382,9 @@ A few things change your first hour with it:
   pointer leaves its mark and its members, whether the pointer goes elsewhere
   on the bar, onto another monitor's bar or off the bars altogether. Until 0.6.2 it waited for the pointer to leave the bar;
   [decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
-  has why that wait could go.
+  has why that wait could go. On Omarchy 4.0.2 and older it still waits, and
+  there the bar counts hover once for the whole shell, so no pocket folds
+  while the pointer is on *any* monitor's bar.
 - **An open panel can hold pockets open on every screen.** A member whose
   widget does not say whether its own panel is open cannot be told apart from
   any other panel, so while any panel is open

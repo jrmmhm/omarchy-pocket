@@ -166,6 +166,11 @@ and the overlay's ownership rules of 0017, are unchanged.
   whether it is unbroken. A member cut off from the group by a widget that is
   not one (a misplacement the host no longer lets the pocket repair, 0015)
   makes the widgets in between hold the pocket open too.
+- A member in another section than the mark is not part of the run
+  (`pointerOnRun()` skips it), so a pointer heading for it folds the pocket on
+  the way, after the two idle ticks, unless it arrives before the fold has
+  hidden the member; the bar-wide guard used to hold it open. Read from the
+  code, not measured; found by the final review of 0.7.0.
 - The run's vertical axis is covered live (a vertical bar opens and folds off
   the bar) but by no offscreen case.
 - A long run in `centerEnd` on a narrow screen reaches the right section, and
