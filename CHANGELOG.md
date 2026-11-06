@@ -50,7 +50,9 @@ owns the measurements.
   virtual pointer, edge cases included, and `--system` adds animations off, a
   vertical bar and the left and centre sections. `shell.json` is restored
   after every block. It samples the widgets beside the pocket while it opens
-  and folds, and fails a jump.
+  and folds, and fails a jump. With a second monitor attached, its `screens`
+  block runs the per-screen checks: fold, pin, lock, a summoned panel, the
+  slide and the removal on the other screen.
 - `tests/qml/layoutextent.qml` drives the slide on layout sections like 4.5's,
   horizontal and vertical, and a member in `center`.
 

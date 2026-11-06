@@ -596,7 +596,8 @@ update for instance: the reveal and the fold and their edges, the pin and the
 lock, every kind of drop the section above describes, a member's panel, a
 rescan and a restart. With `--system` it also turns Hyprland's animations off,
 docks the bar vertically and moves the pocket to the left and centre sections,
-and puts each of them back. Each check prints PASS or FAIL;
+and puts each of them back. With a second monitor attached it also runs the
+per-screen checks there. Each check prints PASS or FAIL;
 [decision 0026](docs/decisions/0026-omarchy-4-5-and-the-fold-off-the-run.md)
 has the run that found the centre sections' oscillation.
 

@@ -157,14 +157,51 @@ it moves.
 - G37 `center`: shut, opened, rested 3 s on the place the mark left without
   folding, and folded onto the widget before the run (the clock) without
   reopening; the run ended the box, so there was no widget after it.
-- The one failure, F33, reads `shell.json` 0.8 s after the click that
-  releases a pin after a plugin rescan and found the pin still written in 2 of
+- The one failure, F33, read `shell.json` once, 0.8 s after the click that
+  releases a pin after a plugin rescan, and found the pin still written in 2 of
   5 runs; in every run the pocket folded, which it does only unpinned, and the
-  file had the pin released by F34. It is the reload path of 0025, which this
-  change does not touch.
+  file had the pin released by F34. Timed by polling the file instead, six
+  runs on each build, from the click to the released pin on disk:
 
-The checks of [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md)
-on a second monitor were not run: none was attached.
+  | Build | Seconds |
+  |---|---|
+  | b6023de, before this change | 0.081, 0.165, 0.122, 0.272, 0.000, 0.000 |
+  | this change | 0.556, 0.000, 0.102, 0.000, 0.000, 0.000 |
+
+  The same spread on both: the host persists the file on its own time, and
+  the single read sometimes came first. F33 now polls for up to 3 s (2 of 2
+  passed, at 0.00 s). The same runs found the block aborting with a second
+  monitor attached: the shell reports no bar geometry for more than 3 s after
+  a rescan; the block now waits for it.
+
+### On a second monitor
+
+The next day, eDP-1 (1152×720 logical) beside an ASUS VG289 on HDMI-A-1
+(1600×900 logical, at x = 1152), `tests/live.sh --full screens`: 39 checks, 39
+passed, `shell.json` restored byte for byte, the focused monitor put back.
+Each surface was identified by opening its pocket (eDP-1 surface 0, HDMI-A-1
+surface 1). Rows of [0022](0022-every-screen-tested-and-the-panel-a-keybinding-opens.md):
+
+- Row 1, each screen folds on its own: on either screen, hover opens it and
+  not the other; onto a member it stays open; onto the other screen's bar it
+  folds and nothing opens there.
+- Row 2, pin and lock per screen: a left click pinned `eDP-1`, then
+  `ASUS VG289`, each by one name, open with the pointer on the other screen
+  and the other shut; a right click locked each by one name, a hover left it
+  shut while the other screen still opened; second clicks released both.
+- Row 10, a summoned member's panel: `summon omarchy.tailscale` with each
+  screen focused opened that screen's pocket only, and `hide` folded it.
+- Row 9, the tooltip on the ASUS: "Pocket holding 6 widgets", both click
+  hints, "Not on this bar: io.github.ilyazar.syncthing" (screenshot).
+- The slide on the ASUS: the tray 1355 → 1135 opening in 15 steps, largest
+  41, and back in 16, largest 43.
+- A member pulled off the ASUS's bar: `omarchy.tailscale` left `members`, the
+  other six unchanged.
+
+Row 8, the gesture: `tests/live.sh --gesture HDMI-A-1` and `--gesture` on
+eDP-1 both passed, a member out past the mark and back in. Rows 3, 5, 6 and 7
+(unplugging, mirroring, stacking, a profile switch) move or remove a monitor
+and were not run.
 
 ## Review
 
