@@ -18,6 +18,16 @@ if ! bash "$ROOT/tests/qml/run.sh"; then
   exit 1
 fi
 
+# The file handling of tests/full.py, which writes the operator's shell.json.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "TESTS FAILED (python3 is not installed)"
+  exit 1
+fi
+if ! python3 "$ROOT/tests/config-mode-test.py"; then
+  echo "TESTS FAILED (config mode)"
+  exit 1
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "TESTS FAILED (node is not installed)"
   exit 1

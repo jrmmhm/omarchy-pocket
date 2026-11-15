@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`tests/live.sh --full` keeps `shell.json` private.** It used to leave a
+  `0600` config readable by other local users after a run, and its snapshot
+  could land in a shared directory. Pocket itself is unchanged; only the
+  explicitly invoked live tests were affected.
+  [Decision 0028](docs/decisions/0028-a-test-that-writes-shell-json-keeps-it-private.md)
+  owns the details.
+
 ## [0.7.0] — 2026-11-06
 
 Pocket on Omarchy 4.5.0, which reworked how bar widgets are dragged, laid out
