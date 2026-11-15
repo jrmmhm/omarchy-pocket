@@ -40,7 +40,7 @@ def mode(path):
     return "%o" % stat.S_IMODE(os.stat(path).st_mode)
 
 
-def run(case, linked):
+def run(case, linked, bits=0o600):
     base = os.path.join(WORK, case)
     config = os.path.join(base, "omarchy", "shell.json")
     real = os.path.join(base, "dotfiles", "shell.json") if linked else config
@@ -48,20 +48,22 @@ def run(case, linked):
     os.makedirs(os.path.dirname(real), exist_ok=True)
     fd = os.open(real, os.O_WRONLY | os.O_CREAT, 0o600)
     with os.fdopen(fd, "w") as handle:
+        os.fchmod(handle.fileno(), bits)
         json.dump(ORIGINAL, handle)
     if linked:
         os.symlink(real, config)
     full.CONFIG = config
+    want = "%o" % bits
 
     master = full.snapshot()
-    check("%s: the snapshot is as private as shell.json" % case, mode(master) == "600",
+    check("%s: the snapshot is private" % case, mode(master) == "600",
           "mode %s" % mode(master))
 
     full.set_entry(pinned="eDP-1")
     entry = json.load(open(config))["bar"]["layout"]["right"][0]
     check("%s: a written shell.json carries the write" % case, entry.get("pinned") == "eDP-1",
           "entry %s" % entry)
-    check("%s: a written shell.json stays private" % case, mode(config) == "600",
+    check("%s: a written shell.json keeps its mode %s" % (case, want), mode(config) == want,
           "mode %s" % mode(config))
     if linked:
         check("%s: a written shell.json is still the symlink" % case, os.path.islink(config))
@@ -71,7 +73,7 @@ def run(case, linked):
     ok = full.restore(master)
     check("%s: restore reports the contents back" % case, ok)
     check("%s: restore puts the contents back" % case, json.load(open(config)) == ORIGINAL)
-    check("%s: restore puts the permissions back" % case, mode(config) == "600",
+    check("%s: restore puts the mode %s back" % (case, want), mode(config) == want,
           "mode %s" % mode(config))
     if linked:
         check("%s: restore leaves the symlink in place" % case, os.path.islink(config))
@@ -79,6 +81,8 @@ def run(case, linked):
 
 run("plain", linked=False)
 run("symlink", linked=True)
+# Not 0600, which mkstemp gives anyway: the mode is carried over, not assumed.
+run("group-readable", linked=False, bits=0o640)
 shutil.rmtree(WORK)
 print("CONFIG MODE %s (%d failed)" % ("PASSED" if not FAILED else "FAILED", len(FAILED)))
 sys.exit(1 if FAILED else 0)
