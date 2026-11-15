@@ -26,8 +26,8 @@ move, plug or mirror no monitor; with one monitor it says so and runs nothing.
 
 import json
 import os
-import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -346,15 +346,28 @@ def mark_edge(bar, s, inner):
 
 
 CONFIG = P.CONFIG
+CONFIG_MODE = None  # shell.json's permission bits, read by snapshot()
+
+
+def replace_config(data):
+    """Swap shell.json for data in one step, with the permissions it had at the snapshot.
+
+    The new file is created private and given those bits before a byte is in it,
+    so a 0600 config is never readable by others, not even for a moment. A
+    symlinked shell.json (a dotfiles checkout) is written through, not replaced.
+    """
+    target = os.path.realpath(CONFIG)
+    fd, tmp = tempfile.mkstemp(prefix=".pocket-full-", dir=os.path.dirname(target))
+    with os.fdopen(fd, "wb") as handle:
+        os.fchmod(handle.fileno(), CONFIG_MODE)
+        handle.write(data)
+    os.replace(tmp, target)
 
 
 def write_config(mutate):
     config = json.load(open(CONFIG))
     mutate(config)
-    tmp = CONFIG + ".pocket-full"
-    with open(tmp, "w") as handle:
-        json.dump(config, handle, indent=2)
-    os.replace(tmp, CONFIG)
+    replace_config(json.dumps(config, indent=2).encode())
     time.sleep(2.0)
 
 
@@ -1100,10 +1113,28 @@ def block_screens(ptr, bar):
 MASTER = None
 
 
+def snapshot():
+    """Copy shell.json to a private file and remember its permission bits.
+
+    mkstemp makes the copy 0600 under a name nobody can guess, in $TMPDIR rather
+    than in $POCKET_SHOTS, which the operator may point anywhere.
+    """
+    global MASTER, CONFIG_MODE
+    with open(CONFIG, "rb") as source:
+        data = source.read()
+        CONFIG_MODE = stat.S_IMODE(os.fstat(source.fileno()).st_mode)
+    fd, MASTER = tempfile.mkstemp(prefix="pocket-full-shell-json-")
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+    return MASTER
+
+
 def restore(path):
-    shutil.copyfile(path, CONFIG)
+    with open(path, "rb") as handle:
+        data = handle.read()
+    replace_config(data)
     time.sleep(2.0)
-    return open(path, "rb").read() == open(CONFIG, "rb").read()
+    return data == open(CONFIG, "rb").read()
 
 
 BLOCKS = [("display", block_display), ("fold", block_fold), ("pin", block_pin),
@@ -1112,7 +1143,6 @@ BLOCKS = [("display", block_display), ("fold", block_fold), ("pin", block_pin),
 
 
 def main(argv):
-    global MASTER
     wanted = [a for a in argv if not a.startswith("--")]
     run = [(n, f) for n, f in BLOCKS if (not wanted or n in wanted)]
     if "--system" not in argv and not wanted:
@@ -1121,8 +1151,7 @@ def main(argv):
     if ipc("ping") != "ok":
         print("FULL SKIPPED (no shell is answering)")
         return P.SKIPPED
-    MASTER = os.path.join(SHOTS, "shell.json.snapshot")
-    shutil.copyfile(CONFIG, MASTER)
+    snapshot()
     print("FULL (shell.json snapshot at %s, shots in %s)" % (MASTER, SHOTS))
 
     try:
@@ -1140,6 +1169,8 @@ def main(argv):
     finally:
         ok = restore(MASTER)
         print("\nconfig restored: %s" % ("yes" if ok else "NO -- the snapshot is at " + MASTER))
+        if ok:
+            os.unlink(MASTER)
 
     failed = [n for n, ok in RESULTS if not ok]
     print("\nFULL %s (%d checks, %d failed)" % ("PASSED" if not failed else "FAILED",
